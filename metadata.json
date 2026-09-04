@@ -1,0 +1,6 @@
+{
+  "name": "AIMA-ICRC India Case League 2026 Portal",
+  "description": "Comprehensive Registration, Assessment, Quiz Engine, Role-Based Administration and Competition Management Portal for AIMA-ICRC India Case League 2026.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
