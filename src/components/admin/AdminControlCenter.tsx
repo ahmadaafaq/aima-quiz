@@ -9,6 +9,8 @@ import { RegionalHubsManager } from './RegionalHubsManager';
 import { InstitutesAndSponsorsManager } from './InstitutesAndSponsorsManager';
 import { QuizQuestionBankManager } from './QuizQuestionBankManager';
 import { OfficialBulletinsManager } from './OfficialBulletinsManager';
+import { CaseDeckDeadlinesManager } from './CaseDeckDeadlinesManager';
+import { OfflineRoundsManager } from './OfflineRoundsManager';
 import { DocRequirementInfo } from '../common/DocRequirementInfo';
 import {
   Activity,
@@ -16,6 +18,7 @@ import {
   Award,
   BarChart3,
   BookOpen,
+  Briefcase,
   Building,
   Building2,
   Calendar,
@@ -83,6 +86,7 @@ export const AdminControlCenter: React.FC = () => {
     hubs,
     institutions,
     sponsors,
+    offlineRoundResults,
     caseSubmissions,
     evaluations,
     rubricR2,
@@ -110,12 +114,15 @@ export const AdminControlCenter: React.FC = () => {
     if (t === 'quiz' || t === 'quiz_programs' || t === 'quizzes' || t === 'quiz_program' || t === 'programs') return 'quiz_programs';
     if (t === 'quiz_results' || t === 'results' || t === 'rankings' || t === 'standings' || t === 'leaderboard') return 'quiz_results';
     if (t === 'quiz_bank' || t === 'questions' || t === 'question_bank' || t === 'bank') return 'quiz_bank';
+    if (t === 'case_deadlines' || t === 'deadlines' || t === 'extensions') return 'case_deadlines';
+    if (t === 'offline_rounds' || t === 'offline' || t === 'round_3_4' || t === 'offline_results') return 'offline_rounds';
     if (t === 'jury' || t === 'jury_bench' || t === 'evaluations' || t === 'evaluator' || t === 'moderation') return 'evaluations';
     if (t === 'hub' || t === 'hubs' || t === 'regional_hubs' || t === 'regional') return 'hubs';
     if (t === 'participants' || t === 'students' || t === 'roster' || t === 'candidates') return 'participants';
     if (t === 'stages' || t === 'progression' || t === 'gates' || t === 'timeline') return 'stages';
     if (t === 'case_decks' || t === 'cases' || t === 'submissions' || t === 'decks') return 'case_decks';
-    if (t === 'institutions' || t === 'sponsors') return 'institutions';
+    if (t === 'sponsors' || t === 'corporate_sponsors' || t === 'partners') return 'sponsors';
+    if (t === 'institutions' || t === 'bschools' || t === 'colleges' || t === 'institutes') return 'institutions';
     if (t === 'finances' || t === 'financial' || t === 'gst' || t === 'ledger') return 'finances';
     if (t === 'announcements' || t === 'bulletins') return 'announcements';
     if (t === 'audit_logs' || t === 'audit') return 'audit_logs';
@@ -262,7 +269,7 @@ export const AdminControlCenter: React.FC = () => {
   const menuGroups: MenuGroup[] = [
     {
       id: 'command_broadcast',
-      title: 'Core Command',
+      title: 'Command & Broadcast',
       items: [
         {
           id: 'overview',
@@ -314,8 +321,8 @@ export const AdminControlCenter: React.FC = () => {
       ],
     },
     {
-      id: 'rounds_evaluations',
-      title: 'Rounds 2-4: Case & Jury',
+      id: 'round2_case',
+      title: 'Round 2: Case Deck & AI',
       items: [
         {
           id: 'case_decks',
@@ -325,11 +332,60 @@ export const AdminControlCenter: React.FC = () => {
           roles: ['admin', 'evaluator', 'all'],
         },
         {
+          id: 'case_deadlines',
+          label: 'Deadlines & Extensions',
+          icon: Clock,
+          badge: teams.filter(t => t.extensionRequest?.status === 'PENDING').length > 0
+            ? `${teams.filter(t => t.extensionRequest?.status === 'PENDING').length} Pending`
+            : undefined,
+          roles: ['admin', 'all'],
+        },
+        {
           id: 'evaluations',
-          label: 'Jury Bench & Evaluations',
+          label: 'Jury Bench & Rubric',
           icon: Scale,
           badge: `${evaluations.length}`,
           roles: ['admin', 'evaluator', 'all'],
+        },
+      ],
+    },
+    {
+      id: 'round34_offline',
+      title: 'Rounds 3 & 4: Offline Finals',
+      items: [
+        {
+          id: 'offline_rounds',
+          label: 'Offline Rounds Results',
+          icon: Award,
+          badge: offlineRoundResults.length > 0 ? `${offlineRoundResults.length}` : 'New',
+          roles: ['admin', 'all', 'regional_hub'],
+        },
+        {
+          id: 'hubs',
+          label: 'Regional Hubs & Zones',
+          icon: MapPin,
+          badge: `${hubs.length}`,
+          roles: ['admin', 'regional_hub', 'all'],
+        },
+      ],
+    },
+    {
+      id: 'ecosystem_partners',
+      title: 'Ecosystem & Partners',
+      items: [
+        {
+          id: 'sponsors',
+          label: 'Corporate Partners & Sponsors',
+          icon: Briefcase,
+          badge: `${sponsors.length}`,
+          roles: ['admin', 'corporate_partner', 'all'],
+        },
+        {
+          id: 'institutions',
+          label: 'Accredited B-Schools',
+          icon: Building2,
+          badge: `${institutions.length}`,
+          roles: ['admin', 'institute_coordinator', 'all'],
         },
         {
           id: 'participants',
@@ -341,23 +397,9 @@ export const AdminControlCenter: React.FC = () => {
       ],
     },
     {
-      id: 'ecosystem_partners',
-      title: 'Institutes & Partners',
+      id: 'finance_governance',
+      title: 'Finance & Governance',
       items: [
-        {
-          id: 'institutions',
-          label: 'Institutes & Sponsors',
-          icon: Building2,
-          badge: `${institutions.length + (sponsors?.length || 0)}`,
-          roles: ['admin', 'institute_coordinator', 'corporate_partner', 'all'],
-        },
-        {
-          id: 'hubs',
-          label: 'Regional Hubs & Zones',
-          icon: MapPin,
-          badge: `${hubs.length}`,
-          roles: ['admin', 'regional_hub', 'all'],
-        },
         {
           id: 'finances',
           label: 'Financial & GST Ledger',
@@ -365,12 +407,6 @@ export const AdminControlCenter: React.FC = () => {
           badge: `₹${(grossRevenue / 1000).toFixed(0)}k`,
           roles: ['admin', 'all'],
         },
-      ],
-    },
-    {
-      id: 'security_governance',
-      title: 'Security & Governance',
-      items: [
         {
           id: 'audit_logs',
           label: 'ISO 27001 Audit Trail',
@@ -1265,6 +1301,20 @@ export const AdminControlCenter: React.FC = () => {
           </div>
         )}
 
+        {/* -------------------- TAB: ROUND 2 DEADLINES & EXTENSIONS -------------------- */}
+        {activeTab === 'case_deadlines' && (
+          <div className="animate-in fade-in duration-200">
+            <CaseDeckDeadlinesManager />
+          </div>
+        )}
+
+        {/* -------------------- TAB: OFFLINE ROUNDS RESULTS -------------------- */}
+        {activeTab === 'offline_rounds' && (
+          <div className="animate-in fade-in duration-200">
+            <OfflineRoundsManager />
+          </div>
+        )}
+
         {/* -------------------- TAB: REGIONAL HUBS -------------------- */}
         {activeTab === 'hubs' && (
           <div className="animate-in fade-in duration-200">
@@ -1275,10 +1325,17 @@ export const AdminControlCenter: React.FC = () => {
           </div>
         )}
 
-        {/* -------------------- TAB: INSTITUTES & SPONSORS -------------------- */}
+        {/* -------------------- TAB: CORPORATE SPONSORS -------------------- */}
+        {activeTab === 'sponsors' && (
+          <div className="animate-in fade-in duration-200">
+            <InstitutesAndSponsorsManager initialSubTab="sponsors" />
+          </div>
+        )}
+
+        {/* -------------------- TAB: ACCREDITED INSTITUTIONS -------------------- */}
         {activeTab === 'institutions' && (
           <div className="animate-in fade-in duration-200">
-            <InstitutesAndSponsorsManager />
+            <InstitutesAndSponsorsManager initialSubTab="institutions" />
           </div>
         )}
 

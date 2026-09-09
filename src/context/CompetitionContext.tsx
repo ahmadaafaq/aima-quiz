@@ -20,6 +20,8 @@ import {
   Announcement,
   CompetitionConfig,
   RegionHubId,
+  DeadlineExtensionRequest,
+  OfflineRoundResult,
 } from '../types';
 import {
   INITIAL_CONFIG,
@@ -39,6 +41,7 @@ import {
   MOCK_ANNOUNCEMENTS,
   MOCK_SUPPORT_TICKETS,
   MOCK_AUDIT_LOGS,
+  MOCK_OFFLINE_ROUND_RESULTS,
 } from '../data/mockData';
 
 interface CompetitionContextType {
@@ -68,6 +71,14 @@ interface CompetitionContextType {
   joinTeam: (inviteCode: string) => { success: boolean; message: string };
   leaveTeam: () => void;
   lockTeam: (teamId: string) => void;
+  requestDeadlineExtension: (teamId: string, requestData: {
+    reasonCategory: 'Academic/Exam Clash' | 'Medical Emergency' | 'Technical/Hardware Issue' | 'Faculty/Mentor Review Delay' | 'Other';
+    reasonDetails: string;
+    requestedExtensionDays: number;
+    supportingDocName?: string;
+  }) => { success: boolean; message: string };
+  reviewDeadlineExtension: (teamId: string, decision: 'APPROVED' | 'REJECTED', remarks?: string, customNewDeadline?: string) => void;
+  updateTeamDeadline: (teamId: string, newDeadline: string) => void;
   
   // Registration & Payment
   updateUserProfile: (data: Partial<UserProfile>) => void;
@@ -128,12 +139,30 @@ interface CompetitionContextType {
   institutions: InstitutionalProfile[];
   addInstitution: (inst: Omit<InstitutionalProfile, 'id'>) => void;
   updateInstitution: (id: string, inst: Partial<InstitutionalProfile>) => void;
+  createInstitutionalTeam: (instId: string, teamData: {
+    name: string;
+    preferredHub?: RegionHubId;
+    leaderStudentId: string;
+    members: Array<{
+      studentId: string;
+      name: string;
+      email: string;
+      mobile?: string;
+      roleInTeam?: string;
+    }>;
+  }) => { success: boolean; message: string; team?: Team };
   bulkRegisterStudents: (instId: string, csvData: Array<Record<string, string>>) => { added: number; errors: string[] };
   processInstitutionalPayment: (instId: string, amount: number) => void;
   sponsors: CorporateSponsor[];
   addSponsor: (sponsor: Omit<CorporateSponsor, 'id'>) => void;
   updateSponsor: (id: string, sponsor: Partial<CorporateSponsor>) => void;
   deleteSponsor: (id: string) => void;
+  
+  // Offline Rounds 3 & 4 Results Management
+  offlineRoundResults: OfflineRoundResult[];
+  recordOfflineResultsBulk: (round: 'round_3' | 'round_4', results: Array<Omit<OfflineRoundResult, 'id' | 'uploadedAt'>>) => { success: boolean; count: number };
+  updateOfflineResult: (id: string, updates: Partial<OfflineRoundResult>) => void;
+  deleteOfflineResult: (id: string) => void;
   
   // Registration Flow with Simulated Gateway
   showRegistrationModal: boolean;
@@ -249,6 +278,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [announcements, setAnnouncements] = useState<Announcement[]>(MOCK_ANNOUNCEMENTS);
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>(MOCK_SUPPORT_TICKETS);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(MOCK_AUDIT_LOGS);
+  const [offlineRoundResults, setOfflineRoundResults] = useState<OfflineRoundResult[]>(MOCK_OFFLINE_ROUND_RESULTS);
 
   // Modals & Chatbot
   const [activeCertificateModal, setActiveCertificateModal] = useState<CertificateRecord | null>(null);
@@ -546,6 +576,105 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const lockTeam = (teamId: string) => {
     setTeams(prev => prev.map(t => (t.id === teamId ? { ...t, isLocked: true } : t)));
     addAuditLog('Team Locked', 'Team', `Roster locked for team ID ${teamId}`);
+  };
+
+  const requestDeadlineExtension = (
+    teamId: string,
+    requestData: {
+      reasonCategory: 'Academic/Exam Clash' | 'Medical Emergency' | 'Technical/Hardware Issue' | 'Faculty/Mentor Review Delay' | 'Other';
+      reasonDetails: string;
+      requestedExtensionDays: number;
+      supportingDocName?: string;
+    }
+  ): { success: boolean; message: string } => {
+    const targetTeam = teams.find(t => t.id === teamId);
+    if (!targetTeam) return { success: false, message: 'Team not found.' };
+
+    const currentDead = targetTeam.submissionDeadline || '2026-10-28T23:59:59Z';
+    const currentDateObj = new Date(currentDead);
+    const newDateObj = new Date(currentDateObj.getTime() + requestData.requestedExtensionDays * 24 * 60 * 60 * 1000);
+    const proposedDeadline = newDateObj.toISOString();
+
+    const newRequest: DeadlineExtensionRequest = {
+      id: 'ext_' + Date.now(),
+      teamId,
+      teamName: targetTeam.name,
+      instituteName: targetTeam.instituteName,
+      leaderId: targetTeam.leaderId,
+      leaderName: targetTeam.leaderName,
+      leaderEmail: currentUser.email || `${targetTeam.leaderName.toLowerCase().replace(/\s+/g, '.')}@institute.ac.in`,
+      currentDeadline: currentDead,
+      requestedExtensionDays: requestData.requestedExtensionDays,
+      proposedDeadline,
+      reasonCategory: requestData.reasonCategory,
+      reasonDetails: requestData.reasonDetails,
+      supportingDocName: requestData.supportingDocName,
+      status: 'PENDING',
+      requestedAt: new Date().toISOString(),
+    };
+
+    setTeams(prev =>
+      prev.map(t =>
+        t.id === teamId
+          ? { ...t, extensionRequest: newRequest }
+          : t
+      )
+    );
+
+    addAuditLog(
+      'Deadline Extension Requested',
+      'Team',
+      `Team "${targetTeam.name}" requested a +${requestData.requestedExtensionDays}-day extension for Round 2 Case Deck (${requestData.reasonCategory}).`
+    );
+
+    return {
+      success: true,
+      message: `Extension request for +${requestData.requestedExtensionDays} days submitted to AIMA Secretariat. Review status will be displayed here.`,
+    };
+  };
+
+  const reviewDeadlineExtension = (
+    teamId: string,
+    decision: 'APPROVED' | 'REJECTED',
+    remarks?: string,
+    customNewDeadline?: string
+  ) => {
+    setTeams(prev =>
+      prev.map(t => {
+        if (t.id !== teamId || !t.extensionRequest) return t;
+
+        const effectiveDeadline = decision === 'APPROVED'
+          ? (customNewDeadline || t.extensionRequest.proposedDeadline)
+          : (t.submissionDeadline || '2026-10-28T23:59:59Z');
+
+        const updatedRequest: DeadlineExtensionRequest = {
+          ...t.extensionRequest,
+          status: decision,
+          reviewedAt: new Date().toISOString(),
+          reviewedBy: currentUser.name || 'AIMA Secretariat Chief Scrutineer',
+          reviewerRemarks: remarks || (decision === 'APPROVED' ? 'Granted on academic merits.' : 'Declined as per uniform league rules.'),
+        };
+
+        return {
+          ...t,
+          submissionDeadline: effectiveDeadline,
+          extensionRequest: updatedRequest,
+        };
+      })
+    );
+
+    addAuditLog(
+      `Deadline Extension ${decision}`,
+      'Team',
+      `Secretariat ${decision.toLowerCase()} deadline extension for team ID ${teamId}. Remarks: ${remarks || 'None'}`
+    );
+  };
+
+  const updateTeamDeadline = (teamId: string, newDeadline: string) => {
+    setTeams(prev =>
+      prev.map(t => (t.id === teamId ? { ...t, submissionDeadline: newDeadline } : t))
+    );
+    addAuditLog('Deadline Adjusted', 'Team', `Updated submission deadline for team ${teamId} to ${newDeadline}`);
   };
 
   const processPayment = async (
@@ -960,6 +1089,184 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       prev.map(i => (i.id === instId ? { ...i, totalPaidAmount: i.totalPaidAmount + amount } : i))
     );
     addAuditLog('Institutional Bulk Payment', 'Payment', `Received ₹${amount} from Institution ${instId}`);
+  };
+
+  const createInstitutionalTeam = (
+    instId: string,
+    teamData: {
+      name: string;
+      preferredHub?: RegionHubId;
+      leaderStudentId: string;
+      members: Array<{
+        studentId: string;
+        name: string;
+        email: string;
+        mobile?: string;
+        roleInTeam?: string;
+      }>;
+    }
+  ): { success: boolean; message: string; team?: Team } => {
+    const inst = institutions.find(i => i.id === instId);
+    const instName = inst?.name || currentUser.instituteName || 'Institutional Campus';
+    const teamId = 'team_inst_' + Math.random().toString(36).substring(2, 9);
+    const code = 'ICL-' + teamData.name.substring(0, 3).toUpperCase() + '-' + Math.floor(100 + Math.random() * 900);
+    const assignedHub = teamData.preferredHub || (inst?.state?.toLowerCase().includes('karnataka') ? 'south' : 'north');
+
+    const leaderMember = teamData.members.find(m => m.studentId === teamData.leaderStudentId) || teamData.members[0];
+
+    const teamMembers: TeamMember[] = teamData.members.map(m => ({
+      studentId: m.studentId,
+      name: m.name,
+      email: m.email,
+      mobile: m.mobile || '+91 98000 00000',
+      institute: instName,
+      isLeader: m.studentId === leaderMember.studentId,
+      hasPaid: true,
+      acceptedDeclaration: true,
+      roleInTeam: m.roleInTeam || (m.studentId === leaderMember.studentId ? 'Team Leader & Strategist' : 'Team Analyst'),
+    }));
+
+    const newTeam: Team = {
+      id: teamId,
+      name: teamData.name,
+      inviteCode: code,
+      leaderId: leaderMember.studentId,
+      leaderName: leaderMember.name,
+      instituteName: instName,
+      assignedHub,
+      preferredHub: teamData.preferredHub,
+      isLocked: false,
+      createdAt: new Date().toISOString(),
+      submissionDeadline: '2026-10-28T23:59:59Z',
+      members: teamMembers,
+      r1AvgScore: 85,
+      r1Qualified: true,
+      r1CompletedMembersCount: teamMembers.length,
+    };
+
+    setTeams(prev => [newTeam, ...prev]);
+
+    // Update institute stats
+    setInstitutions(prev =>
+      prev.map(i =>
+        i.id === instId
+          ? { ...i, teamsCreated: (i.teamsCreated || 0) + 1 }
+          : i
+      )
+    );
+
+    addAuditLog(
+      'Institutional Team Created',
+      'Institute',
+      `Coordinator created team "${teamData.name}" (${code}) with ${teamMembers.length} members for ${instName}`
+    );
+
+    return {
+      success: true,
+      message: `Team "${teamData.name}" created successfully with code ${code}!`,
+      team: newTeam,
+    };
+  };
+
+  const recordOfflineResultsBulk = (
+    round: 'round_3' | 'round_4',
+    newResults: Array<Omit<OfflineRoundResult, 'id' | 'uploadedAt'>>
+  ): { success: boolean; count: number } => {
+    const timestamp = new Date().toISOString();
+    const created: OfflineRoundResult[] = newResults.map((r, idx) => ({
+      ...r,
+      id: `off_${round}_${Date.now()}_${idx}`,
+      uploadedAt: timestamp,
+    }));
+
+    setOfflineRoundResults(prev => {
+      // replace entries for existing teamId in this round or append
+      const existingFiltered = prev.filter(p => !(p.round === round && created.some(c => c.teamId === p.teamId)));
+      return [...created, ...existingFiltered];
+    });
+
+    // Also sync scores directly back onto teams
+    setTeams(prev =>
+      prev.map(t => {
+        const res = created.find(c => c.teamId === t.id);
+        if (!res) return t;
+
+        if (round === 'round_3') {
+          return {
+            ...t,
+            r3AttendanceVerified: res.attendanceVerified,
+            r3OfflineQuizScore: res.offlineQuizScore,
+            r3PresentationScore: res.livePresentationScore,
+            r3TotalScore: res.aggregateScore,
+            r3Rank: res.rank,
+            r3Qualified: res.qualifiedNextRound,
+          };
+        } else {
+          return {
+            ...t,
+            r4AttendanceVerified: res.attendanceVerified,
+            r4OfflineQuizScore: res.offlineQuizScore,
+            r4PresentationScore: res.livePresentationScore,
+            r4FinalScore: res.aggregateScore,
+            r4Rank: res.rank,
+            r4Award: res.award,
+          };
+        }
+      })
+    );
+
+    addAuditLog(
+      'Offline Results Uploaded',
+      'Results',
+      `Admin bulk recorded offline scores for ${created.length} teams in ${round === 'round_3' ? 'Round 3 (Regional Live)' : 'Round 4 (National Grand Finale)'}.`
+    );
+
+    return { success: true, count: created.length };
+  };
+
+  const updateOfflineResult = (id: string, updates: Partial<OfflineRoundResult>) => {
+    setOfflineRoundResults(prev =>
+      prev.map(r => {
+        if (r.id !== id) return r;
+        const updated = { ...r, ...updates };
+
+        // sync team
+        setTeams(tList =>
+          tList.map(t => {
+            if (t.id !== updated.teamId) return t;
+            if (updated.round === 'round_3') {
+              return {
+                ...t,
+                r3AttendanceVerified: updated.attendanceVerified,
+                r3OfflineQuizScore: updated.offlineQuizScore,
+                r3PresentationScore: updated.livePresentationScore,
+                r3TotalScore: updated.aggregateScore,
+                r3Rank: updated.rank,
+                r3Qualified: updated.qualifiedNextRound,
+              };
+            } else {
+              return {
+                ...t,
+                r4AttendanceVerified: updated.attendanceVerified,
+                r4OfflineQuizScore: updated.offlineQuizScore,
+                r4PresentationScore: updated.livePresentationScore,
+                r4FinalScore: updated.aggregateScore,
+                r4Rank: updated.rank,
+                r4Award: updated.award,
+              };
+            }
+          })
+        );
+
+        return updated;
+      })
+    );
+    addAuditLog('Offline Result Updated', 'Results', `Updated offline result record ${id}`);
+  };
+
+  const deleteOfflineResult = (id: string) => {
+    setOfflineRoundResults(prev => prev.filter(r => r.id !== id));
+    addAuditLog('Offline Result Deleted', 'Results', `Removed offline result record ${id}`);
   };
 
   const addSponsor = (sponsorData: Omit<CorporateSponsor, 'id'>) => {
@@ -1567,6 +1874,9 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         joinTeam,
         leaveTeam,
         lockTeam,
+        requestDeadlineExtension,
+        reviewDeadlineExtension,
+        updateTeamDeadline,
         updateUserProfile,
         processPayment,
         makePayment,
@@ -1613,12 +1923,17 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         institutions,
         addInstitution,
         updateInstitution,
+        createInstitutionalTeam,
         bulkRegisterStudents,
         processInstitutionalPayment,
         sponsors,
         addSponsor,
         updateSponsor,
         deleteSponsor,
+        offlineRoundResults,
+        recordOfflineResultsBulk,
+        updateOfflineResult,
+        deleteOfflineResult,
         showRegistrationModal,
         setShowRegistrationModal,
         registrationModalTrack,

@@ -84,6 +84,52 @@ export interface TeamMember {
   roleInTeam?: string; // e.g. Strategist, Financial Modeler, Presenter
 }
 
+export interface DeadlineExtensionRequest {
+  id: string;
+  teamId: string;
+  teamName: string;
+  instituteName: string;
+  leaderId: string;
+  leaderName: string;
+  leaderEmail: string;
+  currentDeadline: string;
+  requestedExtensionDays: number; // e.g. 2
+  proposedDeadline: string; // ISO string or human-readable
+  reasonCategory: 'Academic/Exam Clash' | 'Medical Emergency' | 'Technical/Hardware Issue' | 'Faculty/Mentor Review Delay' | 'Other';
+  reasonDetails: string;
+  supportingDocName?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  requestedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  reviewerRemarks?: string;
+}
+
+export interface OfflineRoundResult {
+  id: string;
+  round: 'round_3' | 'round_4';
+  teamId: string;
+  teamName: string;
+  instituteName: string;
+  hubId?: RegionHubId;
+  hubName?: string;
+  offlineQuizScore: number;
+  offlineQuizMaxMarks?: number;
+  livePresentationScore: number;
+  presentationMaxMarks?: number;
+  qaDefenseScore: number;
+  aggregateScore: number;
+  rank: number;
+  attendanceVerified: boolean;
+  qualifiedNextRound?: boolean;
+  award?: string;
+  evaluatorPanelNotes?: string;
+  notes?: string;
+  evaluatedBy?: string;
+  uploadedBy?: string;
+  uploadedAt: string;
+}
+
 export interface Team {
   id: string;
   name: string;
@@ -96,6 +142,10 @@ export interface Team {
   createdAt: string;
   assignedHub: RegionHubId;
   preferredHub?: RegionHubId;
+  
+  // Round 2 Deadlines & Extension Requests
+  submissionDeadline?: string;
+  extensionRequest?: DeadlineExtensionRequest;
   
   // Progress & Scores
   r1AvgScore?: number;
@@ -117,10 +167,15 @@ export interface Team {
   };
   r3AttendanceVerified?: boolean;
   r3Scores?: RegionalScoreEntry[];
+  r3OfflineQuizScore?: number;
+  r3PresentationScore?: number;
   r3TotalScore?: number;
   r3Rank?: number;
   r3Qualified?: boolean;
   
+  r4AttendanceVerified?: boolean;
+  r4OfflineQuizScore?: number;
+  r4PresentationScore?: number;
   r4FinalScore?: number;
   r4Rank?: number;
   r4Award?: string;

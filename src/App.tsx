@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { CompetitionProvider, useCompetition } from './context/CompetitionContext';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
@@ -18,6 +18,10 @@ import { UnifiedRegistrationModal } from './components/public/UnifiedRegistratio
 
 const AppContent: React.FC = () => {
   const { activeView, activeCertificateModal, setActiveCertificateModal, showRegistrationModal, setShowRegistrationModal, registrationModalTrack } = useCompetition();
+
+  useEffect(() => {
+    document.title = 'AIMA-ICRC India Case League 2026';
+  }, []);
 
   const renderActiveView = () => {
     switch (activeView) {

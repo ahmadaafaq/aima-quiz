@@ -30,7 +30,15 @@ interface CaseDeckSubmitterProps {
 }
 
 export const CaseDeckSubmitter: React.FC<CaseDeckSubmitterProps> = ({ onBack }) => {
-  const { currentTeam, currentUser, submitCaseDeck, aiEvaluations, setAiEvaluations, activeSubmission } = useCompetition();
+  const {
+    currentTeam,
+    currentUser,
+    submitCaseDeck,
+    aiEvaluations,
+    setAiEvaluations,
+    activeSubmission,
+    requestDeadlineExtension,
+  } = useCompetition();
 
   const [caseDeckName, setCaseDeckName] = useState(activeSubmission?.fileName || 'StratApex_AIMA_R2_CaseDeck_v1.pdf');
   const [slideCount, setSlideCount] = useState<number>(activeSubmission?.slideCount || 12);
@@ -48,6 +56,59 @@ export const CaseDeckSubmitter: React.FC<CaseDeckSubmitterProps> = ({ onBack }) 
     aiEvaluations[activeSubmission?.id || ''] || null
   );
   const [isSuccessModal, setIsSuccessModal] = useState(false);
+
+  // Deadline Extension State
+  const [showExtensionModal, setShowExtensionModal] = useState(false);
+  const [extensionCategory, setExtensionCategory] = useState<
+    'Academic/Exam Clash' | 'Medical Emergency' | 'Technical/Hardware Issue' | 'Faculty/Mentor Review Delay' | 'Other'
+  >('Academic/Exam Clash');
+  const [extensionDays, setExtensionDays] = useState<number>(2);
+  const [extensionDetails, setExtensionDetails] = useState('');
+  const [extensionDocName, setExtensionDocName] = useState('');
+  const [extensionSuccessMsg, setExtensionSuccessMsg] = useState<string | null>(null);
+
+  const isTeamLeader =
+    currentUser.isTeamLeader ||
+    currentUser.id === currentTeam?.leaderId ||
+    currentUser.role === 'team_leader' ||
+    currentTeam?.leaderName === currentUser.name;
+
+  const deadlineIso = currentTeam?.submissionDeadline || '2026-10-28T23:59:59Z';
+  const deadlineDate = new Date(deadlineIso);
+
+  const getDeadlineTimeLeft = () => {
+    const diff = deadlineDate.getTime() - Date.now();
+    if (diff < 0) return { text: 'Cut-off Expired', isUrgent: true };
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+    return { text: `${days}d ${hours}h remaining`, isUrgent: days <= 2 };
+  };
+
+  const timeLeft = getDeadlineTimeLeft();
+  const extRequest = currentTeam?.extensionRequest;
+
+  const handleRequestExtensionSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentTeam) return;
+    if (!extensionDetails.trim()) {
+      alert('Please provide a detailed explanation of the circumstances requiring an extension.');
+      return;
+    }
+
+    const res = requestDeadlineExtension(currentTeam.id, {
+      reasonCategory: extensionCategory,
+      reasonDetails: extensionDetails.trim(),
+      requestedExtensionDays: extensionDays,
+      supportingDocName: extensionDocName.trim() || undefined,
+    });
+
+    if (res.success) {
+      setExtensionSuccessMsg(res.message);
+      setShowExtensionModal(false);
+      setExtensionDetails('');
+      setExtensionDocName('');
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,12 +207,111 @@ export const CaseDeckSubmitter: React.FC<CaseDeckSubmitterProps> = ({ onBack }) 
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
-            Deadline: Oct 28, 2026 23:59 IST
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="px-3.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-right">
+            <span className="text-[10px] uppercase font-bold text-amber-600 block">
+              Cut-off Deadline
+            </span>
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+              {deadlineDate.toLocaleString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+              })}
+            </span>
+          </div>
+
+          <span
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${
+              timeLeft.isUrgent
+                ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 animate-pulse'
+                : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
+            }`}
+          >
+            {timeLeft.text}
           </span>
         </div>
       </div>
+
+      {/* Extension Appeal Alert / Status Banner */}
+      {extRequest && (
+        <div
+          className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+            extRequest.status === 'PENDING'
+              ? 'bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200'
+              : extRequest.status === 'APPROVED'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-900 dark:text-emerald-200'
+              : 'bg-rose-500/10 border-rose-500/30 text-rose-900 dark:text-rose-200'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <Clock className="w-5 h-5 shrink-0" />
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-xs font-bold">
+                  {extRequest.status === 'PENDING' && `Deadline Extension Request Pending Review (+${extRequest.requestedExtensionDays} Days)`}
+                  {extRequest.status === 'APPROVED' && `Extension Approved by Secretariat (+${extRequest.requestedExtensionDays} Days Granted)`}
+                  {extRequest.status === 'REJECTED' && 'Deadline Extension Request Declined'}
+                </h4>
+                <span className="text-[10px] px-2 py-0.2 rounded-full font-bold uppercase tracking-wider bg-white/60 dark:bg-black/40 border">
+                  {extRequest.status}
+                </span>
+              </div>
+              <p className="text-[11px] opacity-90 mt-0.5">
+                Reason: <strong>{extRequest.reasonCategory}</strong> — "{extRequest.reasonDetails}"
+                {extRequest.reviewerRemarks && ` • Secretariat Note: "${extRequest.reviewerRemarks}"`}
+              </p>
+            </div>
+          </div>
+
+          {extRequest.status === 'PENDING' && (
+            <span className="text-[11px] font-mono font-semibold opacity-75 self-start sm:self-auto shrink-0">
+              Submitted {new Date(extRequest.requestedAt).toLocaleDateString()}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Extension Request Action Banner (if no pending request) */}
+      {!extRequest && (
+        <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+            <div>
+              <span className="font-bold text-slate-800 dark:text-slate-200">
+                Facing university examination or medical schedule clashes?
+              </span>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Team leaders may petition the AIMA Central Secretariat for a 1 to 5 day submission extension under Section 8.3.
+              </p>
+            </div>
+          </div>
+
+          {isTeamLeader ? (
+            <button
+              type="button"
+              onClick={() => setShowExtensionModal(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors cursor-pointer shrink-0"
+            >
+              Request Deadline Extension
+            </button>
+          ) : (
+            <span className="text-[11px] text-slate-400 italic shrink-0">
+              (Team Leader {currentTeam?.leaderName || 'Representative'} can file petition)
+            </span>
+          )}
+        </div>
+      )}
+
+      {extensionSuccessMsg && (
+        <div className="p-3.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs flex items-center justify-between">
+          <span>{extensionSuccessMsg}</span>
+          <button onClick={() => setExtensionSuccessMsg(null)} className="font-bold">✕</button>
+        </div>
+      )}
 
       {/* Case Brief Watermarked Download Box */}
       <div className="p-5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-300/60 dark:border-amber-700/60 relative overflow-hidden">
@@ -404,6 +564,123 @@ export const CaseDeckSubmitter: React.FC<CaseDeckSubmitterProps> = ({ onBack }) 
         </div>
 
       </form>
+
+      {/* Deadline Extension Petition Modal */}
+      {showExtensionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-blue-600" />
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                  Petition AIMA Secretariat for Deadline Extension
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExtensionModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl text-xs text-blue-900 dark:text-blue-200 border border-blue-200 dark:border-blue-800">
+              <strong>Section 8.3 Extension By-law:</strong> Teams with valid academic schedule conflicts, medical emergencies, or accredited institutional events may petition for a 1 to 5 day extension. Requests are evaluated by the AIMA Regional Convener.
+            </div>
+
+            <form onSubmit={handleRequestExtensionSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Reason for Extension:
+                </label>
+                <select
+                  value={extensionCategory}
+                  onChange={e => setExtensionCategory(e.target.value as any)}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                >
+                  <option value="Academic/Exam Clash">Academic / University Examination Clash</option>
+                  <option value="Medical Emergency">Medical Emergency / Health Contingency</option>
+                  <option value="Faculty/Mentor Review Delay">Institutional Faculty/Mentor Review Scheduling Delay</option>
+                  <option value="Technical/Hardware Issue">Technical / Hardware / Connectivity Disruption</option>
+                  <option value="Other">Other Unforeseen Institutional Reason</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Extension Requested (Days):
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[1, 2, 3, 5].map(days => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => setExtensionDays(days)}
+                      className={`p-2 rounded-xl text-center font-bold border transition-all cursor-pointer ${
+                        extensionDays === days
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                          : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                      }`}
+                    >
+                      +{days} {days === 1 ? 'Day' : 'Days'}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Proposed New Deadline: <strong>{new Date(deadlineDate.getTime() + extensionDays * 86400000).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong>
+                </p>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Detailed Explanation & Context:
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  placeholder="Provide precise details of university exam dates, subject codes, or circumstances warranting this extension..."
+                  value={extensionDetails}
+                  onChange={e => setExtensionDetails(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Supporting Document (Optional):
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. University_Exam_DateSheet_Signed.pdf"
+                  value={extensionDocName}
+                  onChange={e => setExtensionDocName(e.target.value)}
+                  className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                />
+                <span className="text-[10px] text-slate-400 mt-0.5 block">
+                  Mention the name of the signed institutional letter or exam schedule submitted.
+                </span>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowExtensionModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                >
+                  Submit Extension Request
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Modal */}
       {isSuccessModal && (

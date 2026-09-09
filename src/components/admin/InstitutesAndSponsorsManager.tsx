@@ -22,9 +22,13 @@ import {
 
 interface InstitutesAndSponsorsManagerProps {
   onNavigateToHubs?: () => void;
+  initialSubTab?: 'institutions' | 'sponsors';
 }
 
-export const InstitutesAndSponsorsManager: React.FC<InstitutesAndSponsorsManagerProps> = () => {
+export const InstitutesAndSponsorsManager: React.FC<InstitutesAndSponsorsManagerProps> = ({
+  onNavigateToHubs,
+  initialSubTab = 'sponsors',
+}) => {
   const {
     institutions,
     addInstitution,
@@ -35,7 +39,13 @@ export const InstitutesAndSponsorsManager: React.FC<InstitutesAndSponsorsManager
   } = useCompetition();
 
   // Active view: 'institutions' | 'sponsors'
-  const [activeSubTab, setActiveSubTab] = useState<'institutions' | 'sponsors'>('sponsors');
+  const [activeSubTab, setActiveSubTab] = useState<'institutions' | 'sponsors'>(initialSubTab);
+
+  React.useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
 
   // Search & Filters for Institutions
   const [instSearch, setInstSearch] = useState('');
