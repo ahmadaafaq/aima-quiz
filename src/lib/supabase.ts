@@ -376,7 +376,7 @@ export async function fetchRegistrationByNumber(
 }
 
 /**
- * Save registration dynamically to Supabase
+ * Save registration dynamically to Supabase with local storage cache fallback
  */
 export async function saveRegistrationToSupabase(
   reg: CSRBootcampRegistration
@@ -389,7 +389,7 @@ export async function saveRegistrationToSupabase(
   try {
     const row = mapAppRegToSupabaseRow(reg);
 
-    // Insert into 'registrations' table
+    // Insert into 'registrations' table in Supabase
     const { data, error } = await supabase
       .from('registrations')
       .upsert(row, { onConflict: 'registration_number' })
@@ -422,7 +422,7 @@ export async function saveRegistrationToSupabase(
 }
 
 /**
- * Fetch registrations dynamically from Supabase
+ * Fetch registrations dynamically from Supabase with local storage cache fallback
  */
 export async function fetchRegistrationsFromSupabase(): Promise<{
   registrations: CSRBootcampRegistration[];
@@ -481,7 +481,7 @@ export async function fetchRegistrationsFromSupabase(): Promise<{
 }
 
 /**
- * Update payment status dynamically in Supabase
+ * Update payment status dynamically in Supabase with local storage cache update
  */
 export async function updateRegistrationPaymentInSupabase(
   registrationIdOrNumber: string,
@@ -572,9 +572,11 @@ CREATE INDEX IF NOT EXISTS idx_registrations_mode ON public.registrations(regist
 CREATE INDEX IF NOT EXISTS idx_registrations_created_at ON public.registrations(created_at DESC);
 
 ALTER TABLE public.registrations ENABLE ROW LEVEL SECURITY;
-GRANT ALL ON TABLE public.registrations TO anon;
-GRANT ALL ON TABLE public.registrations TO authenticated;
-GRANT ALL ON TABLE public.registrations TO service_role;
+
+-- Grant permissions to Supabase roles
+GRANT ALL ON public.registrations TO anon, authenticated, service_role;
+
+-- Allow public submission & read via publishable/anon key
 DROP POLICY IF EXISTS "Allow anon submit and read registrations" ON public.registrations;
 CREATE POLICY "Allow anon submit and read registrations"
   ON public.registrations FOR ALL USING (true) WITH CHECK (true);
