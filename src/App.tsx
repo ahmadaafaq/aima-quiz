@@ -16,6 +16,7 @@ import { SupportModal } from './components/support/SupportModal';
 import { ChatAssistant } from './components/chat/ChatAssistant';
 import { UnifiedRegistrationModal } from './components/public/UnifiedRegistrationModal';
 import { RegistrationPage } from './components/registration/RegistrationPage';
+import { ParticipantLoginPage } from './components/auth/ParticipantLoginPage';
 
 const AppContent: React.FC = () => {
   const { activeView, activeCertificateModal, setActiveCertificateModal, showRegistrationModal, setShowRegistrationModal, registrationModalTrack } = useCompetition();
@@ -30,6 +31,9 @@ const AppContent: React.FC = () => {
       case 'register':
       case 'bootcamp_registration':
         return <RegistrationPage />;
+      case 'participant_login':
+      case 'login':
+        return <ParticipantLoginPage />;
       case 'student':
         return <StudentDashboard />;
       case 'institute':

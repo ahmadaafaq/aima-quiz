@@ -79,6 +79,19 @@ export const StudentDashboard: React.FC = () => {
     ? certificates.find(c => c.recipientId === currentUser.id || c.teamName === currentTeam?.name)
     : undefined;
 
+  const assignedHubId = currentTeam?.assignedHub || currentUser.assignedHub || 'north';
+  const hubInfo = hubs.find(h => h.id === assignedHubId) || hubs[0];
+
+  // Dynamic financial calculation from registration
+  const isInstituteReg = currentTeam?.registrationMode === 'institute' || currentUser.instituteId?.includes('participant');
+  const isPaymentPaid = currentTeam?.paymentStatus === 'PAID';
+  const totalAmountVal = currentTeam?.totalAmount || (isInstituteReg ? 67850 : 14750);
+  const formattedTotalAmount = `₹${totalAmountVal.toLocaleString('en-IN')}`;
+  const perParticipantAmount = currentTeam?.members?.length
+    ? Math.round(totalAmountVal / currentTeam.members.length)
+    : (isInstituteReg ? 13570 : 14750);
+  const formattedPerParticipantAmount = `₹${perParticipantAmount.toLocaleString('en-IN')}`;
+
   const handleCopyInvite = () => {
     if (!currentTeam) return;
     navigator.clipboard?.writeText(currentTeam.inviteCode);
@@ -93,7 +106,7 @@ export const StudentDashboard: React.FC = () => {
 
   const handlePayment = (e: React.FormEvent) => {
     e.preventDefault();
-    makePayment('round1', 200, payMethod === 'upi' ? 'UPI_TRANSACTION' : 'CARD_TRANSACTION');
+    makePayment('round1', totalAmountVal, payMethod === 'upi' ? 'UPI_TRANSACTION' : 'CARD_TRANSACTION');
     setShowPaymentModal(false);
   };
 
@@ -124,7 +137,7 @@ export const StudentDashboard: React.FC = () => {
                   {currentUser.name || 'Participant'}
                 </h1>
                 <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
-                  {currentUser.role === 'team_leader' ? '👑 Team Leader' : currentUser.role === 'team_member' ? '👤 Team Member' : '🎓 Registered Participant'}
+                  {currentUser.isTeamLeader || currentUser.role === 'team_leader' ? '👑 Team Leader' : '👤 Team Member'}
                 </span>
                 {(currentUser.isVerified || currentUser.idCardUploaded) && (
                   <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center gap-1 border border-emerald-300 dark:border-emerald-700">
@@ -136,17 +149,27 @@ export const StudentDashboard: React.FC = () => {
 
               <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1.5 flex items-center gap-2 flex-wrap">
                 <span className="font-semibold text-slate-800 dark:text-slate-200">
-                  {currentUser.instituteName || 'Indian Institute of Management Bangalore (IIMB)'}
+                  {currentUser.instituteName || 'Registered Institution'}
                 </span>
-                <span>•</span>
-                <span>
-                  {currentUser.programme || 'MBA'}
-                  {currentUser.specialisation ? ` (${currentUser.specialisation})` : ''} • {currentUser.yearSemester || 'Year 2'} (Batch of {currentUser.expectedGraduation || '2027'})
-                </span>
-                <span>•</span>
-                <span className="font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[11px]">
-                  Roll: {currentUser.enrolmentNumber || currentUser.id}
-                </span>
+                {currentUser.programme && (
+                  <>
+                    <span>•</span>
+                    <span>
+                      {currentUser.programme}
+                      {currentUser.specialisation ? ` (${currentUser.specialisation})` : ''}
+                      {currentUser.yearSemester ? ` • ${currentUser.yearSemester}` : ''}
+                      {currentUser.expectedGraduation ? ` (Batch of ${currentUser.expectedGraduation})` : ''}
+                    </span>
+                  </>
+                )}
+                {currentUser.enrolmentNumber && (
+                  <>
+                    <span>•</span>
+                    <span className="font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[11px]">
+                      Roll: {currentUser.enrolmentNumber}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -166,10 +189,26 @@ export const StudentDashboard: React.FC = () => {
               </div>
             )}
 
-            {currentUser.hasPaidR1R2 ? (
+            {isInstituteReg ? (
+              isPaymentPaid ? (
+                <div className="inline-flex items-center gap-1.5">
+                  <span className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 border border-emerald-200 dark:border-emerald-800">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Institution Grant • Paid ({formattedTotalAmount})
+                  </span>
+                  <DocRequirementInfo specKey="student_fees" variant="icon" size="xs" colorTheme="emerald" />
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5">
+                  <span className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 flex items-center gap-1.5 border border-amber-300 dark:border-amber-700">
+                    <Clock className="w-3.5 h-3.5 text-amber-500 animate-pulse" /> Institution Proforma Invoice Pending ({formattedTotalAmount})
+                  </span>
+                  <DocRequirementInfo specKey="student_fees" variant="icon" size="xs" colorTheme="amber" />
+                </div>
+              )
+            ) : currentUser.hasPaidR1R2 || isPaymentPaid ? (
               <div className="inline-flex items-center gap-1.5">
                 <span className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 border border-emerald-200 dark:border-emerald-800">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Stage 1 Fee Paid (₹200)
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Registration Fee Paid ({formattedPerParticipantAmount})
                 </span>
                 <DocRequirementInfo specKey="student_fees" variant="icon" size="xs" colorTheme="emerald" />
               </div>
@@ -180,7 +219,7 @@ export const StudentDashboard: React.FC = () => {
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <CreditCard className="w-4 h-4" />
-                  <span>Pay Stage Fee (₹200)</span>
+                  <span>Pay Fee ({formattedPerParticipantAmount})</span>
                 </button>
                 <DocRequirementInfo specKey="student_fees" variant="icon" size="xs" colorTheme="emerald" />
               </div>
@@ -196,7 +235,11 @@ export const StudentDashboard: React.FC = () => {
               <span>Stage Progression</span>
               <DocRequirementInfo specKey="student_progression" variant="icon" size="xs" colorTheme="slate" />
             </div>
-            <span className="text-amber-600 dark:text-amber-400 font-bold">Round 2 Active • Advancing to Regionals</span>
+            <span className="text-amber-600 dark:text-amber-400 font-bold">
+              {myAttempt
+                ? (myCaseSubmission ? 'Round 2 Submitted • Awaiting Evaluation' : 'Round 2 Active • Advancing to Regionals')
+                : 'Round 1 Active • Assessment Pending'}
+            </span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-[10px] sm:text-xs font-bold">
@@ -222,13 +265,13 @@ export const StudentDashboard: React.FC = () => {
                 <span>Round 2: Case Deck</span>
               </span>
               <span className="text-[10px] font-medium opacity-80">
-                {myCaseSubmission ? '12 Slides Submitted' : 'Upload Case Deck'}
+                {myCaseSubmission ? `${myCaseSubmission.slideCount || 12} Slides Submitted` : 'Upload Case Deck'}
               </span>
             </button>
 
             <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/70 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1">
               <span className="font-semibold">Round 3: Regional Hub</span>
-              <span className="text-[10px] opacity-75">IIM Bangalore (Nov 14)</span>
+              <span className="text-[10px] opacity-75">{hubInfo ? `${hubInfo.city} (Nov 14)` : 'Regional Hub'}</span>
             </div>
 
             <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/70 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1">
@@ -263,7 +306,7 @@ export const StudentDashboard: React.FC = () => {
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-300/40 space-y-2">
                 <div className="text-[10px] text-amber-700 dark:text-amber-400 font-bold uppercase tracking-wider">
-                  Assigned Team Name
+                  {isInstituteReg ? 'Institutional Cohort Team' : 'Assigned Team Name'}
                 </div>
                 <div className="text-base font-bold text-slate-900 dark:text-slate-100">
                   {currentTeam.name}
@@ -281,35 +324,90 @@ export const StudentDashboard: React.FC = () => {
                 {copiedCode && (
                   <span className="text-[10px] text-emerald-600 font-semibold block">✓ Code copied to clipboard</span>
                 )}
+
+                {/* Dynamic Financial Overview */}
+                <div className="pt-2 mt-2 border-t border-amber-200/50 dark:border-amber-900/40 text-[11px] space-y-1">
+                  <div className="flex items-center justify-between text-slate-600 dark:text-slate-400">
+                    <span>Registration Mode:</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">
+                      {isInstituteReg ? 'Institutional Nomination' : 'Team Registration'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-600 dark:text-slate-400">
+                    <span>Total Package Fee:</span>
+                    <span className="font-bold text-slate-900 dark:text-slate-100 font-mono">
+                      {formattedTotalAmount}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Payment Status:</span>
+                    <span className={`font-semibold ${isPaymentPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                      {isPaymentPaid ? 'Paid & Cleared' : 'Proforma Invoice Pending'}
+                    </span>
+                  </div>
+                  {currentTeam.invoiceNumber && (
+                    <div className="flex items-center justify-between text-[10px] text-slate-400">
+                      <span>Invoice Ref:</span>
+                      <span className="font-mono">{currentTeam.invoiceNumber}</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Members List */}
               <div className="space-y-2">
-                <div className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  Registered Members ({currentTeam.members.length}/4)
+                <div className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                  <span>
+                    {isInstituteReg
+                      ? `Nominated Members (${currentTeam.members.length} Participants)`
+                      : `Registered Members (${currentTeam.members.length}/${currentTeam.maxMembers || 4})`}
+                  </span>
+                  {currentTeam.feeTier && (
+                    <span className="text-[9px] font-normal text-slate-400 truncate max-w-[130px]" title={currentTeam.feeTier}>
+                      {currentTeam.feeTier}
+                    </span>
+                  )}
                 </div>
                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {currentTeam.members.map((member: any, idx: number) => (
-                    <div key={member.id || member.studentId || idx} className="py-2.5 flex items-center justify-between text-xs">
-                      <div>
-                        <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                          <span>{member.name}</span>
-                          {(member.role === 'team_leader' || member.isLeader) && (
-                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold">Leader</span>
-                          )}
+                  {currentTeam.members.map((member: any, idx: number) => {
+                    const memberIsPaid = member.hasPaid || isPaymentPaid;
+                    const memberBadgeText = member.paymentLabel || (
+                      isInstituteReg
+                        ? (memberIsPaid ? 'Institute Paid' : 'Invoice Pending')
+                        : (memberIsPaid ? `Paid ${formattedPerParticipantAmount}` : `Pending ${formattedPerParticipantAmount}`)
+                    );
+
+                    return (
+                      <div key={member.id || member.studentId || idx} className="py-2.5 flex items-center justify-between text-xs">
+                        <div>
+                          <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                            <span>{member.name}</span>
+                            {(member.role === 'team_leader' || member.isLeader) && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold">Leader</span>
+                            )}
+                            {currentUser.email && member.email?.toLowerCase() === currentUser.email?.toLowerCase() && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-700 dark:text-blue-400 font-semibold">You</span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500">{member.email}</div>
                         </div>
-                        <div className="text-[11px] text-slate-500">{member.email}</div>
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+                          memberIsPaid
+                            ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                            : 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+                        }`}>
+                          {memberBadgeText}
+                        </span>
                       </div>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-semibold">
-                        Paid ₹200
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
               <div className="pt-2 text-[11px] text-slate-500 leading-relaxed">
-                Rules: Teams must consist of 3-4 members. Roster locks automatically upon Round 2 Case Deck deadline.
+                {isInstituteReg
+                  ? `Institutional Cohort: ${currentTeam.members.length} student nominees registered by ${currentTeam.instituteName || 'Institution'}. Fees settled at institutional level.`
+                  : 'Rules: Teams must consist of 3-4 members. Roster locks automatically upon Round 2 Case Deck deadline.'}
               </div>
             </div>
           ) : (
@@ -419,15 +517,15 @@ export const StudentDashboard: React.FC = () => {
                 <DocRequirementInfo specKey="round3_regional" variant="icon" size="xs" colorTheme="purple" />
               </div>
               <span className="text-xs font-bold text-purple-600 dark:text-purple-400">
-                Southern Regional Hub
+                {hubInfo?.name || 'Regional Hub'}
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
                 <span className="text-[10px] text-slate-400 uppercase font-semibold block">Host Campus</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200">IIM Bangalore</span>
-                <span className="text-[10px] text-slate-500 block">Bannerghatta Road</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{hubInfo?.hostInstitute || 'Regional Host Campus'}</span>
+                <span className="text-[10px] text-slate-500 block">{hubInfo?.city || 'Regional Center'}</span>
               </div>
 
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
@@ -568,12 +666,18 @@ export const StudentDashboard: React.FC = () => {
 
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between text-xs">
               <div>
-                <span className="text-slate-500 block">Registration Amount</span>
-                <span className="font-bold text-slate-900 dark:text-slate-100 text-base">₹200.00</span>
+                <span className="text-slate-500 block">
+                  {isInstituteReg ? 'Institutional Package Amount' : 'Registration Amount'}
+                </span>
+                <span className="font-bold text-slate-900 dark:text-slate-100 text-base">
+                  {formattedTotalAmount}
+                </span>
               </div>
               <div className="text-right">
                 <span className="text-slate-500 block">GST (18% Included)</span>
-                <span className="text-[10px] font-mono text-emerald-600 font-bold">₹30.51</span>
+                <span className="text-[10px] font-mono text-emerald-600 font-bold">
+                  ₹{Math.round(totalAmountVal - totalAmountVal / 1.18).toLocaleString('en-IN')}
+                </span>
               </div>
             </div>
 
@@ -618,7 +722,7 @@ export const StudentDashboard: React.FC = () => {
                 type="submit"
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md transition-colors cursor-pointer"
               >
-                Authorize & Pay ₹200
+                Authorize & Pay {formattedTotalAmount}
               </button>
             </form>
           </div>

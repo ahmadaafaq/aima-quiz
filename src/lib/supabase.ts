@@ -9,6 +9,46 @@ export const SUPABASE_ANON_KEY =
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// ============================================================
+// PARTICIPANT ACCOUNT TYPES
+// ============================================================
+
+export interface SupabaseParticipantRow {
+  id?: string;
+  registration_number: string;
+  registration_mode: 'individual' | 'institute';
+  institute_name: string;
+  username: string;        // email used as username
+  email: string;
+  password_hash: string;   // plain stored for simplicity (no Supabase Auth); hash via btoa
+  name: string;
+  mobile?: string | null;
+  program?: string | null;
+  semester?: string | null;
+  enrolment_number?: string | null;
+  is_team_leader: boolean;
+  coordinator_name?: string | null;
+  coordinator_email?: string | null;
+  created_at?: string;
+}
+
+// Simple deterministic password hasher (base64 + salt) – NOT cryptographic, use for demo
+export function hashPassword(plain: string): string {
+  // Encode as base64 with a prefix salt so it is not trivially reversible in UI
+  return 'aima_' + btoa(unescape(encodeURIComponent(plain)));
+}
+
+export function verifyPassword(plain: string, stored: string): boolean {
+  return hashPassword(plain) === stored;
+}
+
+// Auto-generate a strong default password from the nominee's name + mobile
+export function generateDefaultPassword(name: string, mobile: string): string {
+  const first = name.trim().split(' ')[0].toLowerCase();
+  const last4 = (mobile || '0000').replace(/\D/g, '').slice(-4);
+  return `${first}@${last4}#AIMA2026`;
+}
+
 export interface SupabaseRegistrationRow {
   id?: string;
   registration_number: string;
@@ -165,6 +205,176 @@ export function saveLocalRegistrationCache(regs: CSRBootcampRegistration[]): voi
   }
 }
 
+// ============================================================
+// PARTICIPANT ACCOUNTS CRUD
+// ============================================================
+
+/**
+ * Create one participant account per nominee after registration
+ */
+export async function createParticipantAccounts(
+  reg: CSRBootcampRegistration
+): Promise<{ created: number; errors: string[] }> {
+  const isInst = reg.track === 'institutional' || reg.organizationType === 'Academic Institution';
+  const errors: string[] = [];
+  let created = 0;
+
+  const rows: SupabaseParticipantRow[] = reg.nominees.map((nominee) => {
+    const password = nominee.password || generateDefaultPassword(nominee.name, nominee.mobile || '');
+    return {
+      registration_number: reg.registrationNumber,
+      registration_mode: isInst ? 'institute' : 'individual',
+      institute_name: reg.organizationName,
+      username: nominee.email.toLowerCase().trim(),
+      email: nominee.email.toLowerCase().trim(),
+      password_hash: hashPassword(password),
+      name: nominee.name,
+      mobile: nominee.mobile || null,
+      program: nominee.program || null,
+      semester: nominee.semester || null,
+      enrolment_number: nominee.enrolmentNumber || null,
+      is_team_leader: !!nominee.isTeamLeader,
+      coordinator_name: reg.coordinator?.name || null,
+      coordinator_email: reg.coordinator?.email || null,
+      created_at: new Date().toISOString(),
+    };
+  });
+
+  for (const row of rows) {
+    try {
+      const { error } = await supabase
+        .from('participants')
+        .upsert(row, { onConflict: 'email' });
+      if (error) {
+        errors.push(`${row.email}: ${error.message}`);
+      } else {
+        created++;
+      }
+    } catch (e: any) {
+      errors.push(`${row.email}: ${e?.message}`);
+    }
+  }
+
+  return { created, errors };
+}
+
+/**
+ * Login a participant by email + plain password
+ */
+export async function loginParticipant(
+  email: string,
+  plainPassword: string
+): Promise<{ success: boolean; participant?: SupabaseParticipantRow; error?: string }> {
+  try {
+    const { data, error } = await supabase
+      .from('participants')
+      .select('*')
+      .eq('email', email.toLowerCase().trim())
+      .single();
+
+    if (error || !data) {
+      return { success: false, error: 'No account found with this email address.' };
+    }
+
+    if (!verifyPassword(plainPassword, data.password_hash)) {
+      return { success: false, error: 'Incorrect password. Please try again.' };
+    }
+
+    return { success: true, participant: data as SupabaseParticipantRow };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Login failed. Please try again.' };
+  }
+}
+
+/**
+ * Fetch all participants for a given registration
+ */
+export async function fetchParticipantsByRegistration(
+  registrationNumber: string
+): Promise<SupabaseParticipantRow[]> {
+  try {
+    const { data } = await supabase
+      .from('participants')
+      .select('*')
+      .eq('registration_number', registrationNumber)
+      .order('is_team_leader', { ascending: false });
+    return (data || []) as SupabaseParticipantRow[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch all participants for a given institute (by institute name)
+ */
+export async function fetchParticipantsByInstitute(
+  instituteName: string
+): Promise<SupabaseParticipantRow[]> {
+  try {
+    const { data } = await supabase
+      .from('participants')
+      .select('*')
+      .eq('institute_name', instituteName)
+      .order('created_at', { ascending: false });
+    return (data || []) as SupabaseParticipantRow[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch all institute-mode registrations for admin panel
+ */
+export async function fetchInstituteRegistrations(): Promise<{
+  registrations: CSRBootcampRegistration[];
+  source: 'supabase' | 'local';
+}> {
+  try {
+    const { data, error } = await supabase
+      .from('registrations')
+      .select('*')
+      .eq('registration_mode', 'institute')
+      .order('created_at', { ascending: false });
+
+    if (error || !data) {
+      return { registrations: getLocalRegistrationsCache().filter(r => r.track === 'institutional'), source: 'local' };
+    }
+
+    return {
+      registrations: data.map((d: any) => mapSupabaseRowToAppReg(d)),
+      source: 'supabase',
+    };
+  } catch {
+    return { registrations: getLocalRegistrationsCache().filter(r => r.track === 'institutional'), source: 'local' };
+  }
+}
+
+/**
+ * Fetch a single registration by its registration number.
+ * Used after participant login to build the team/profile dynamically.
+ */
+export async function fetchRegistrationByNumber(
+  registrationNumber: string
+): Promise<CSRBootcampRegistration | null> {
+  try {
+    const { data, error } = await supabase
+      .from('registrations')
+      .select('*')
+      .eq('registration_number', registrationNumber)
+      .single();
+
+    if (error || !data) {
+      // Fallback to local cache
+      const cached = getLocalRegistrationsCache();
+      return cached.find(r => r.registrationNumber === registrationNumber) || null;
+    }
+    return mapSupabaseRowToAppReg(data as SupabaseRegistrationRow);
+  } catch {
+    const cached = getLocalRegistrationsCache();
+    return cached.find(r => r.registrationNumber === registrationNumber) || null;
+  }
+}
+
 /**
  * Save registration dynamically to Supabase
  */
@@ -317,9 +527,10 @@ export async function updateRegistrationPaymentInSupabase(
 
 export const SUPABASE_SQL_SETUP_SCRIPT = `-- ==============================================================
 -- ALL INDIA MANAGEMENT ASSOCIATION (AIMA) - INDIA CASE LEAGUE 2026
--- Supabase Schema for Dynamic Registrations & Quiz Candidate Vault
+-- Supabase Schema for Dynamic Registrations & Participant Vault
 -- ==============================================================
 
+-- TABLE 1: registrations
 CREATE TABLE IF NOT EXISTS public.registrations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     registration_number TEXT NOT NULL UNIQUE,
@@ -338,7 +549,7 @@ CREATE TABLE IF NOT EXISTS public.registrations (
     gst_amount NUMERIC NOT NULL,
     total_amount NUMERIC NOT NULL,
     payment_method TEXT NOT NULL,
-    payment_status TEXT NOT NULL DEFAULT 'PENDING_INVOICE', -- 'PAID' | 'PENDING_INVOICE'
+    payment_status TEXT NOT NULL DEFAULT 'PENDING_INVOICE',
     transaction_id TEXT,
     invoice_number TEXT NOT NULL,
     nominees JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -354,21 +565,51 @@ CREATE TABLE IF NOT EXISTS public.registrations (
     raw_data JSONB
 );
 
--- Indices for rapid querying & admin dashboard filtering
 CREATE INDEX IF NOT EXISTS idx_registrations_number ON public.registrations(registration_number);
 CREATE INDEX IF NOT EXISTS idx_registrations_email ON public.registrations(candidate_email);
 CREATE INDEX IF NOT EXISTS idx_registrations_status ON public.registrations(payment_status);
 CREATE INDEX IF NOT EXISTS idx_registrations_mode ON public.registrations(registration_mode);
 CREATE INDEX IF NOT EXISTS idx_registrations_created_at ON public.registrations(created_at DESC);
 
--- Enable Row Level Security (RLS)
 ALTER TABLE public.registrations ENABLE ROW LEVEL SECURITY;
-
--- Allow public submission & read via publishable/anon key
+GRANT ALL ON TABLE public.registrations TO anon;
+GRANT ALL ON TABLE public.registrations TO authenticated;
+GRANT ALL ON TABLE public.registrations TO service_role;
 DROP POLICY IF EXISTS "Allow anon submit and read registrations" ON public.registrations;
-CREATE POLICY "Allow anon submit and read registrations" 
-ON public.registrations 
-FOR ALL 
-USING (true) 
-WITH CHECK (true);
+CREATE POLICY "Allow anon submit and read registrations"
+  ON public.registrations FOR ALL USING (true) WITH CHECK (true);
+
+-- TABLE 2: participants  (one row per nominee / participant)
+CREATE TABLE IF NOT EXISTS public.participants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    registration_number TEXT NOT NULL,
+    registration_mode TEXT NOT NULL,  -- 'individual' | 'institute'
+    institute_name TEXT NOT NULL,
+    username TEXT NOT NULL,           -- same as email
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    name TEXT NOT NULL,
+    mobile TEXT,
+    program TEXT,
+    semester TEXT,
+    enrolment_number TEXT,
+    is_team_leader BOOLEAN DEFAULT FALSE,
+    coordinator_name TEXT,
+    coordinator_email TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_participants_email ON public.participants(email);
+CREATE INDEX IF NOT EXISTS idx_participants_reg_number ON public.participants(registration_number);
+CREATE INDEX IF NOT EXISTS idx_participants_institute ON public.participants(institute_name);
+CREATE INDEX IF NOT EXISTS idx_participants_mode ON public.participants(registration_mode);
+
+ALTER TABLE public.participants ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.participants TO anon;
+GRANT ALL ON TABLE public.participants TO authenticated;
+GRANT ALL ON TABLE public.participants TO service_role;
+DROP POLICY IF EXISTS "Allow anon read and insert participants" ON public.participants;
+CREATE POLICY "Allow anon read and insert participants"
+  ON public.participants FOR ALL USING (true) WITH CHECK (true);
 `;
+

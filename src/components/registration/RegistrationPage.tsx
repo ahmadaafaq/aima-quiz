@@ -11,6 +11,7 @@ import { CSRBootcampNominee, CSRBootcampRegistration } from '../../types';
 import {
   saveRegistrationToSupabase,
   updateRegistrationPaymentInSupabase,
+  createParticipantAccounts,
 } from '../../lib/supabase';
 import {
   Building2,
@@ -884,9 +885,20 @@ export const RegistrationPage: React.FC = () => {
     const result = registerCSRBootcamp(payload);
     setActiveCreatedRegistration(result.registration);
 
-    // Dynamic Supabase Persistence
+    // Dynamic Supabase Persistence (registration record)
     saveRegistrationToSupabase(result.registration).catch((err) => {
       console.warn('Supabase dynamic save error (cached locally):', err);
+    });
+
+    // Create participant login accounts for every nominee
+    createParticipantAccounts(result.registration).then(({ created, errors }) => {
+      if (errors.length > 0) {
+        console.warn('Participant account creation partial errors:', errors);
+      } else {
+        console.info(`Participant accounts created: ${created}`);
+      }
+    }).catch((err) => {
+      console.warn('Participant account creation failed (non-critical):', err);
     });
 
     if (method === 'gateway') {

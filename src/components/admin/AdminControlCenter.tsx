@@ -13,6 +13,7 @@ import { CaseDeckDeadlinesManager } from './CaseDeckDeadlinesManager';
 import { OfflineRoundsManager } from './OfflineRoundsManager';
 import { FinancialLedgerManager } from './FinancialLedgerManager';
 import { DynamicRegistrationsManager } from './DynamicRegistrationsManager';
+import { InstitutionsAdminPanel } from './InstitutionsAdminPanel';
 import { AdminLoginGate, checkIsAdminAuthenticated, clearAdminAuth } from './AdminLoginGate';
 import { DocRequirementInfo } from '../common/DocRequirementInfo';
 import {
@@ -1421,10 +1422,18 @@ export const AdminControlCenter: React.FC = () => {
           </div>
         )}
 
-        {/* -------------------- TAB: ACCREDITED INSTITUTIONS -------------------- */}
+        {/* -------------------- TAB: REGISTERED INSTITUTIONS (SUPABASE) -------------------- */}
         {activeTab === 'institutions' && (
-          <div className="animate-in fade-in duration-200">
-            <InstitutesAndSponsorsManager initialSubTab="institutions" />
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {/* Live Supabase institutions panel */}
+            <InstitutionsAdminPanel />
+            {/* Separator before mock/legacy institutions */}
+            <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Legacy Mock Institutions (Competition Context)</span>
+              </div>
+              <InstitutesAndSponsorsManager initialSubTab="institutions" />
+            </div>
           </div>
         )}
 
