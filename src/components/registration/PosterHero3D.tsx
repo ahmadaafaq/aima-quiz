@@ -1,4 +1,5 @@
 import React from 'react';
+import { useCompetition } from '../../context/CompetitionContext';
 import { CardContainer, CardItem } from '../ui/AceternityCard3D';
 import {
   Trophy,
@@ -9,7 +10,9 @@ import {
   Brain,
   FileCheck,
   Lightbulb,
-  Receipt
+  Receipt,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 interface PosterHero3DProps {
@@ -18,6 +21,7 @@ interface PosterHero3DProps {
 }
 
 export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOpenFeeModal }) => {
+  const { theme, toggleTheme } = useCompetition();
   const stages = [
     {
       step: '01',
@@ -108,15 +112,36 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               Registrations Open
             </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30">
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
               National Level
             </span>
+
+            {/* Dark / Light Mode Toggle: Right Top Corner */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="h-9 px-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-slate-500 text-slate-200 hover:text-white transition-all flex items-center gap-2 cursor-pointer shadow-md shrink-0"
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              aria-label="Toggle Theme Mode"
+            >
+              {theme === 'dark' ? (
+                <>
+                  <Sun className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-bold text-slate-300">Light</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-4 h-4 text-indigo-400" />
+                  <span className="text-xs font-bold text-slate-300">Dark</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 

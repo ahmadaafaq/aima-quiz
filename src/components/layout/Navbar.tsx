@@ -63,32 +63,9 @@ export const Navbar: React.FC = () => {
   const isAdminView = activeView === 'admin';
   const isRegistrationView = activeView === 'registration' || activeView === 'register' || activeView === 'bootcamp_registration';
 
-  // Dedicated minimal appbar for candidate registration: logo only and nothing else
+  // Appbar removed on registration page as requested
   if (isRegistrationView) {
-    return (
-      <header className="sticky top-0 z-40 w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 transition-colors shadow-xs">
-        <div className="w-full px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto h-16 flex items-center justify-between">
-          <div className="flex items-center">
-            <div className="h-10 px-3.5 rounded-xl bg-white flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-xs shrink-0">
-              <img
-                src="https://www.aima.in/img/logo.png"
-                alt="AIMA Logo"
-                className="h-7 w-auto object-contain"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-          </div>
-          <button
-            onClick={toggleTheme}
-            className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors cursor-pointer"
-            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            aria-label="Toggle Theme"
-          >
-            {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
-          </button>
-        </div>
-      </header>
-    );
+    return null;
   }
 
   return (

@@ -26,6 +26,11 @@ import {
   CSREmailLog,
 } from '../types';
 import {
+  saveRegistrationToSupabase,
+  fetchRegistrationsFromSupabase,
+  updateRegistrationPaymentInSupabase,
+} from '../lib/supabase';
+import {
   INITIAL_CONFIG,
   ROUND_2_RUBRIC,
   ROUND_3_RUBRIC,
@@ -267,9 +272,19 @@ const INITIAL_QUIZ_ATTEMPTS: QuizAttempt[] = [
   },
 ];
 
+const getInitialActiveView = (): string => {
+  if (typeof window !== 'undefined') {
+    const path = window.location.pathname.toLowerCase();
+    if (path === '/registration' || path === '/register' || path.startsWith('/registration')) {
+      return 'registration';
+    }
+  }
+  return 'public';
+};
+
 export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [activeView, setActiveView] = useState<string>('public');
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [activeView, setActiveView] = useState<string>(getInitialActiveView);
   const [config, setConfig] = useState<CompetitionConfig>(INITIAL_CONFIG);
   
   const [users, setUsers] = useState<UserProfile[]>(MOCK_USERS);
@@ -363,12 +378,12 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   };
 
-  // Load / Save from LocalStorage with Light Mode default
+  // Load / Save from LocalStorage with Dark Mode default
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem('AIMA_THEME') as 'light' | 'dark' | null;
-      // Light mode is default
-      const initial = savedTheme === 'dark' ? 'dark' : 'light';
+      // Dark mode is default
+      const initial = savedTheme === 'light' ? 'light' : 'dark';
       setTheme(initial);
       if (initial === 'dark') {
         document.documentElement.classList.add('dark');
@@ -376,9 +391,66 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         document.documentElement.classList.remove('dark');
       }
     } catch {
-      document.documentElement.classList.remove('dark');
-      setTheme('light');
+      document.documentElement.classList.add('dark');
+      setTheme('dark');
     }
+  }, []);
+
+  // Sync URL route with activeView (/registration route support)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const currentPath = window.location.pathname.toLowerCase();
+    const isRegView = activeView === 'registration' || activeView === 'register' || activeView === 'bootcamp_registration';
+
+    if (isRegView) {
+      if (currentPath !== '/registration') {
+        window.history.pushState({ view: 'registration' }, '', '/registration');
+      }
+    } else if (activeView === 'public') {
+      if (currentPath === '/registration' || currentPath === '/register') {
+        window.history.pushState({ view: 'public' }, '', '/');
+      }
+    }
+  }, [activeView]);
+
+  // Handle browser back / forward navigation
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handlePopState = () => {
+      const path = window.location.pathname.toLowerCase();
+      if (path === '/registration' || path === '/register' || path.startsWith('/registration')) {
+        setActiveView('registration');
+      } else if (path === '/' || path === '') {
+        setActiveView('public');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Hydrate registrations dynamically from Supabase & cached storage
+  useEffect(() => {
+    let isMounted = true;
+    fetchRegistrationsFromSupabase()
+      .then((res) => {
+        if (!isMounted) return;
+        if (res.registrations && res.registrations.length > 0) {
+          setCsrRegistrations((prev) => {
+            const fetchedNumbers = new Set(res.registrations.map((r) => r.registrationNumber));
+            const remainingMocks = prev.filter((r) => !fetchedNumbers.has(r.registrationNumber));
+            return [...res.registrations, ...remainingMocks];
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('Initial Supabase sync notice:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const toggleTheme = () => {
@@ -1956,6 +2028,11 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       `Registered "${data.organizationName}" (${data.participantCount} nominees). Tier: ${data.tierLabel}. Status: ${data.paymentStatus}. Details automatically dispatched to enayyar@aima.in. Ref: ${data.registrationNumber}, Inv: ${data.invoiceNumber}`
     );
 
+    // Dynamic Supabase Persistence
+    saveRegistrationToSupabase(newReg).catch(err => {
+      console.warn('Supabase dynamic save error (cached locally):', err);
+    });
+
     return {
       registration: newReg,
       emailLog: newEmailLog,
@@ -1965,9 +2042,11 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const updateCSRPayment = (registrationId: string, paymentMethod: string, transactionId: string) => {
     const paidAt = new Date().toISOString();
     let updatedInvoice = '';
+    let targetRegNumber = '';
     setCsrRegistrations(prev =>
       prev.map(r => {
         if (r.id === registrationId) {
+          targetRegNumber = r.registrationNumber;
           updatedInvoice = r.invoiceNumber.startsWith('PINV-')
             ? r.invoiceNumber.replace('PINV-', 'INV-')
             : r.invoiceNumber;
@@ -1983,6 +2062,16 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         return r;
       })
     );
+
+    // Dynamic Supabase Payment Update
+    updateRegistrationPaymentInSupabase(
+      targetRegNumber || registrationId,
+      'PAID',
+      paymentMethod,
+      transactionId
+    ).catch(err => {
+      console.warn('Supabase payment sync error:', err);
+    });
 
     setPayments(prev =>
       prev.map(p => {

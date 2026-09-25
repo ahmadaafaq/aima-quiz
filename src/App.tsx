@@ -55,8 +55,8 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-amber-500/20 selection:text-amber-700 dark:selection:text-amber-300">
-      {/* Top Sticky Header */}
-      <Navbar />
+      {/* Top Sticky Header: Hidden on registration page as requested */}
+      {!isRegistrationPage && <Navbar />}
 
       {/* Main Routed Content */}
       <main className="flex-1">

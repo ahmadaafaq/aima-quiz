@@ -12,6 +12,8 @@ import { OfficialBulletinsManager } from './OfficialBulletinsManager';
 import { CaseDeckDeadlinesManager } from './CaseDeckDeadlinesManager';
 import { OfflineRoundsManager } from './OfflineRoundsManager';
 import { FinancialLedgerManager } from './FinancialLedgerManager';
+import { DynamicRegistrationsManager } from './DynamicRegistrationsManager';
+import { AdminLoginGate, checkIsAdminAuthenticated, clearAdminAuth } from './AdminLoginGate';
 import { DocRequirementInfo } from '../common/DocRequirementInfo';
 import {
   Activity,
@@ -28,6 +30,7 @@ import {
   ChevronRight,
   Clock,
   Coins,
+  Database,
   Download,
   Eye,
   FileCheck,
@@ -94,7 +97,16 @@ export const AdminControlCenter: React.FC = () => {
     adminActiveTab,
     setAdminActiveTab,
     openChatWithQuery,
+    csrRegistrations,
   } = useCompetition();
+
+  // Secretariat Super-Admin Authentication Gate (admin@aima.in / case-aima@123#league)
+  const [isAdminAuthed, setIsAdminAuthed] = useState<boolean>(() => checkIsAdminAuthenticated());
+
+  const handleAdminLogout = () => {
+    clearAdminAuth();
+    setIsAdminAuthed(false);
+  };
 
   const mainRef = useRef<HTMLDivElement>(null);
 
@@ -112,6 +124,7 @@ export const AdminControlCenter: React.FC = () => {
   // Robust Tab Normalizer
   const normalizeTab = (raw: string): string => {
     const t = (raw || '').toLowerCase().trim();
+    if (t === 'registrations' || t === 'dynamic_registrations' || t === 'supabase' || t === 'supabase_registrations') return 'dynamic_registrations';
     if (t === 'quiz' || t === 'quiz_programs' || t === 'quizzes' || t === 'quiz_program' || t === 'programs') return 'quiz_programs';
     if (t === 'quiz_results' || t === 'results' || t === 'rankings' || t === 'standings' || t === 'leaderboard') return 'quiz_results';
     if (t === 'quiz_bank' || t === 'questions' || t === 'question_bank' || t === 'bank') return 'quiz_bank';
@@ -279,6 +292,13 @@ export const AdminControlCenter: React.FC = () => {
           roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
         },
         {
+          id: 'dynamic_registrations',
+          label: 'Dynamic Registrations (Supabase)',
+          icon: Database,
+          badge: `${csrRegistrations.length}`,
+          roles: ['admin', 'all', 'institute_coordinator'],
+        },
+        {
           id: 'announcements',
           label: 'Official Bulletins',
           icon: Radio,
@@ -424,6 +444,10 @@ export const AdminControlCenter: React.FC = () => {
       ],
     },
   ];
+
+  if (!isAdminAuthed) {
+    return <AdminLoginGate onAuthenticated={() => setIsAdminAuthed(true)} />;
+  }
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex flex-col lg:flex-row bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
@@ -606,6 +630,15 @@ export const AdminControlCenter: React.FC = () => {
               <Download className="w-3.5 h-3.5" />
               <span>Export Audit Data</span>
             </button>
+
+            <button
+              onClick={handleAdminLogout}
+              className="w-full py-1.5 px-2.5 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 text-[11px] font-bold flex items-center justify-center gap-1.5 border border-red-200 dark:border-red-900/80 transition-colors cursor-pointer"
+              title="Sign Out of Central Admin Session"
+            >
+              <Lock className="w-3.5 h-3.5 text-red-500" />
+              <span>Logout (admin@aima.in)</span>
+            </button>
           </div>
         </div>
       </aside>
@@ -626,6 +659,8 @@ export const AdminControlCenter: React.FC = () => {
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 mt-1 capitalize">
               {activeTab === 'overview'
                 ? 'Central Executive Command Desk'
+                : activeTab === 'dynamic_registrations'
+                ? 'Supabase Dynamic Registrations Master'
                 : activeTab === 'quiz_programs'
                 ? 'Quiz Programs & Pan-India Live Assessments'
                 : activeTab === 'quiz_results'
@@ -654,7 +689,7 @@ export const AdminControlCenter: React.FC = () => {
             </h1>
           </div>
 
-          {/* Perspective Indicator Pill */}
+          {/* Perspective Indicator Pill & Auth Logout Action */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
               <Eye className="w-3.5 h-3.5 text-red-500" />
@@ -667,6 +702,23 @@ export const AdminControlCenter: React.FC = () => {
             >
               <Zap className="w-3.5 h-3.5" />
               <span>Phase: {config.activeStage.toUpperCase()}</span>
+            </button>
+
+            {/* Authenticated Admin Badge */}
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/60 text-xs font-bold">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+              <span>admin@aima.in</span>
+            </div>
+
+            {/* Logout Action */}
+            <button
+              type="button"
+              onClick={handleAdminLogout}
+              className="px-3 py-1.5 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 text-xs font-bold border border-red-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+              title="Logout from Central Secretariat Session"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Logout</span>
             </button>
           </div>
         </div>
@@ -696,7 +748,36 @@ export const AdminControlCenter: React.FC = () => {
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5">
+                {/* Action 0: Supabase Dynamic Registrations Master */}
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-emerald-400/50 transition-all flex flex-col justify-between gap-3">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="p-2 rounded-xl bg-emerald-500/20 text-emerald-300">
+                        <Database className="w-4 h-4" />
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>{csrRegistrations.length} Saved</span>
+                      </span>
+                    </div>
+                    <div className="font-bold text-sm text-white mt-2">
+                      Dynamic Registrations
+                    </div>
+                    <div className="text-[11px] text-slate-300 mt-0.5">
+                      Live Supabase database, candidate passwords &amp; GST invoices.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => setActiveTab('dynamic_registrations')}
+                      className="flex-1 py-1.5 px-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition cursor-pointer shadow-sm text-center"
+                    >
+                      Open Manager
+                    </button>
+                  </div>
+                </div>
+
                 {/* Action 1: Quiz Programs */}
                 <div className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-amber-400/50 transition-all flex flex-col justify-between gap-3">
                   <div>
@@ -1217,6 +1298,13 @@ export const AdminControlCenter: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* -------------------- TAB: DYNAMIC REGISTRATIONS (SUPABASE) -------------------- */}
+        {activeTab === 'dynamic_registrations' && (
+          <div className="animate-in fade-in duration-200">
+            <DynamicRegistrationsManager initialRegistrations={csrRegistrations} />
           </div>
         )}
 
