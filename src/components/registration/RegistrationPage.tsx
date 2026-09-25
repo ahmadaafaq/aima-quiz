@@ -2422,11 +2422,11 @@ export const RegistrationPage: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-[11px] text-emerald-900/80 dark:text-emerald-300/80 leading-relaxed">
-                    Registration record <strong>{activeCreatedRegistration?.registrationNumber}</strong> with <strong>{activeCreatedRegistration?.participantCount || 1} participant(s)</strong> has been dynamically saved to the Supabase cloud instance (<code>https://setjjgjhuslevgnqcnhj.supabase.co</code>). You can review and verify this record anytime in the Secretariat Admin Panel.
+                    Registration record <strong>{activeCreatedRegistration?.registrationNumber}</strong> with <strong>{activeCreatedRegistration?.participantCount || 1} participant(s)</strong> has been dynamically saved and verified with the AIMA Secretariat database.
                   </p>
                 </div>
 
-                {/* Actions: View Invoice, Start Another, View in Admin Panel */}
+                {/* Actions: View Invoice, Start Another */}
                 <div className="flex flex-wrap items-center justify-center gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
                   <button
                     type="button"
@@ -2435,16 +2435,6 @@ export const RegistrationPage: React.FC = () => {
                   >
                     <Receipt className="w-4 h-4" />
                     <span>View Official Tax Invoice / Receipt</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => navigateToFeature({ view: 'admin', tab: 'dynamic_registrations', persona: 'admin' })}
-                    className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer shadow-md shadow-emerald-600/20"
-                    title="View live registration in Supabase Admin Manager"
-                  >
-                    <Database className="w-4 h-4" />
-                    <span>View in Admin Panel</span>
                   </button>
 
                   <button

@@ -40,7 +40,7 @@ export function clearAdminAuth(): void {
 }
 
 export const AdminLoginGate: React.FC<AdminLoginGateProps> = ({ onAuthenticated }) => {
-  const [username, setUsername] = useState('admin@aima.in');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string>('');
@@ -71,12 +71,6 @@ export const AdminLoginGate: React.FC<AdminLoginGateProps> = ({ onAuthenticated 
         setError('Invalid administrator credentials. Authorized AIMA Secretariat access only.');
       }
     }, 400);
-  };
-
-  const handleQuickFill = () => {
-    setUsername('admin@aima.in');
-    setPassword('case-aima@123#league');
-    setError('');
   };
 
   return (
@@ -142,13 +136,6 @@ export const AdminLoginGate: React.FC<AdminLoginGateProps> = ({ onAuthenticated 
                 <label className="font-bold text-slate-700 dark:text-slate-300">
                   Password
                 </label>
-                <button
-                  type="button"
-                  onClick={handleQuickFill}
-                  className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                >
-                  Quick-Fill
-                </button>
               </div>
               <div className="relative">
                 <input
@@ -167,18 +154,6 @@ export const AdminLoginGate: React.FC<AdminLoginGateProps> = ({ onAuthenticated 
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
-              </div>
-            </div>
-
-            {/* Quick Demo Helper Box */}
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 text-[11px] text-slate-600 dark:text-slate-400 space-y-1">
-              <div className="flex items-center justify-between font-mono">
-                <span className="text-slate-500">Authorized User:</span>
-                <span className="font-bold text-slate-900 dark:text-white">admin@aima.in</span>
-              </div>
-              <div className="flex items-center justify-between font-mono">
-                <span className="text-slate-500">Security Key:</span>
-                <span className="font-bold text-amber-600 dark:text-amber-400">case-aima@123#league</span>
               </div>
             </div>
 
