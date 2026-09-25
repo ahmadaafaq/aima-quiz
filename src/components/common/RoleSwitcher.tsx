@@ -143,7 +143,10 @@ export const RoleSwitcher: React.FC = () => {
     },
   ];
 
-  const currentRoleInfo = roles.find(r => r.role === currentUser.role) || roles[0];
+  const roleKey = (currentUser.role === 'student' || currentUser.role === 'team_member')
+    ? (currentUser.isTeamLeader ? 'team_leader' : 'team_member')
+    : currentUser.role;
+  const currentRoleInfo = roles.find(r => r.role === roleKey) || roles[1];
   const CurrentIcon = currentRoleInfo.icon;
 
   const handleSelectEvaluator = (evaluator: UserProfile) => {
@@ -172,7 +175,13 @@ export const RoleSwitcher: React.FC = () => {
           <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-none mt-1 flex items-center gap-1 truncate whitespace-nowrap">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
             <span className="truncate">
-              {currentUser.role === 'evaluator' ? (currentUser.speciality ? currentUser.speciality.split('&')[0].trim() : 'Jury Evaluator') : currentRoleInfo.shortBadge}
+              {currentUser.role === 'evaluator'
+                ? (currentUser.speciality ? currentUser.speciality.split('&')[0].trim() : 'Jury Evaluator')
+                : currentUser.isTeamLeader
+                ? 'Team Leader'
+                : (currentUser.role === 'student' || currentUser.role === 'team_member')
+                ? 'Participant'
+                : currentRoleInfo.shortBadge}
             </span>
           </div>
         </div>

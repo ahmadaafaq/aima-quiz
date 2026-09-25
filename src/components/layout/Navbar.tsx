@@ -44,6 +44,8 @@ export const Navbar: React.FC = () => {
     setActiveSupportModal,
     openChatWithQuery,
     openRegistrationModal,
+    participantUser,
+    logoutParticipant,
   } = useCompetition();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -295,6 +297,30 @@ export const Navbar: React.FC = () => {
                 <GraduationCap className="w-3.5 h-3.5 text-white" />
                 <span>Register</span>
               </button>
+
+              {/* Participant Login / Session */}
+              {participantUser ? (
+                <div className="h-9 hidden sm:inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                  <User className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <span className="truncate max-w-[100px]">{participantUser.name.split(' ')[0]}</span>
+                  <button
+                    onClick={logoutParticipant}
+                    title="Logout"
+                    className="ml-1 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setActiveView('participant_login')}
+                  className="h-9 hidden sm:inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+                  title="Participant Login"
+                >
+                  <User className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Login</span>
+                </button>
+              )}
 
               {/* Requirements Document (SRS) CTA Button in Appbar */}
               <button

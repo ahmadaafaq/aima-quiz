@@ -29,6 +29,10 @@ import {
   saveRegistrationToSupabase,
   fetchRegistrationsFromSupabase,
   updateRegistrationPaymentInSupabase,
+  SupabaseParticipantRow,
+  fetchRegistrationByNumber,
+  fetchParticipantsByRegistration,
+  getLocalRegistrationsCache,
 } from '../lib/supabase';
 import {
   INITIAL_CONFIG,
@@ -233,6 +237,11 @@ interface CompetitionContextType {
   setIsChatOpen: (open: boolean) => void;
   initialChatQuery: string | null;
   openChatWithQuery: (query?: string) => void;
+
+  // Participant (Nominee) Auth
+  participantUser: SupabaseParticipantRow | null;
+  loginParticipantSession: (participant: SupabaseParticipantRow) => void;
+  logoutParticipant: () => void;
 }
 
 const CompetitionContext = createContext<CompetitionContextType | null>(null);
@@ -287,9 +296,188 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [activeView, setActiveView] = useState<string>(getInitialActiveView);
   const [config, setConfig] = useState<CompetitionConfig>(INITIAL_CONFIG);
   
-  const [users, setUsers] = useState<UserProfile[]>(MOCK_USERS);
-  const [currentUser, setCurrentUser] = useState<UserProfile>(MOCK_USERS[0]); // default student leader
-  const [teams, setTeams] = useState<Team[]>(MOCK_TEAMS);
+  // Participant session helpers & storage keys
+  const PARTICIPANT_SESSION_KEY = 'AIMA_PARTICIPANT_SESSION_V1';
+
+  function getSavedParticipantSession(): SupabaseParticipantRow | null {
+    try {
+      const raw = sessionStorage.getItem(PARTICIPANT_SESSION_KEY) || localStorage.getItem(PARTICIPANT_SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function buildUserProfileFromParticipant(participant: SupabaseParticipantRow): UserProfile {
+    const userId = 'participant_' + participant.email.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const teamId = 'team_participant_' + participant.registration_number;
+    return {
+      id: userId,
+      name: participant.name,
+      email: participant.email,
+      mobile: participant.mobile || '',
+      role: participant.is_team_leader ? 'team_leader' : 'student',
+      isVerified: true,
+      gender: 'Other',
+      state: '',
+      city: '',
+      nationality: 'Indian',
+      instituteName: participant.institute_name,
+      instituteId: 'inst_participant_' + participant.registration_number,
+      programme: participant.program || 'Management Programme',
+      specialisation: '',
+      yearSemester: participant.semester || 'Semester 1',
+      expectedGraduation: '2026',
+      university: participant.institute_name,
+      enrolmentNumber: participant.enrolment_number || '',
+      idCardUploaded: true,
+      photoUploaded: true,
+      hasPaidR1R2: true,
+      hasPaidR3: false,
+      teamId: teamId,
+      isTeamLeader: participant.is_team_leader,
+      quizScore: 0,
+      quizCompleted: false,
+    };
+  }
+
+  function buildSyntheticTeamFromReg(
+    reg: CSRBootcampRegistration,
+    participant?: SupabaseParticipantRow | null
+  ): Team {
+    const teamId = 'team_participant_' + reg.registrationNumber;
+    const isPaid = reg.paymentStatus === 'PAID';
+    const isInst =
+      reg.track === 'institutional' ||
+      reg.organizationType === 'Academic Institution' ||
+      reg.tierId?.startsWith('inst_') ||
+      (reg.participantCount && reg.participantCount > 4);
+    const participantCount = reg.participantCount || reg.nominees?.length || 1;
+    const totalAmount =
+      reg.totalPayable ||
+      (reg.ratePerPersonOrPackage ? Math.round(reg.ratePerPersonOrPackage * participantCount * 1.18) : (isInst ? 67850 : 14750));
+    const perStudentAmount = Math.round(totalAmount / participantCount);
+
+    const teamMembers: TeamMember[] = (reg.nominees && reg.nominees.length > 0)
+      ? reg.nominees.map((n) => {
+          const paymentLabel = isPaid
+            ? (isInst ? 'Institute Paid' : `Paid ₹${perStudentAmount.toLocaleString('en-IN')}`)
+            : (isInst ? 'Invoice Pending' : `Pending ₹${perStudentAmount.toLocaleString('en-IN')}`);
+          return {
+            studentId: 'participant_' + n.email.replace(/[^a-z0-9]/gi, '_').toLowerCase(),
+            name: n.name,
+            email: n.email,
+            mobile: n.mobile || '',
+            institute: reg.organizationName,
+            isLeader: !!n.isTeamLeader,
+            hasPaid: isPaid,
+            acceptedDeclaration: true,
+            roleInTeam: n.isTeamLeader ? 'Team Leader' : 'Member',
+            paymentLabel,
+            paymentStatus: reg.paymentStatus,
+            amount: perStudentAmount,
+          };
+        })
+      : participant
+      ? [{
+          studentId: 'participant_' + participant.email.replace(/[^a-z0-9]/gi, '_').toLowerCase(),
+          name: participant.name,
+          email: participant.email,
+          mobile: participant.mobile || '',
+          institute: reg.organizationName || participant.institute_name,
+          isLeader: participant.is_team_leader,
+          hasPaid: isPaid,
+          acceptedDeclaration: true,
+          roleInTeam: participant.is_team_leader ? 'Team Leader' : 'Member',
+          paymentLabel: isPaid
+            ? (isInst ? 'Institute Paid' : `Paid ₹${perStudentAmount.toLocaleString('en-IN')}`)
+            : (isInst ? 'Invoice Pending' : `Pending ₹${perStudentAmount.toLocaleString('en-IN')}`),
+          paymentStatus: reg.paymentStatus,
+          amount: perStudentAmount,
+        }]
+      : [];
+
+    const leaderMember = teamMembers.find((m) => m.isLeader) || teamMembers[0];
+
+    return {
+      id: teamId,
+      name: reg.teamName || (reg.organizationName ? `${reg.organizationName} Team` : 'Case League Team'),
+      inviteCode: reg.registrationNumber,
+      leaderId: leaderMember?.studentId || (participant ? 'participant_' + participant.email.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'leader_1'),
+      leaderName: leaderMember?.name || participant?.name || 'Team Leader',
+      instituteName: reg.organizationName || participant?.institute_name || '',
+      members: teamMembers,
+      isLocked: isPaid,
+      createdAt: reg.createdAt || new Date().toISOString(),
+      assignedHub: 'north' as any,
+      paymentStatus: reg.paymentStatus,
+      invoiceNumber: reg.invoiceNumber,
+      registrationMode: isInst ? 'institute' : 'individual',
+      feeTier: reg.tierLabel || (isInst ? `Institutional Pack (${participantCount} participants)` : 'Team/Individual'),
+      totalAmount: totalAmount,
+      subtotalAmount: reg.subtotalExclGst || Math.round(totalAmount / 1.18),
+      gstAmount: reg.gstAmount || Math.round(totalAmount - totalAmount / 1.18),
+      participantCount: participantCount,
+      maxMembers: Math.max(participantCount, 4),
+    };
+  }
+
+  const initialParticipant = getSavedParticipantSession();
+  const [participantUser, setParticipantUser] = useState<SupabaseParticipantRow | null>(initialParticipant);
+
+  const [users, setUsers] = useState<UserProfile[]>(() => {
+    if (initialParticipant) {
+      const pProfile = buildUserProfileFromParticipant(initialParticipant);
+      return [pProfile, ...MOCK_USERS.filter((u) => u.email !== pProfile.email)];
+    }
+    return MOCK_USERS;
+  });
+
+  const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
+    if (initialParticipant) {
+      return buildUserProfileFromParticipant(initialParticipant);
+    }
+    return MOCK_USERS[0];
+  });
+
+  const [teams, setTeams] = useState<Team[]>(() => {
+    if (initialParticipant) {
+      const cached = getLocalRegistrationsCache().find(
+        (r) => r.registrationNumber === initialParticipant.registration_number
+      );
+      if (cached) {
+        return [buildSyntheticTeamFromReg(cached, initialParticipant), ...MOCK_TEAMS];
+      }
+      const tempTeam: Team = {
+        id: 'team_participant_' + initialParticipant.registration_number,
+        name: `${initialParticipant.institute_name} Team`,
+        inviteCode: initialParticipant.registration_number,
+        leaderId: 'participant_' + initialParticipant.email.replace(/[^a-z0-9]/gi, '_').toLowerCase(),
+        leaderName: initialParticipant.name,
+        instituteName: initialParticipant.institute_name,
+        members: [
+          {
+            studentId: 'participant_' + initialParticipant.email.replace(/[^a-z0-9]/gi, '_').toLowerCase(),
+            name: initialParticipant.name,
+            email: initialParticipant.email,
+            mobile: initialParticipant.mobile || '',
+            institute: initialParticipant.institute_name,
+            isLeader: initialParticipant.is_team_leader,
+            hasPaid: true,
+            acceptedDeclaration: true,
+            roleInTeam: initialParticipant.is_team_leader ? 'Team Leader' : 'Member',
+          },
+        ],
+        isLocked: true,
+        createdAt: initialParticipant.created_at || new Date().toISOString(),
+        assignedHub: 'north' as any,
+        paymentStatus: 'PAID',
+      };
+      return [tempTeam, ...MOCK_TEAMS];
+    }
+    return MOCK_TEAMS;
+  });
+
   const [quizPrograms, setQuizPrograms] = useState<QuizProgram[]>(MOCK_QUIZ_PROGRAMS);
   const [questions, setQuestions] = useState<QuizQuestion[]>(QUIZ_QUESTIONS);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>(INITIAL_QUIZ_ATTEMPTS);
@@ -321,6 +509,115 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [targetRequirementClause, setTargetRequirementClause] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [initialChatQuery, setInitialChatQuery] = useState<string | null>(null);
+
+  // Async helper to fully sync participant registration and peers from Supabase
+  const syncParticipantData = async (participant: SupabaseParticipantRow) => {
+    try {
+      const regNumber = participant.registration_number;
+      const teamId = 'team_participant_' + regNumber;
+
+      // 1. Fetch full registration record
+      const reg = await fetchRegistrationByNumber(regNumber);
+      if (reg && reg.nominees && reg.nominees.length > 0) {
+        const synTeam = buildSyntheticTeamFromReg(reg, participant);
+        setTeams((prev) => [synTeam, ...prev.filter((t) => t.id !== teamId)]);
+        setCurrentUser((prev) => ({
+          ...prev,
+          teamId,
+          hasPaidR1R2: reg.paymentStatus === 'PAID',
+        }));
+        return;
+      }
+
+      // 2. Fallback: fetch participant peers from participants table
+      const peers = await fetchParticipantsByRegistration(regNumber);
+      if (peers && peers.length > 0) {
+        const teamMembers: TeamMember[] = peers.map((p) => ({
+          studentId: 'participant_' + p.email.replace(/[^a-z0-9]/gi, '_').toLowerCase(),
+          name: p.name,
+          email: p.email,
+          mobile: p.mobile || '',
+          institute: p.institute_name,
+          isLeader: p.is_team_leader,
+          hasPaid: true,
+          acceptedDeclaration: true,
+          roleInTeam: p.is_team_leader ? 'Team Leader' : 'Member',
+        }));
+        const leader = teamMembers.find((m) => m.isLeader) || teamMembers[0];
+        const synTeam: Team = {
+          id: teamId,
+          name: `${participant.institute_name} Team`,
+          inviteCode: regNumber,
+          leaderId: leader?.studentId || ('participant_' + participant.email.replace(/[^a-z0-9]/gi, '_').toLowerCase()),
+          leaderName: leader?.name || participant.name,
+          instituteName: participant.institute_name,
+          members: teamMembers,
+          isLocked: true,
+          createdAt: participant.created_at || new Date().toISOString(),
+          assignedHub: 'north' as any,
+          paymentStatus: 'PAID',
+        };
+        setTeams((prev) => [synTeam, ...prev.filter((t) => t.id !== teamId)]);
+        setCurrentUser((prev) => ({ ...prev, teamId }));
+      }
+    } catch (err) {
+      console.warn('Sync participant data notice:', err);
+    }
+  };
+
+  // On mount: if participant session exists, sync newest data from Supabase
+  useEffect(() => {
+    if (participantUser) {
+      syncParticipantData(participantUser);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loginParticipantSession = (participant: SupabaseParticipantRow) => {
+    // 1. Save session to storage
+    setParticipantUser(participant);
+    try {
+      const serialized = JSON.stringify(participant);
+      sessionStorage.setItem(PARTICIPANT_SESSION_KEY, serialized);
+      localStorage.setItem(PARTICIPANT_SESSION_KEY, serialized);
+    } catch {
+      // quota exceeded; ignore
+    }
+
+    // 2. Build profile and set currentUser immediately
+    const userProfile = buildUserProfileFromParticipant(participant);
+    setCurrentUser(userProfile);
+    setUsers((prev) => [userProfile, ...prev.filter((u) => u.email !== userProfile.email)]);
+
+    // 3. Immediately build team from local cache if available
+    const cached = getLocalRegistrationsCache().find(
+      (r) => r.registrationNumber === participant.registration_number
+    );
+    if (cached) {
+      const synTeam = buildSyntheticTeamFromReg(cached, participant);
+      setTeams((prev) => [synTeam, ...prev.filter((t) => t.id !== synTeam.id)]);
+    }
+
+    // 4. Async sync full Supabase registration and peers
+    syncParticipantData(participant);
+
+    // 5. Navigate to student dashboard immediately
+    setActiveView('student');
+  };
+
+  const logoutParticipant = () => {
+    setParticipantUser(null);
+    setCurrentUser(MOCK_USERS[0]);
+    setTeams((prev) => prev.filter((t) => !t.id.startsWith('team_participant_')));
+    try {
+      sessionStorage.removeItem(PARTICIPANT_SESSION_KEY);
+      localStorage.removeItem(PARTICIPANT_SESSION_KEY);
+    } catch {
+      // ignore
+    }
+    setActiveView('public');
+  };
+
 
   const openRegistrationModal = (track: 'team' | 'institute' = 'team') => {
     setRegistrationModalTrack(track);
@@ -2261,6 +2558,9 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setIsChatOpen,
         initialChatQuery,
         openChatWithQuery,
+        participantUser,
+        loginParticipantSession,
+        logoutParticipant,
       }}
     >
       {children}

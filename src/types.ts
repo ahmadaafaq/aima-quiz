@@ -82,6 +82,9 @@ export interface TeamMember {
   hasPaid: boolean;
   acceptedDeclaration: boolean;
   roleInTeam?: string; // e.g. Strategist, Financial Modeler, Presenter
+  paymentLabel?: string;
+  paymentStatus?: 'PAID' | 'PENDING_INVOICE' | string;
+  amount?: number;
 }
 
 export interface DeadlineExtensionRequest {
@@ -142,6 +145,15 @@ export interface Team {
   createdAt: string;
   assignedHub: RegionHubId;
   preferredHub?: RegionHubId;
+  paymentStatus?: string;
+  invoiceNumber?: string;
+  registrationMode?: 'individual' | 'institute' | string;
+  feeTier?: string;
+  totalAmount?: number;
+  subtotalAmount?: number;
+  gstAmount?: number;
+  participantCount?: number;
+  maxMembers?: number;
   
   // Round 2 Deadlines & Extension Requests
   submissionDeadline?: string;
