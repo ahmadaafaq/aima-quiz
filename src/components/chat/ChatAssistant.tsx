@@ -735,6 +735,11 @@ export const ChatAssistant: React.FC = () => {
 
   const suggestions = getSuggestionsForRole();
 
+  // Hide chatbot on registration page as explicitly requested
+  if (activeView === 'registration' || activeView === 'register' || activeView === 'bootcamp_registration') {
+    return null;
+  }
+
   return (
     <>
       {/* ========================================================================= */}

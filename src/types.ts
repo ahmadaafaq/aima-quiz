@@ -441,8 +441,20 @@ export interface PaymentRecord {
   userId: string;
   userName: string;
   teamId?: string;
+  teamName?: string;
   instituteId?: string;
+  instituteName?: string;
+  regionHub?: RegionHubId | 'national';
+  regionName?: string;
   amount: number;
+  baseAmount?: number;
+  gstAmount?: number;
+  gstRate?: number;
+  gstType?: 'CGST+SGST' | 'IGST';
+  hsnSacCode?: string;
+  billingState?: string;
+  payerGstin?: string;
+  itemDescription?: string;
   stage: 'round_1_2' | 'round_3' | 'round_4' | 'bulk_institutional';
   paymentMethod: 'UPI' | 'Credit Card' | 'Debit Card' | 'Net Banking' | 'Waiver/Coupon';
   status: 'SUCCESS' | 'PENDING' | 'FAILED' | 'REFUNDED';
@@ -517,4 +529,91 @@ export interface CompetitionConfig {
   isResultsLockedR3: boolean;
   isResultsLockedR4: boolean;
   isPublicResultsPublished: boolean;
+}
+
+export interface CSRBootcampNominee {
+  id: string;
+  salutation?: 'Mr.' | 'Ms.' | 'Dr.' | 'Prof.' | string;
+  name: string;
+  dob?: string;
+  gender?: 'Male' | 'Female' | 'Other' | 'Prefer not to say' | string;
+  email: string;
+  mobile: string;
+  instituteName?: string;
+  program?: string;
+  semester?: string;
+  enrolmentNumber?: string;
+  password?: string;
+  designation?: string;
+  department?: string;
+  foodPreference?: 'Vegetarian' | 'Non-Vegetarian' | 'Jain' | string;
+  specialRequirements?: string;
+  isTeamLeader?: boolean;
+}
+
+export interface CSRBootcampRegistration {
+  id: string;
+  registrationNumber: string;
+  track: 'corporate_individual' | 'institutional';
+  createdAt: string;
+  organizationName: string;
+  organizationType?: string;
+  address: string;
+  city: string;
+  state: string;
+  pinCode: string;
+  gstin?: string;
+  pan?: string;
+  poNumber?: string;
+  isOnboardingTeam?: boolean;
+  teamName?: string;
+  participantPassword?: string;
+  coordinator: {
+    salutation?: string;
+    name: string;
+    designation: string;
+    department?: string;
+    email: string;
+    mobile: string;
+    extension?: string;
+  };
+  tierId: '1_3' | '4_7' | '8_plus' | 'inst_5' | 'inst_10';
+  tierLabel: string;
+  participantCount: number;
+  ratePerPersonOrPackage: number;
+  subtotalExclGst: number;
+  gstAmount: number;
+  totalPayable: number;
+  gstRate: number;
+  gstType: 'CGST+SGST' | 'IGST';
+  sacCode: string;
+  nominees: CSRBootcampNominee[];
+  managementAuthorisationAccepted: boolean;
+  termsAccepted: boolean;
+  dpdpConsentAccepted: boolean;
+  dpdpConsentTimestamp?: string;
+  paymentStatus: 'PAID' | 'PENDING_INVOICE';
+  paymentMethod?: 'UPI' | 'Credit Card' | 'Debit Card' | 'Net Banking' | 'PO/NEFT_Pending';
+  transactionId?: string;
+  invoiceNumber: string;
+  paidAt?: string;
+  secretariatEmailSent: boolean;
+  registrantEmailSent: boolean;
+  emailDispatchedAt: string;
+}
+
+export interface CSREmailLog {
+  id: string;
+  to: string;
+  cc?: string;
+  subject: string;
+  timestamp: string;
+  status: 'DELIVERED';
+  registrationId: string;
+  registrationNumber: string;
+  organizationName: string;
+  participantCount: number;
+  totalAmount: number;
+  invoiceNumber: string;
+  bodySnippet: string;
 }

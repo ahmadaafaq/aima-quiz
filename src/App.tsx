@@ -15,6 +15,7 @@ import { CertificateVerifier } from './components/common/CertificateVerifier';
 import { SupportModal } from './components/support/SupportModal';
 import { ChatAssistant } from './components/chat/ChatAssistant';
 import { UnifiedRegistrationModal } from './components/public/UnifiedRegistrationModal';
+import { RegistrationPage } from './components/registration/RegistrationPage';
 
 const AppContent: React.FC = () => {
   const { activeView, activeCertificateModal, setActiveCertificateModal, showRegistrationModal, setShowRegistrationModal, registrationModalTrack } = useCompetition();
@@ -25,6 +26,10 @@ const AppContent: React.FC = () => {
 
   const renderActiveView = () => {
     switch (activeView) {
+      case 'registration':
+      case 'register':
+      case 'bootcamp_registration':
+        return <RegistrationPage />;
       case 'student':
         return <StudentDashboard />;
       case 'institute':
@@ -45,6 +50,8 @@ const AppContent: React.FC = () => {
         return <PublicHome />;
     }
   };
+
+  const isRegistrationPage = activeView === 'registration' || activeView === 'register' || activeView === 'bootcamp_registration';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-amber-500/20 selection:text-amber-700 dark:selection:text-amber-300">
@@ -68,7 +75,7 @@ const AppContent: React.FC = () => {
       />
       <CertificateVerifier />
       <SupportModal />
-      <ChatAssistant />
+      {!isRegistrationPage && <ChatAssistant />}
 
       {/* Bottom Footer */}
       <Footer />

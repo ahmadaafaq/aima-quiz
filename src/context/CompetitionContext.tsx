@@ -22,6 +22,8 @@ import {
   RegionHubId,
   DeadlineExtensionRequest,
   OfflineRoundResult,
+  CSRBootcampRegistration,
+  CSREmailLog,
 } from '../types';
 import {
   INITIAL_CONFIG,
@@ -42,6 +44,8 @@ import {
   MOCK_SUPPORT_TICKETS,
   MOCK_AUDIT_LOGS,
   MOCK_OFFLINE_ROUND_RESULTS,
+  MOCK_CSR_REGISTRATIONS,
+  MOCK_CSR_EMAIL_LOGS,
 } from '../data/mockData';
 
 interface CompetitionContextType {
@@ -172,6 +176,15 @@ interface CompetitionContextType {
   registerTeamWithPayment: (formData: any) => Promise<{ success: boolean; team: Team; leader: UserProfile; transactionId: string; invoiceNumber: string }>;
   registerInstituteWithPayment: (formData: any) => Promise<{ success: boolean; institution: InstitutionalProfile; voucherCode: string; invoiceNumber: string }>;
 
+  // Certified CSR Leader Bootcamp Registration & Secretariat Integration
+  csrRegistrations: CSRBootcampRegistration[];
+  csrEmailLogs: CSREmailLog[];
+  registerCSRBootcamp: (data: Omit<CSRBootcampRegistration, 'id' | 'createdAt' | 'emailDispatchedAt' | 'secretariatEmailSent' | 'registrantEmailSent'>) => {
+    registration: CSRBootcampRegistration;
+    emailLog: CSREmailLog;
+  };
+  updateCSRPayment: (registrationId: string, paymentMethod: string, transactionId: string) => void;
+
   // Certificates & Results
   certificates: CertificateRecord[];
   activeCertificateModal: CertificateRecord | null;
@@ -286,6 +299,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [activeSupportModal, setActiveSupportModal] = useState<boolean>(false);
   const [showRegistrationModal, setShowRegistrationModal] = useState<boolean>(false);
   const [registrationModalTrack, setRegistrationModalTrack] = useState<'team' | 'institute'>('team');
+  const [csrRegistrations, setCsrRegistrations] = useState<CSRBootcampRegistration[]>(MOCK_CSR_REGISTRATIONS);
+  const [csrEmailLogs, setCsrEmailLogs] = useState<CSREmailLog[]>(MOCK_CSR_EMAIL_LOGS);
   const [adminActiveTab, setAdminActiveTab] = useState<string>('overview');
   const [targetRequirementSection, setTargetRequirementSection] = useState<string | null>(null);
   const [targetRequirementClause, setTargetRequirementClause] = useState<string | null>(null);
@@ -294,7 +309,10 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const openRegistrationModal = (track: 'team' | 'institute' = 'team') => {
     setRegistrationModalTrack(track);
-    setShowRegistrationModal(true);
+    setActiveView('registration');
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const setTargetRequirement = (sectionId: string | null, clauseId?: string | null) => {
@@ -345,20 +363,21 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   };
 
-  // Load / Save from LocalStorage
+  // Load / Save from LocalStorage with Light Mode default
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem('AIMA_THEME') as 'light' | 'dark' | null;
-      if (savedTheme) {
-        setTheme(savedTheme);
-        if (savedTheme === 'dark') {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+      // Light mode is default
+      const initial = savedTheme === 'dark' ? 'dark' : 'light';
+      setTheme(initial);
+      if (initial === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
       }
     } catch {
-      // ignore
+      document.documentElement.classList.remove('dark');
+      setTheme('light');
     }
   }, []);
 
@@ -694,13 +713,36 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const txnId = 'TXN-' + Math.floor(100000000 + Math.random() * 900000000);
     const invoiceNum = 'INV-AIMA-26-' + Math.floor(10000 + Math.random() * 90000);
 
+    const userTeam = teams.find(t => t.id === currentUser.teamId);
+    const assignedHub = currentUser.assignedHub || userTeam?.assignedHub || 'north';
+    const hubNames: Record<string, string> = {
+      north: 'Northern Regional Hub (New Delhi)',
+      west: 'Western Regional Hub (Mumbai)',
+      south: 'Southern Regional Hub (Bengaluru)',
+      east: 'Eastern Regional Hub (Kolkata)',
+      central: 'Central Regional Hub (Bhopal)',
+    };
+    const baseAmt = Math.round((amount / 1.18) * 100) / 100;
+    const gstAmt = Math.round((amount - baseAmt) * 100) / 100;
+
     const record: PaymentRecord = {
       id: 'pay_' + Date.now(),
       transactionId: txnId,
       userId: currentUser.id,
       userName: currentUser.name,
       teamId: currentUser.teamId,
+      teamName: userTeam?.name,
+      instituteId: currentUser.instituteId,
+      instituteName: currentUser.instituteName,
+      regionHub: assignedHub,
+      regionName: hubNames[assignedHub] || 'Northern Regional Hub (New Delhi)',
       amount,
+      baseAmount: baseAmt,
+      gstAmount: gstAmt,
+      gstRate: 18,
+      gstType: assignedHub === 'north' ? 'CGST+SGST' : 'IGST',
+      hsnSacCode: '999293',
+      itemDescription: stage === 'round_3' ? 'Round 3 Regional Final Entry Fee' : 'Round 1-2 Individual Screening Fee',
       stage,
       paymentMethod: method,
       status: 'SUCCESS',
@@ -1684,13 +1726,34 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       return 'UPI';
     };
 
+    const hubNames: Record<string, string> = {
+      north: 'Northern Regional Hub (New Delhi)',
+      west: 'Western Regional Hub (Mumbai)',
+      south: 'Southern Regional Hub (Bengaluru)',
+      east: 'Eastern Regional Hub (Kolkata)',
+      central: 'Central Regional Hub (Bhopal)',
+    };
+    const teamBaseAmt = Math.round((formData.amount / 1.18) * 100) / 100;
+    const teamGstAmt = Math.round((formData.amount - teamBaseAmt) * 100) / 100;
+    const teamHub = formData.preferredHub || 'north';
+
     const newPayment: PaymentRecord = {
       id: 'pay_' + Date.now().toString(36),
       transactionId: transactionId,
       userId: leaderId,
       userName: formData.leaderName,
       teamId: teamId,
+      teamName: formData.teamName,
+      instituteName: formData.instituteName,
+      regionHub: teamHub,
+      regionName: hubNames[teamHub] || 'Northern Regional Hub (New Delhi)',
       amount: formData.amount,
+      baseAmount: teamBaseAmt,
+      gstAmount: teamGstAmt,
+      gstRate: 18,
+      gstType: teamHub === 'north' ? 'CGST+SGST' : 'IGST',
+      hsnSacCode: '999293',
+      itemDescription: `Team Screening Package (${teamMembers.length} Members)`,
       stage: 'round_1_2',
       paymentMethod: mapPaymentMethod(formData.paymentMethod),
       status: 'SUCCESS',
@@ -1775,13 +1838,26 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       return 'Net Banking';
     };
 
+    const instBaseAmt = Math.round((formData.amount / 1.18) * 100) / 100;
+    const instGstAmt = Math.round((formData.amount - instBaseAmt) * 100) / 100;
+
     const newPayment: PaymentRecord = {
       id: 'pay_' + Date.now().toString(36),
       transactionId: transactionId,
       userId: newCoordUser.id,
       userName: formData.coordinatorName,
       instituteId: instId,
+      instituteName: formData.instituteName,
+      billingState: formData.state,
+      regionHub: 'national',
+      regionName: 'Institutional Accredited Cohort (National)',
       amount: formData.amount,
+      baseAmount: instBaseAmt,
+      gstAmount: instGstAmt,
+      gstRate: 18,
+      gstType: 'IGST',
+      hsnSacCode: '999293',
+      itemDescription: `Institutional Bulk Pass (${formData.studentBatchSize} Students Cohort)`,
       stage: 'bulk_institutional',
       paymentMethod: mapPaymentMethod(formData.paymentMethod),
       status: 'SUCCESS',
@@ -1803,6 +1879,131 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       voucherCode,
       invoiceNumber,
     };
+  };
+
+  const registerCSRBootcamp = (data: Omit<CSRBootcampRegistration, 'id' | 'createdAt' | 'emailDispatchedAt' | 'secretariatEmailSent' | 'registrantEmailSent'>) => {
+    const regId = 'csr_reg_' + Date.now().toString(36);
+    const now = new Date().toISOString();
+
+    const newReg: CSRBootcampRegistration = {
+      ...data,
+      id: regId,
+      createdAt: now,
+      emailDispatchedAt: now,
+      secretariatEmailSent: true,
+      registrantEmailSent: true,
+    };
+
+    const newEmailLog: CSREmailLog = {
+      id: 'csr_mail_' + Date.now().toString(36),
+      to: 'enayyar@aima.in',
+      cc: data.coordinator.email,
+      subject: `[AIMA Secretariat] New Registration: Certified CSR Leader Bootcamp - ${data.organizationName}`,
+      timestamp: now,
+      status: 'DELIVERED',
+      registrationId: regId,
+      registrationNumber: data.registrationNumber,
+      organizationName: data.organizationName,
+      participantCount: data.participantCount,
+      totalAmount: data.totalPayable,
+      invoiceNumber: data.invoiceNumber,
+      bodySnippet: `New registration initiated by ${data.organizationName} for ${data.participantCount} participant(s). Tier: ${data.tierLabel}. Status: ${data.paymentStatus === 'PAID' ? 'PAID & CONFIRMED' : 'PENDING PROFORMA INVOICE / PO CLEARANCE'}. Invoice #${data.invoiceNumber}. Nominees: ${data.nominees.map(n => n.name).join(', ')}.`,
+    };
+
+    setCsrRegistrations(prev => [newReg, ...prev]);
+    setCsrEmailLogs(prev => [newEmailLog, ...prev]);
+
+    // Financial & GST Ledger Integration
+    const mapPaymentMethod = (m?: string): 'UPI' | 'Credit Card' | 'Debit Card' | 'Net Banking' | 'Waiver/Coupon' => {
+      if (!m) return 'Net Banking';
+      if (m.includes('UPI')) return 'UPI';
+      if (m.includes('Credit')) return 'Credit Card';
+      if (m.includes('Debit')) return 'Debit Card';
+      if (m.includes('Waiver') || m.includes('Coupon')) return 'Waiver/Coupon';
+      return 'Net Banking';
+    };
+
+    const newPayment: PaymentRecord = {
+      id: 'pay_csr_' + Date.now().toString(36),
+      transactionId: data.transactionId || ('TXN-PENDING-PO-' + Math.floor(100000 + Math.random() * 900000)),
+      userId: 'usr_csr_' + Date.now().toString(36),
+      userName: data.coordinator.name,
+      teamName: data.organizationName,
+      instituteName: data.organizationName,
+      billingState: data.state,
+      payerGstin: data.gstin,
+      regionHub: 'north',
+      regionName: 'Northern Regional Hub (New Delhi)',
+      amount: data.totalPayable,
+      baseAmount: data.subtotalExclGst,
+      gstAmount: data.gstAmount,
+      gstRate: 18,
+      gstType: data.gstType,
+      hsnSacCode: '999293',
+      itemDescription: `Certified CSR Leader Bootcamp (27-28 Oct 2026) - ${data.tierLabel} (${data.participantCount} Nominees)`,
+      stage: data.track === 'institutional' ? 'bulk_institutional' : 'round_1_2',
+      paymentMethod: mapPaymentMethod(data.paymentMethod),
+      status: data.paymentStatus === 'PAID' ? 'SUCCESS' : 'PENDING',
+      timestamp: now,
+      gstInvoiceNumber: data.invoiceNumber,
+    };
+
+    setPayments(prev => [newPayment, ...prev]);
+
+    addAuditLog(
+      'CSR Bootcamp Registration Captured',
+      'Registration',
+      `Registered "${data.organizationName}" (${data.participantCount} nominees). Tier: ${data.tierLabel}. Status: ${data.paymentStatus}. Details automatically dispatched to enayyar@aima.in. Ref: ${data.registrationNumber}, Inv: ${data.invoiceNumber}`
+    );
+
+    return {
+      registration: newReg,
+      emailLog: newEmailLog,
+    };
+  };
+
+  const updateCSRPayment = (registrationId: string, paymentMethod: string, transactionId: string) => {
+    const paidAt = new Date().toISOString();
+    let updatedInvoice = '';
+    setCsrRegistrations(prev =>
+      prev.map(r => {
+        if (r.id === registrationId) {
+          updatedInvoice = r.invoiceNumber.startsWith('PINV-')
+            ? r.invoiceNumber.replace('PINV-', 'INV-')
+            : r.invoiceNumber;
+          return {
+            ...r,
+            paymentStatus: 'PAID',
+            paymentMethod: paymentMethod as any,
+            transactionId,
+            invoiceNumber: updatedInvoice,
+            paidAt,
+          };
+        }
+        return r;
+      })
+    );
+
+    setPayments(prev =>
+      prev.map(p => {
+        if (p.gstInvoiceNumber && (p.gstInvoiceNumber === updatedInvoice || p.gstInvoiceNumber.replace('INV-', 'PINV-') === updatedInvoice)) {
+          return {
+            ...p,
+            status: 'SUCCESS',
+            transactionId,
+            gstInvoiceNumber: updatedInvoice || p.gstInvoiceNumber,
+            paymentMethod: (paymentMethod.includes('UPI') ? 'UPI' : paymentMethod.includes('Card') ? 'Credit Card' : 'Net Banking') as any,
+          };
+        }
+        return p;
+      })
+    );
+
+    addAuditLog(
+      'CSR Payment Cleared',
+      'Payment',
+      `Payment cleared for CSR Registration ${registrationId}. Txn: ${transactionId}, Method: ${paymentMethod}`
+    );
   };
 
   const addInstitution = (inst: Omit<InstitutionalProfile, 'id'>) => {
@@ -1940,6 +2141,10 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         openRegistrationModal,
         registerTeamWithPayment,
         registerInstituteWithPayment,
+        csrRegistrations,
+        csrEmailLogs,
+        registerCSRBootcamp,
+        updateCSRPayment,
         certificates,
         activeCertificateModal,
         setActiveCertificateModal,

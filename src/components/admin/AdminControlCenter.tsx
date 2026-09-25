@@ -11,6 +11,7 @@ import { QuizQuestionBankManager } from './QuizQuestionBankManager';
 import { OfficialBulletinsManager } from './OfficialBulletinsManager';
 import { CaseDeckDeadlinesManager } from './CaseDeckDeadlinesManager';
 import { OfflineRoundsManager } from './OfflineRoundsManager';
+import { FinancialLedgerManager } from './FinancialLedgerManager';
 import { DocRequirementInfo } from '../common/DocRequirementInfo';
 import {
   Activity,
@@ -1399,77 +1400,7 @@ export const AdminControlCenter: React.FC = () => {
         {/* -------------------- TAB: FINANCIAL LEDGER -------------------- */}
         {activeTab === 'finances' && (
           <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-              <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Gross Revenue Settled</span>
-                <span className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1 block">
-                  ₹{grossRevenue.toLocaleString()}
-                </span>
-                <span className="text-[11px] text-emerald-600 font-semibold block mt-0.5">Across All 4 Stages</span>
-              </div>
-
-              <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold block">GST Collected (18%)</span>
-                <span className="text-2xl font-black text-amber-600 mt-1 block">
-                  ₹{gstCollected.toLocaleString()}
-                </span>
-                <span className="text-[11px] text-slate-500 block mt-0.5">Central + State GST</span>
-              </div>
-
-              <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Registered Transactions</span>
-                <span className="text-2xl font-black text-purple-600 mt-1 block">
-                  {payments.length} Invoices
-                </span>
-                <span className="text-[11px] text-slate-500 block mt-0.5">B2B Tax Invoiced</span>
-              </div>
-
-              <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Prize Purse Reserve</span>
-                <span className="text-2xl font-black text-emerald-600 mt-1 block">₹15,00,000</span>
-                <span className="text-[11px] text-slate-500 block mt-0.5">Escrow Allocated</span>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-xs">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <Coins className="w-4 h-4 text-amber-600" />
-                <span>Recent Stage Transactions & B2B GST Invoices</span>
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 uppercase text-[10px] font-bold tracking-wider">
-                    <tr>
-                      <th className="p-3">Receipt Code</th>
-                      <th className="p-3">Candidate / Entity</th>
-                      <th className="p-3">Stage</th>
-                      <th className="p-3">Method</th>
-                      <th className="p-3">Total Paid</th>
-                      <th className="p-3 text-right">Tax Invoice</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {payments.map(p => (
-                      <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                        <td className="p-3 font-mono font-bold text-amber-600">{p.transactionId}</td>
-                        <td className="p-3 font-semibold">{p.userName}</td>
-                        <td className="p-3 uppercase text-[10px]">{p.stage.replace('_', ' ')}</td>
-                        <td className="p-3">{p.paymentMethod}</td>
-                        <td className="p-3 font-bold text-slate-900 dark:text-slate-100">₹{p.amount.toLocaleString()}</td>
-                        <td className="p-3 text-right">
-                          <span
-                            onClick={() => alert(`Downloading GST Invoice #${p.gstInvoiceNumber} for ₹${p.amount}...`)}
-                            className="text-emerald-600 font-semibold cursor-pointer underline"
-                          >
-                            {p.gstInvoiceNumber}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <FinancialLedgerManager />
           </div>
         )}
 
