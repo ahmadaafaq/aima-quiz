@@ -53,7 +53,6 @@ import {
   MOCK_SUPPORT_TICKETS,
   MOCK_AUDIT_LOGS,
   MOCK_OFFLINE_ROUND_RESULTS,
-  MOCK_CSR_REGISTRATIONS,
   MOCK_CSR_EMAIL_LOGS,
 } from '../data/mockData';
 
@@ -502,7 +501,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [activeSupportModal, setActiveSupportModal] = useState<boolean>(false);
   const [showRegistrationModal, setShowRegistrationModal] = useState<boolean>(false);
   const [registrationModalTrack, setRegistrationModalTrack] = useState<'team' | 'institute'>('team');
-  const [csrRegistrations, setCsrRegistrations] = useState<CSRBootcampRegistration[]>(MOCK_CSR_REGISTRATIONS);
+  const [csrRegistrations, setCsrRegistrations] = useState<CSRBootcampRegistration[]>([]);
   const [csrEmailLogs, setCsrEmailLogs] = useState<CSREmailLog[]>(MOCK_CSR_EMAIL_LOGS);
   const [adminActiveTab, setAdminActiveTab] = useState<string>('overview');
   const [targetRequirementSection, setTargetRequirementSection] = useState<string | null>(null);
@@ -734,12 +733,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     fetchRegistrationsFromSupabase()
       .then((res) => {
         if (!isMounted) return;
-        if (res.registrations && res.registrations.length > 0) {
-          setCsrRegistrations((prev) => {
-            const fetchedNumbers = new Set(res.registrations.map((r) => r.registrationNumber));
-            const remainingMocks = prev.filter((r) => !fetchedNumbers.has(r.registrationNumber));
-            return [...res.registrations, ...remainingMocks];
-          });
+        if (res.registrations && res.registrations.length >= 0) {
+          setCsrRegistrations(res.registrations);
         }
       })
       .catch((err) => {
