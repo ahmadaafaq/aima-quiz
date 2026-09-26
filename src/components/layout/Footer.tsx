@@ -30,39 +30,6 @@ export const Footer: React.FC = () => {
     return (
       <footer className="bg-slate-950 text-slate-300 text-xs border-t border-slate-800 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-10">
-          
-          {/* Top Brand & Event Header */}
-          <div className="flex flex-wrap items-center justify-between gap-4 pb-8 border-b border-slate-800">
-            <div className="flex items-center gap-3.5">
-              <div className="h-11 px-3 rounded-xl bg-white flex items-center justify-center border border-slate-700 shadow-sm shrink-0">
-                <img
-                  src="https://www.aima.in/img/logo.png"
-                  alt="AIMA Logo"
-                  className="h-7 w-auto object-contain"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              <div>
-                <span className="font-extrabold text-sm text-white uppercase tracking-wider block">
-                  ALL INDIA MANAGEMENT ASSOCIATION (AIMA)
-                </span>
-                <span className="text-[11px] text-amber-400 font-semibold tracking-wide block">
-                  India Case Research Centre (ICRC) • India Case League 2026 • Official Secretariat
-                </span>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-[11px] font-semibold text-blue-300 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                National Student Case Competition
-              </span>
-              <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-semibold text-emerald-300 flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                AIMA Certified Credential
-              </span>
-            </div>
-          </div>
 
           {/* ============================================================== */}
           {/* OFFICIAL CONTACT SECTION (MATCHING USER SPECIFICATION)        */}
@@ -145,7 +112,7 @@ export const Footer: React.FC = () => {
 
           {/* 3-Column Schedule, Statutory Terms & Bank Details */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            
+
             {/* Col 1: Competition Schedule & Key Dates */}
             <div className="space-y-3">
               <h4 className="text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
@@ -259,11 +226,11 @@ export const Footer: React.FC = () => {
   // Standard Website Footer for Competition Overview & Portals
   return (
     <footer className="bg-slate-950 text-slate-400 text-xs border-t border-slate-800 transition-colors">
-      
+
       {/* Main Footer Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
-          
+
           {/* Col 1: Brand & Accreditation */}
           <div className="lg:col-span-2 space-y-4">
             <div className="flex items-center gap-3">
@@ -284,7 +251,7 @@ export const Footer: React.FC = () => {
                 </span>
               </div>
             </div>
-            
+
             <p className="text-slate-400 text-xs leading-relaxed max-w-sm">
               The India Case League (ICL 2026) is India’s premier multi-stage business case simulation and leadership championship. Fostering data-driven decision-making, strategic problem-solving, and national economic impact across top B-schools and corporate hubs.
             </p>
