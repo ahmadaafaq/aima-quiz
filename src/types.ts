@@ -561,6 +561,7 @@ export interface CSRBootcampNominee {
   foodPreference?: 'Vegetarian' | 'Non-Vegetarian' | 'Jain' | string;
   specialRequirements?: string;
   isTeamLeader?: boolean;
+  teamName?: string;
 }
 
 export interface CSRBootcampRegistration {

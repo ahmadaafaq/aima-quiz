@@ -57,6 +57,19 @@ import {
 // Flat participation fee as per brochure: ₹200 per participant
 export const PARTICIPATION_FEE_PER_PERSON = 200;
 
+export const FEE_TIERS = [
+  {
+    id: 'per_student',
+    label: 'Standard Registration',
+    rateExclGst: 200,
+    rateInclGst: 200,
+    isPackage: false,
+    minCount: 1,
+    maxCount: 4,
+    subLabel: '₹200 per student participant',
+  },
+];
+
 interface TeamMemberInput {
   id: string;
   name: string;
@@ -81,6 +94,12 @@ interface InstituteParticipantInput {
   semester: string;
   enrolmentNumber: string;
   password: string;
+}
+
+interface InstituteTeam {
+  id: string;
+  teamName: string;
+  members: InstituteParticipantInput[];
 }
 
 export const RegistrationPage: React.FC = () => {
@@ -154,68 +173,62 @@ export const RegistrationPage: React.FC = () => {
   const [coordinatorEmail, setCoordinatorEmail] = useState('sanjeev.kapoor@iitm.ac.in');
   const [coordinatorPhone, setCoordinatorPhone] = useState('+91 98101 23456');
 
-  // Institute participants: Excel / Form entry tab
+  // Institute teams: each team has up to 4 participants, institute can have multiple teams
   const [instituteEntryTab, setInstituteEntryTab] = useState<'form' | 'excel'>('form');
-  const [instituteParticipants, setInstituteParticipants] = useState<InstituteParticipantInput[]>([
+  const [instituteTeams, setInstituteTeams] = useState<InstituteTeam[]>([
     {
-      id: 'inst_p1',
-      name: 'Kabir Mehta',
-      dob: '2002-03-15',
-      email: 'kabir.m@iitm.ac.in',
-      gender: 'Male',
-      mobile: '+91 98111 22331',
-      program: 'PGDM - Finance & CSR Strategy',
-      semester: '2nd Year / Sem 3',
-      enrolmentNumber: 'IITM-2025-014',
-      password: 'Pass#Quiz1',
-    },
-    {
-      id: 'inst_p2',
-      name: 'Ananya Sharma',
-      dob: '2002-09-18',
-      email: 'ananya.s@iitm.ac.in',
-      gender: 'Female',
-      mobile: '+91 98111 22332',
-      program: 'PGDM - Operations & ESG',
-      semester: '2nd Year / Sem 3',
-      enrolmentNumber: 'IITM-2025-029',
-      password: 'Pass#Quiz2',
-    },
-    {
-      id: 'inst_p3',
-      name: 'Devansh Verma',
-      dob: '2003-01-24',
-      email: 'devansh.v@iitm.ac.in',
-      gender: 'Male',
-      mobile: '+91 98111 22333',
-      program: 'MBA - Business Analytics',
-      semester: '1st Year / Sem 1',
-      enrolmentNumber: 'IITM-2026-042',
-      password: 'Pass#Quiz3',
-    },
-    {
-      id: 'inst_p4',
-      name: 'Sneha Kulkarni',
-      dob: '2002-07-30',
-      email: 'sneha.k@iitm.ac.in',
-      gender: 'Female',
-      mobile: '+91 98111 22334',
-      program: 'MBA - Human Capital & CSR',
-      semester: '2nd Year / Sem 3',
-      enrolmentNumber: 'IITM-2025-055',
-      password: 'Pass#Quiz4',
-    },
-    {
-      id: 'inst_p5',
-      name: 'Vikramaditya Roy',
-      dob: '2001-12-05',
-      email: 'vikram.r@iitm.ac.in',
-      gender: 'Male',
-      mobile: '+91 98111 22335',
-      program: 'PGDM - Strategic Leadership',
-      semester: '2nd Year / Sem 4',
-      enrolmentNumber: 'IITM-2025-067',
-      password: 'Pass#Quiz5',
+      id: 'inst_team_1',
+      teamName: 'Team Alpha',
+      members: [
+        {
+          id: 'inst_p1',
+          name: 'Kabir Mehta',
+          dob: '2002-03-15',
+          email: 'kabir.m@iitm.ac.in',
+          gender: 'Male',
+          mobile: '+91 98111 22331',
+          program: 'PGDM - Finance & CSR Strategy',
+          semester: '2nd Year / Sem 3',
+          enrolmentNumber: 'IITM-2025-014',
+          password: 'Pass#Quiz1',
+        },
+        {
+          id: 'inst_p2',
+          name: 'Ananya Sharma',
+          dob: '2002-09-18',
+          email: 'ananya.s@iitm.ac.in',
+          gender: 'Female',
+          mobile: '+91 98111 22332',
+          program: 'PGDM - Operations & ESG',
+          semester: '2nd Year / Sem 3',
+          enrolmentNumber: 'IITM-2025-029',
+          password: 'Pass#Quiz2',
+        },
+        {
+          id: 'inst_p3',
+          name: 'Devansh Verma',
+          dob: '2003-01-24',
+          email: 'devansh.v@iitm.ac.in',
+          gender: 'Male',
+          mobile: '+91 98111 22333',
+          program: 'MBA - Business Analytics',
+          semester: '1st Year / Sem 1',
+          enrolmentNumber: 'IITM-2026-042',
+          password: 'Pass#Quiz3',
+        },
+        {
+          id: 'inst_p4',
+          name: 'Sneha Kulkarni',
+          dob: '2002-07-30',
+          email: 'sneha.k@iitm.ac.in',
+          gender: 'Female',
+          mobile: '+91 98111 22334',
+          program: 'MBA - Human Capital & CSR',
+          semester: '2nd Year / Sem 3',
+          enrolmentNumber: 'IITM-2025-055',
+          password: 'Pass#Quiz4',
+        },
+      ],
     },
   ]);
 
@@ -247,8 +260,9 @@ export const RegistrationPage: React.FC = () => {
     if (regMode === 'individual') {
       return isOnboardingTeam ? 1 + teamMembers.length : 1;
     }
-    return instituteParticipants.length || 1;
-  }, [regMode, isOnboardingTeam, teamMembers.length, instituteParticipants.length]);
+    const count = instituteTeams.reduce((acc, t) => acc + t.members.length, 0);
+    return count || 1;
+  }, [regMode, isOnboardingTeam, teamMembers.length, instituteTeams]);
 
   // Simple ₹200/participant fee calculation
   const feeCalculation = useMemo(() => {
@@ -315,16 +329,58 @@ export const RegistrationPage: React.FC = () => {
   };
 
   // ==========================================
-  // HANDLERS: INSTITUTE PARTICIPANTS (MANUAL FORM)
+  // HANDLERS: INSTITUTE TEAMS & PARTICIPANTS
   // ==========================================
-  const handleAddInstituteParticipant = () => {
-    // Max 4 participants per team
-    if (instituteParticipants.length >= 4) {
-      setValidationError('Maximum team size is 4 participants per team.');
+  const handleAddInstituteTeam = () => {
+    const newTeamNumber = instituteTeams.length + 1;
+    const newTeam: InstituteTeam = {
+      id: 'inst_team_' + Date.now().toString(36),
+      teamName: `Team ${newTeamNumber}`,
+      members: [
+        {
+          id: 'inst_p_' + Date.now().toString(36) + '_1',
+          name: '',
+          dob: '2002-01-01',
+          email: '',
+          gender: 'Male',
+          mobile: '+91 ',
+          program: 'MBA / PGDM',
+          semester: '1st Year',
+          enrolmentNumber: '',
+          password: 'Quiz#' + Math.floor(1000 + Math.random() * 9000),
+        },
+      ],
+    };
+    setInstituteTeams((prev) => [...prev, newTeam]);
+    setValidationError('');
+  };
+
+  const handleRemoveInstituteTeam = (teamId: string) => {
+    if (instituteTeams.length <= 1) {
+      setValidationError('Please keep at least 1 team in your institutional registration.');
       return;
     }
-    const newP: InstituteParticipantInput = {
-      id: 'inst_p_' + Date.now().toString(36),
+    setInstituteTeams((prev) => prev.filter((t) => t.id !== teamId));
+    setValidationError('');
+  };
+
+  const handleUpdateInstituteTeamName = (teamId: string, name: string) => {
+    setInstituteTeams((prev) =>
+      prev.map((t) => (t.id === teamId ? { ...t, teamName: name } : t))
+    );
+  };
+
+  const handleAddMemberToTeam = (teamId: string) => {
+    const targetTeam = instituteTeams.find((t) => t.id === teamId);
+    if (!targetTeam) return;
+
+    if (targetTeam.members.length >= 4) {
+      setValidationError(`"${targetTeam.teamName}" already has 4 participants (maximum 4 participants per team).`);
+      return;
+    }
+
+    const newMember: InstituteParticipantInput = {
+      id: 'inst_p_' + Date.now().toString(36) + '_' + (targetTeam.members.length + 1),
       name: '',
       dob: '2002-01-01',
       email: '',
@@ -335,28 +391,51 @@ export const RegistrationPage: React.FC = () => {
       enrolmentNumber: '',
       password: 'Quiz#' + Math.floor(1000 + Math.random() * 9000),
     };
-    const updated = [...instituteParticipants, newP];
-    setInstituteParticipants(updated);
+
+    setInstituteTeams((prev) =>
+      prev.map((t) =>
+        t.id === teamId ? { ...t, members: [...t.members, newMember] } : t
+      )
+    );
     setValidationError('');
   };
 
-  const handleRemoveInstituteParticipant = (id: string) => {
-    if (instituteParticipants.length <= 1) {
-      setValidationError('Please keep at least 1 participant in the institutional roster.');
+  const handleRemoveMemberFromTeam = (teamId: string, memberId: string) => {
+    const targetTeam = instituteTeams.find((t) => t.id === teamId);
+    if (!targetTeam) return;
+
+    if (targetTeam.members.length <= 1) {
+      setValidationError(`"${targetTeam.teamName}" must have at least 1 participant. You can remove the entire team if not needed.`);
       return;
     }
-    const updated = instituteParticipants.filter((p) => p.id !== id);
-    setInstituteParticipants(updated);
+
+    setInstituteTeams((prev) =>
+      prev.map((t) =>
+        t.id === teamId
+          ? { ...t, members: t.members.filter((m) => m.id !== memberId) }
+          : t
+      )
+    );
     setValidationError('');
   };
 
-  const handleUpdateInstituteParticipant = (
-    id: string,
+  const handleUpdateTeamMemberField = (
+    teamId: string,
+    memberId: string,
     field: keyof InstituteParticipantInput,
     value: string
   ) => {
-    setInstituteParticipants((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, [field]: value } : p))
+    setInstituteTeams((prev) =>
+      prev.map((t) =>
+        t.id === teamId
+          ? {
+              ...t,
+              members: t.members.map((m) =>
+                m.id === memberId ? { ...m, [field]: value } : m
+              ),
+            }
+          : t
+      )
     );
   };
 
@@ -366,6 +445,7 @@ export const RegistrationPage: React.FC = () => {
   const handleDownloadExcelTemplate = () => {
     const templateRows = [
       {
+        'Team Name': 'Team Alpha',
         'Candidate Name': 'Aarav Sharma',
         'Date of Birth (YYYY-MM-DD)': '2002-05-14',
         'Email Address': 'aarav.sharma@campus.edu',
@@ -377,6 +457,7 @@ export const RegistrationPage: React.FC = () => {
         'Quiz Password': 'QuizPass#2026',
       },
       {
+        'Team Name': 'Team Alpha',
         'Candidate Name': 'Priya Sundaram',
         'Date of Birth (YYYY-MM-DD)': '2002-08-22',
         'Email Address': 'priya.s@campus.edu',
@@ -388,6 +469,7 @@ export const RegistrationPage: React.FC = () => {
         'Quiz Password': 'QuizPass#2026',
       },
       {
+        'Team Name': 'Team Beta',
         'Candidate Name': 'Rohan Deshmukh',
         'Date of Birth (YYYY-MM-DD)': '2001-11-10',
         'Email Address': 'rohan.d@campus.edu',
@@ -399,6 +481,7 @@ export const RegistrationPage: React.FC = () => {
         'Quiz Password': 'QuizPass#2026',
       },
       {
+        'Team Name': 'Team Beta',
         'Candidate Name': 'Sneha Kulkarni',
         'Date of Birth (YYYY-MM-DD)': '2002-07-30',
         'Email Address': 'sneha.k@campus.edu',
@@ -410,6 +493,7 @@ export const RegistrationPage: React.FC = () => {
         'Quiz Password': 'QuizPass#2026',
       },
       {
+        'Team Name': 'Team Gamma',
         'Candidate Name': 'Vikramaditya Roy',
         'Date of Birth (YYYY-MM-DD)': '2001-12-05',
         'Email Address': 'vikram.r@campus.edu',
@@ -449,7 +533,14 @@ export const RegistrationPage: React.FC = () => {
           return;
         }
 
-        const parsed: InstituteParticipantInput[] = rows.map((r, i) => {
+        // Group rows by Team Name (or chunk by 4 if no Team Name specified)
+        const teamMap = new Map<string, InstituteParticipantInput[]>();
+        let overflowCount = 0;
+
+        rows.forEach((r, i) => {
+          const rawTeam = (r['Team Name'] || r['Team'] || r['Team Title'] || '').toString().trim();
+          const teamKey = rawTeam || `Team ${Math.floor(i / 4) + 1}`;
+
           const rawName = r['Candidate Name'] || r['Name'] || r['Participant Name'] || `Participant ${i + 1}`;
           const rawDob = r['Date of Birth (YYYY-MM-DD)'] || r['DOB'] || r['Date of Birth'] || '2002-01-01';
           const rawEmail = r['Email Address'] || r['Email'] || `candidate${i + 1}@campus.edu`;
@@ -460,7 +551,7 @@ export const RegistrationPage: React.FC = () => {
           const rawEnr = r['Enrolment Number'] || r['Roll No'] || `ROLL-${i + 101}`;
           const rawPass = r['Quiz Password'] || r['Password'] || 'Quiz#' + Math.floor(1000 + Math.random() * 9000);
 
-          return {
+          const member: InstituteParticipantInput = {
             id: 'inst_p_excel_' + Date.now().toString(36) + '_' + i,
             name: String(rawName).trim(),
             dob: String(rawDob).trim(),
@@ -472,15 +563,30 @@ export const RegistrationPage: React.FC = () => {
             enrolmentNumber: String(rawEnr).trim(),
             password: String(rawPass).trim(),
           };
+
+          const currentList = teamMap.get(teamKey) || [];
+          if (currentList.length < 4) {
+            currentList.push(member);
+            teamMap.set(teamKey, currentList);
+          } else {
+            overflowCount++;
+          }
         });
 
-        // Limit to max 4 participants per team from Excel import
-        const limited = parsed.slice(0, 4);
-        setInstituteParticipants(limited);
-        setExcelUploadFeedback({
-          type: 'success',
-          message: `Successfully imported ${limited.length} participant(s) from "${file.name}"${parsed.length > 4 ? ` (limited to 4 per team; ${parsed.length - 4} rows skipped)` : ''}.`,
-        });
+        const newTeams: InstituteTeam[] = Array.from(teamMap.entries()).map(([tName, members], idx) => ({
+          id: 'inst_team_excel_' + Date.now().toString(36) + '_' + idx,
+          teamName: tName,
+          members,
+        }));
+
+        if (newTeams.length > 0) {
+          setInstituteTeams(newTeams);
+          const totalImported = newTeams.reduce((s, t) => s + t.members.length, 0);
+          setExcelUploadFeedback({
+            type: 'success',
+            message: `Successfully imported ${totalImported} participant(s) across ${newTeams.length} team(s) from "${file.name}" (max 4 per team${overflowCount > 0 ? `, ${overflowCount} excess row(s) skipped` : ''}).`,
+          });
+        }
       } catch (err) {
         setExcelUploadFeedback({
           type: 'error',
@@ -592,19 +698,34 @@ export const RegistrationPage: React.FC = () => {
         setValidationError('Please enter the Coordinator Phone / Mobile Number.');
         return false;
       }
-      if (instituteParticipants.length === 0) {
-        setValidationError('Please add at least 1 participant via the form or Excel import.');
+      if (instituteTeams.length === 0) {
+        setValidationError('Please add at least 1 team with participants.');
         return false;
       }
-      for (let i = 0; i < instituteParticipants.length; i++) {
-        const p = instituteParticipants[i];
-        if (!p.name.trim()) {
-          setValidationError(`Please provide the Name for Participant #${i + 1}.`);
+      for (let t = 0; t < instituteTeams.length; t++) {
+        const team = instituteTeams[t];
+        if (!team.teamName.trim()) {
+          setValidationError(`Please enter a name for Team #${t + 1}.`);
           return false;
         }
-        if (!p.email.trim() || !p.email.includes('@')) {
-          setValidationError(`Please provide a valid Email for Participant #${i + 1} (${p.name || 'Student'}).`);
+        if (team.members.length === 0) {
+          setValidationError(`Team "${team.teamName}" must have at least 1 participant.`);
           return false;
+        }
+        if (team.members.length > 4) {
+          setValidationError(`Team "${team.teamName}" exceeds the maximum limit of 4 participants per team.`);
+          return false;
+        }
+        for (let m = 0; m < team.members.length; m++) {
+          const mem = team.members[m];
+          if (!mem.name.trim()) {
+            setValidationError(`Please provide the Name for Participant #${m + 1} in "${team.teamName}".`);
+            return false;
+          }
+          if (!mem.email.trim() || !mem.email.includes('@')) {
+            setValidationError(`Please provide a valid Email for Participant #${m + 1} (${mem.name || 'Student'}) in "${team.teamName}".`);
+            return false;
+          }
         }
       }
     }
@@ -668,20 +789,25 @@ export const RegistrationPage: React.FC = () => {
 
       return [leaderNominee, ...teamNominees];
     } else {
-      return instituteParticipants.map((ip, idx) => ({
-        id: 'nom_inst_' + idx + '_' + Date.now().toString(36),
-        name: ip.name,
-        dob: ip.dob,
-        gender: ip.gender,
-        email: ip.email,
-        mobile: ip.mobile,
-        instituteName: instName,
-        program: ip.program,
-        semester: ip.semester,
-        enrolmentNumber: ip.enrolmentNumber,
-        password: ip.password,
-        designation: 'Student Nominee',
-      }));
+      return instituteTeams.flatMap((team, teamIdx) =>
+        team.members.map((ip, memIdx) => ({
+          id: `nom_inst_${teamIdx}_${memIdx}_` + Date.now().toString(36),
+          name: ip.name,
+          dob: ip.dob,
+          gender: ip.gender,
+          email: ip.email,
+          mobile: ip.mobile,
+          instituteName: instName,
+          program: ip.program,
+          semester: ip.semester,
+          enrolmentNumber: ip.enrolmentNumber,
+          password: ip.password,
+          designation: memIdx === 0 ? `Team Leader (${team.teamName})` : `Team Member (${team.teamName})`,
+          department: team.teamName,
+          teamName: team.teamName,
+          isTeamLeader: memIdx === 0,
+        }))
+      );
     }
   };
 
@@ -710,8 +836,11 @@ export const RegistrationPage: React.FC = () => {
       city: regMode === 'individual' ? 'New Delhi' : instCity,
       state: regMode === 'individual' ? 'Delhi' : instState,
       pinCode: regMode === 'individual' ? '110001' : instPinCode,
-      isOnboardingTeam,
-      teamName: isOnboardingTeam ? teamName : undefined,
+      isOnboardingTeam: regMode === 'individual' ? isOnboardingTeam : true,
+      teamName:
+        regMode === 'individual'
+          ? (isOnboardingTeam ? teamName : undefined)
+          : `${instituteTeams.length} Teams (${instituteTeams.map((t) => t.teamName).join(', ')})`,
       participantPassword: password,
       coordinator: {
         name: coordName,
@@ -727,7 +856,7 @@ export const RegistrationPage: React.FC = () => {
       gstAmount: 0,
       totalPayable: feeCalculation.total,
       gstRate: 0,
-      gstType: 'N/A',
+      gstType: 'IGST',
       sacCode: '999293',
       nominees: compiledNominees,
       managementAuthorisationAccepted: true,
@@ -1592,43 +1721,62 @@ export const RegistrationPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Dual Mode: Form vs Excel Import */}
+                  {/* Institute Teams Section */}
                   <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
                     <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
                       <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 font-bold text-xs uppercase tracking-wider">
+                            Multi-Team Delegation
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-xs">
+                            Max 4 Members / Team
+                          </span>
+                        </div>
                         <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                          Add Institute Participants ({instituteParticipants.length} / 4 Nominated)
+                          Institute Teams &amp; Participants ({instituteTeams.length} Team{instituteTeams.length > 1 ? 's' : ''} • {totalHeadcount} Total Candidates)
                         </h3>
                         <p className="text-xs text-slate-500 dark:text-slate-400">
-                          Choose Excel import or direct entry. Maximum 4 participants per team.
+                          Add multiple teams from your institution. Each team can have a maximum of 4 participants.
                         </p>
                       </div>
 
-                      {/* Dual Mode Tabs */}
-                      <div className="flex items-center gap-2 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+                      {/* Right action controls: Excel / Form toggle + Add Team */}
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+                          <button
+                            type="button"
+                            onClick={() => setInstituteEntryTab('form')}
+                            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                              instituteEntryTab === 'form'
+                                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                            }`}
+                          >
+                            <Users className="w-3.5 h-3.5" />
+                            <span>Form Entry</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setInstituteEntryTab('excel')}
+                            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                              instituteEntryTab === 'excel'
+                                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                            }`}
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5" />
+                            <span>Excel Import</span>
+                          </button>
+                        </div>
+
                         <button
                           type="button"
-                          onClick={() => setInstituteEntryTab('form')}
-                          className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                            instituteEntryTab === 'form'
-                              ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
-                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                          }`}
+                          onClick={handleAddInstituteTeam}
+                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-blue-500/20"
                         >
-                          <Users className="w-3.5 h-3.5" />
-                          <span>Form Entry</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setInstituteEntryTab('excel')}
-                          className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                            instituteEntryTab === 'excel'
-                              ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
-                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                          }`}
-                        >
-                          <FileSpreadsheet className="w-3.5 h-3.5" />
-                          <span>Excel Import</span>
+                          <Plus className="w-4 h-4 stroke-[2.5]" />
+                          <span>Add Another Team</span>
                         </button>
                       </div>
                     </div>
@@ -1642,10 +1790,10 @@ export const RegistrationPage: React.FC = () => {
                           </div>
                           <div className="space-y-1">
                             <div className="text-sm font-bold text-slate-900 dark:text-white">
-                              Upload Participant Roster Spreadsheet
+                              Upload Multi-Team Roster Spreadsheet
                             </div>
                             <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                              Upload your Excel (.xlsx, .xls) or CSV file with columns: Name, DOB, Email, Gender, Mobile, Program, Semester, Enrolment Number, and Password.
+                              Upload your Excel (.xlsx, .xls) or CSV file with columns: Team Name, Candidate Name, DOB, Email, Gender, Mobile, Program, Semester, Enrolment Number, and Password. Max 4 members per team.
                             </p>
                           </div>
 
@@ -1697,173 +1845,246 @@ export const RegistrationPage: React.FC = () => {
                       </div>
                     )}
 
-                    {/* TAB 2: MULTIPLE PARTICIPANT FORM */}
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                          Roster Entries ({instituteParticipants.length} / 4 Candidates)
-                        </span>
-                        <button
-                          type="button"
-                          onClick={handleAddInstituteParticipant}
-                          className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    {/* TAB 2: TEAMS & PARTICIPANTS FORM */}
+                    <div className="space-y-6">
+                      {instituteTeams.map((team, tIdx) => (
+                        <div
+                          key={team.id}
+                          className="rounded-3xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/90 shadow-sm overflow-hidden space-y-4"
                         >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Add Participant Row</span>
-                        </button>
-                      </div>
-
-                      <div className="space-y-3">
-                        {instituteParticipants.map((p, idx) => (
-                          <div
-                            key={p.id}
-                            className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/80 space-y-3"
-                          >
-                            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700/60">
-                              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
-                                  {idx + 1}
-                                </span>
-                                <span>Participant #{idx + 1}</span>
+                          {/* Team Card Header */}
+                          <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-50 via-blue-50/30 to-indigo-50/20 dark:from-slate-800/80 dark:via-blue-950/30 dark:to-slate-800/50 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[240px]">
+                              <span className="w-8 h-8 rounded-xl bg-blue-600 text-white font-black text-xs flex items-center justify-center shadow-xs shrink-0">
+                                {tIdx + 1}
                               </span>
+                              <div className="flex-1 min-w-[180px]">
+                                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">
+                                  Team #{tIdx + 1}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={team.teamName}
+                                  onChange={(e) => handleUpdateInstituteTeamName(team.id, e.target.value)}
+                                  placeholder={`e.g. Team ${tIdx + 1} or Synergy`}
+                                  className="font-bold text-sm sm:text-base text-slate-900 dark:text-white bg-transparent border-b border-dashed border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:outline-hidden px-1 py-0.5 w-full max-w-xs"
+                                  required
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {/* Member count indicator */}
+                              <span
+                                className={`px-3 py-1 rounded-xl text-xs font-bold border ${
+                                  team.members.length >= 4
+                                    ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                                    : 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                                }`}
+                              >
+                                {team.members.length} / 4 Members {team.members.length >= 4 && '(Max)'}
+                              </span>
+
+                              {/* Add member button */}
                               <button
                                 type="button"
-                                onClick={() => handleRemoveInstituteParticipant(p.id)}
-                                className="text-red-500 hover:text-red-700 p-1 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                                onClick={() => handleAddMemberToTeam(team.id)}
+                                disabled={team.members.length >= 4}
+                                className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                title={team.members.length >= 4 ? 'Maximum 4 participants per team reached' : 'Add participant to this team'}
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>Remove</span>
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Add Member</span>
                               </button>
-                            </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-                              <div>
-                                <label className="block text-slate-600 dark:text-slate-400 mb-1">
-                                  Full Name *
-                                </label>
-                                <input
-                                  type="text"
-                                  value={p.name}
-                                  onChange={(e) =>
-                                    handleUpdateInstituteParticipant(p.id, 'name', e.target.value)
-                                  }
-                                  placeholder="Student name"
-                                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
-                                  required
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block text-slate-600 dark:text-slate-400 mb-1">
-                                  DOB (Date of Birth)
-                                </label>
-                                <input
-                                  type="date"
-                                  value={p.dob}
-                                  onChange={(e) =>
-                                    handleUpdateInstituteParticipant(p.id, 'dob', e.target.value)
-                                  }
-                                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block text-slate-600 dark:text-slate-400 mb-1">
-                                  Email (Quiz Login ID) *
-                                </label>
-                                <input
-                                  type="email"
-                                  value={p.email}
-                                  onChange={(e) =>
-                                    handleUpdateInstituteParticipant(p.id, 'email', e.target.value)
-                                  }
-                                  placeholder="student@univ.edu"
-                                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-[11px]"
-                                  required
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block text-slate-600 dark:text-slate-400 mb-1">
-                                  Mobile Number
-                                </label>
-                                <input
-                                  type="tel"
-                                  value={p.mobile}
-                                  onChange={(e) =>
-                                    handleUpdateInstituteParticipant(p.id, 'mobile', e.target.value)
-                                  }
-                                  placeholder="+91 98..."
-                                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block text-slate-600 dark:text-slate-400 mb-1">
-                                  Gender
-                                </label>
-                                <select
-                                  value={p.gender}
-                                  onChange={(e) =>
-                                    handleUpdateInstituteParticipant(p.id, 'gender', e.target.value as any)
-                                  }
-                                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                              {/* Remove team button */}
+                              {instituteTeams.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveInstituteTeam(team.id)}
+                                  className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors border border-transparent hover:border-red-200 dark:hover:border-red-900/50"
+                                  title="Remove entire team"
                                 >
-                                  <option value="Male">Male</option>
-                                  <option value="Female">Female</option>
-                                  <option value="Other">Other</option>
-                                  <option value="Prefer not to say">Prefer not to say</option>
-                                </select>
-                              </div>
-
-                              <div>
-                                <label className="block text-slate-600 dark:text-slate-400 mb-1">
-                                  Program / Course
-                                </label>
-                                <input
-                                  type="text"
-                                  value={p.program}
-                                  onChange={(e) =>
-                                    handleUpdateInstituteParticipant(p.id, 'program', e.target.value)
-                                  }
-                                  placeholder="e.g. PGDM / MBA"
-                                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block text-slate-600 dark:text-slate-400 mb-1">
-                                  Enrolment / Roll No
-                                </label>
-                                <input
-                                  type="text"
-                                  value={p.enrolmentNumber}
-                                  onChange={(e) =>
-                                    handleUpdateInstituteParticipant(p.id, 'enrolmentNumber', e.target.value)
-                                  }
-                                  placeholder="e.g. ROLL-101"
-                                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block text-slate-600 dark:text-slate-400 mb-1">
-                                  Set Quiz Password
-                                </label>
-                                <input
-                                  type="text"
-                                  value={p.password}
-                                  onChange={(e) =>
-                                    handleUpdateInstituteParticipant(p.id, 'password', e.target.value)
-                                  }
-                                  placeholder="Quiz pass"
-                                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-[11px]"
-                                />
-                              </div>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span className="hidden sm:inline">Delete Team</span>
+                                </button>
+                              )}
                             </div>
                           </div>
-                        ))}
-                      </div>
+
+                          {/* Team Members List */}
+                          <div className="p-4 sm:p-5 space-y-4">
+                            {team.members.map((p, mIdx) => (
+                              <div
+                                key={p.id}
+                                className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60 space-y-3"
+                              >
+                                <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700/60">
+                                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
+                                      {mIdx + 1}
+                                    </span>
+                                    <span>
+                                      Participant #{mIdx + 1}
+                                    </span>
+                                    {mIdx === 0 && (
+                                      <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-bold">
+                                        Team Leader
+                                      </span>
+                                    )}
+                                  </span>
+                                  {team.members.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveMemberFromTeam(team.id, p.id)}
+                                      className="text-red-500 hover:text-red-700 p-1 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      <span>Remove</span>
+                                    </button>
+                                  )}
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                                  <div>
+                                    <label className="block text-slate-600 dark:text-slate-400 mb-1 font-medium">
+                                      Full Name *
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={p.name}
+                                      onChange={(e) =>
+                                        handleUpdateTeamMemberField(team.id, p.id, 'name', e.target.value)
+                                      }
+                                      placeholder="Student name"
+                                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                                      required
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-slate-600 dark:text-slate-400 mb-1 font-medium">
+                                      DOB (Date of Birth)
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={p.dob}
+                                      onChange={(e) =>
+                                        handleUpdateTeamMemberField(team.id, p.id, 'dob', e.target.value)
+                                      }
+                                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-slate-600 dark:text-slate-400 mb-1 font-medium">
+                                      Email (Quiz Login ID) *
+                                    </label>
+                                    <input
+                                      type="email"
+                                      value={p.email}
+                                      onChange={(e) =>
+                                        handleUpdateTeamMemberField(team.id, p.id, 'email', e.target.value)
+                                      }
+                                      placeholder="student@univ.edu"
+                                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-[11px]"
+                                      required
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-slate-600 dark:text-slate-400 mb-1 font-medium">
+                                      Mobile Number
+                                    </label>
+                                    <input
+                                      type="tel"
+                                      value={p.mobile}
+                                      onChange={(e) =>
+                                        handleUpdateTeamMemberField(team.id, p.id, 'mobile', e.target.value)
+                                      }
+                                      placeholder="+91 98..."
+                                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-slate-600 dark:text-slate-400 mb-1 font-medium">
+                                      Gender
+                                    </label>
+                                    <select
+                                      value={p.gender}
+                                      onChange={(e) =>
+                                        handleUpdateTeamMemberField(team.id, p.id, 'gender', e.target.value as any)
+                                      }
+                                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                                    >
+                                      <option value="Male">Male</option>
+                                      <option value="Female">Female</option>
+                                      <option value="Other">Other</option>
+                                      <option value="Prefer not to say">Prefer not to say</option>
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-slate-600 dark:text-slate-400 mb-1 font-medium">
+                                      Program / Course
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={p.program}
+                                      onChange={(e) =>
+                                        handleUpdateTeamMemberField(team.id, p.id, 'program', e.target.value)
+                                      }
+                                      placeholder="e.g. PGDM / MBA"
+                                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-slate-600 dark:text-slate-400 mb-1 font-medium">
+                                      Enrolment / Roll No
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={p.enrolmentNumber}
+                                      onChange={(e) =>
+                                        handleUpdateTeamMemberField(team.id, p.id, 'enrolmentNumber', e.target.value)
+                                      }
+                                      placeholder="e.g. ROLL-101"
+                                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-slate-600 dark:text-slate-400 mb-1 font-medium">
+                                      Set Quiz Password
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={p.password}
+                                      onChange={(e) =>
+                                        handleUpdateTeamMemberField(team.id, p.id, 'password', e.target.value)
+                                      }
+                                      placeholder="Quiz pass"
+                                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-[11px]"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Bottom Add Team CTA */}
+                      <button
+                        type="button"
+                        onClick={handleAddInstituteTeam}
+                        className="w-full py-4 rounded-2xl border-2 border-dashed border-blue-300 dark:border-blue-800/80 hover:border-blue-500 bg-blue-50/40 dark:bg-blue-950/20 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                      >
+                        <Plus className="w-4 h-4 stroke-[2.5]" />
+                        <span>Add Another Team (Team #{instituteTeams.length + 1})</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1994,6 +2215,26 @@ export const RegistrationPage: React.FC = () => {
                   </div>
                 )}
 
+                {regMode === 'institute' && (
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-xs space-y-2">
+                    <span className="font-bold text-slate-700 dark:text-slate-300 block">
+                      Registered Teams Breakdown ({instituteTeams.length} {instituteTeams.length === 1 ? 'Team' : 'Teams'} • Max 4 participants per team):
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                      {instituteTeams.map((team, idx) => (
+                        <div key={team.id} className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                          <span className="font-bold text-slate-800 dark:text-slate-200 truncate pr-2">
+                            {team.teamName || `Team ${idx + 1}`}
+                          </span>
+                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 shrink-0">
+                            {team.members.length} / 4 Members
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Dual Payment Options / Action Buttons */}
                 <div className="pt-2 space-y-4">
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
@@ -2114,15 +2355,22 @@ export const RegistrationPage: React.FC = () => {
                         key={nom.id || idx}
                         className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-900 dark:text-white">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-slate-900 dark:text-white truncate">
                             {nom.name}
                           </span>
-                          {nom.isTeamLeader && (
-                            <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-bold">
-                              Leader
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {nom.teamName && (
+                              <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 text-[10px] font-bold">
+                                {nom.teamName}
+                              </span>
+                            )}
+                            {nom.isTeamLeader && (
+                              <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-bold">
+                                Leader
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="text-slate-600 dark:text-slate-400 text-[11px]">
                           Login ID: <strong className="font-mono text-slate-900 dark:text-white">{nom.email}</strong>
