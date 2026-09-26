@@ -6,7 +6,7 @@ import { PosterHero3D } from './PosterHero3D';
 import { RulesAndTermsCard } from './RulesAndTermsCard';
 import { AimaGatewayModal } from './AimaGatewayModal';
 import { AimaInvoiceModal } from './AimaInvoiceModal';
-import { PaymentSlabsModal } from './PaymentSlabsModal';
+
 import { CSRBootcampNominee, CSRBootcampRegistration } from '../../types';
 import {
   saveRegistrationToSupabase,
@@ -54,69 +54,8 @@ import {
   Database
 } from 'lucide-react';
 
-export interface FeeTierOption {
-  id: '1_3' | '4_7' | '8_plus' | 'inst_5' | 'inst_10';
-  label: string;
-  subLabel: string;
-  minParticipants: number;
-  maxParticipants: number;
-  isPackage: boolean;
-  rateExclGst: number;
-  rateInclGst: number;
-}
-
-export const FEE_TIERS: FeeTierOption[] = [
-  {
-    id: '1_3',
-    label: '1–3 Participants',
-    subLabel: 'Standard Nomination',
-    minParticipants: 1,
-    maxParticipants: 3,
-    isPackage: false,
-    rateExclGst: 14000,
-    rateInclGst: 16520,
-  },
-  {
-    id: '4_7',
-    label: '4–7 Participants',
-    subLabel: 'Group Nomination (Preferential Tier)',
-    minParticipants: 4,
-    maxParticipants: 7,
-    isPackage: false,
-    rateExclGst: 11500,
-    rateInclGst: 13570,
-  },
-  {
-    id: '8_plus',
-    label: '8+ Participants',
-    subLabel: 'Enterprise Delegation (Volume Concession)',
-    minParticipants: 8,
-    maxParticipants: 50,
-    isPackage: false,
-    rateExclGst: 10000,
-    rateInclGst: 11800,
-  },
-  {
-    id: 'inst_5',
-    label: 'Institutional Nomination – 5 participants',
-    subLabel: 'Academic & Institutional Cohort (Pack of 5)',
-    minParticipants: 5,
-    maxParticipants: 5,
-    isPackage: true,
-    rateExclGst: 57500,
-    rateInclGst: 67850,
-  },
-  {
-    id: 'inst_10',
-    label: 'Institutional Nomination – 10 participants',
-    subLabel: 'Academic & Institutional Cohort (Pack of 10)',
-    minParticipants: 10,
-    maxParticipants: 10,
-    isPackage: true,
-    rateExclGst: 100000,
-    rateInclGst: 118000,
-  },
-];
+// Flat participation fee as per brochure: ₹200 per participant
+export const PARTICIPATION_FEE_PER_PERSON = 200;
 
 interface TeamMemberInput {
   id: string;
@@ -154,8 +93,7 @@ export const RegistrationPage: React.FC = () => {
   // Registration Track: 'individual' vs 'institute'
   const [regMode, setRegMode] = useState<'individual' | 'institute'>('individual');
 
-  // Selected Fee Tier
-  const [selectedTierId, setSelectedTierId] = useState<'1_3' | '4_7' | '8_plus' | 'inst_5' | 'inst_10'>('1_3');
+
 
   // ==========================================
   // TRACK 1: INDIVIDUAL PARTICIPANT STATE
@@ -291,15 +229,12 @@ export const RegistrationPage: React.FC = () => {
   // COMMON COMPLIANCE: DPDP ACT & UNDERTAKING
   // ==========================================
   const [dpdpConsentAccepted, setDpdpConsentAccepted] = useState(true);
-  const [managementConfirmed, setManagementConfirmed] = useState(true);
-  const [termsAccepted, setTermsAccepted] = useState(true);
   const [validationError, setValidationError] = useState('');
 
   // Modals & Completion State
   const [activeCreatedRegistration, setActiveCreatedRegistration] = useState<CSRBootcampRegistration | null>(null);
   const [showGatewayModal, setShowGatewayModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
-  const [showFeeModal, setShowFeeModal] = useState(false);
   const [copiedLogins, setCopiedLogins] = useState(false);
 
   // Smooth scroll helper to form
@@ -315,52 +250,15 @@ export const RegistrationPage: React.FC = () => {
     return instituteParticipants.length || 1;
   }, [regMode, isOnboardingTeam, teamMembers.length, instituteParticipants.length]);
 
-  // Current fee tier selected
-  const activeFeeTier = useMemo(() => {
-    if (regMode === 'individual' && !isOnboardingTeam) {
-      // Pure individual is always strictly 1-3 Participants
-      return FEE_TIERS[0];
-    }
-    return FEE_TIERS.find((t) => t.id === selectedTierId) || FEE_TIERS[0];
-  }, [regMode, isOnboardingTeam, selectedTierId]);
-
-  // Auto-recommend tier when headcount changes
-  const autoTierRecommendation = useMemo(() => {
-    if (regMode === 'individual') {
-      if (!isOnboardingTeam || totalHeadcount <= 3) return '1_3';
-      return '4_7';
-    } else {
-      if (totalHeadcount === 5) return 'inst_5';
-      if (totalHeadcount === 10) return 'inst_10';
-      if (totalHeadcount <= 3) return '1_3';
-      if (totalHeadcount <= 7) return '4_7';
-      return '8_plus';
-    }
-  }, [regMode, isOnboardingTeam, totalHeadcount]);
-
-  // Financial calculations based strictly on the user's PARTICIPATION FEE table
+  // Simple ₹200/participant fee calculation
   const feeCalculation = useMemo(() => {
-    let subtotal = 0;
-    if (activeFeeTier.isPackage) {
-      subtotal = activeFeeTier.rateExclGst;
-    } else {
-      subtotal = activeFeeTier.rateExclGst * totalHeadcount;
-    }
-
-    const gst = Math.round(subtotal * 0.18);
-    const total = subtotal + gst;
-
+    const total = PARTICIPATION_FEE_PER_PERSON * totalHeadcount;
     return {
-      tier: activeFeeTier,
       participantCount: totalHeadcount,
-      rateExclGst: activeFeeTier.rateExclGst,
-      rateInclGst: activeFeeTier.rateInclGst,
-      subtotal,
-      gst,
+      ratePerPerson: PARTICIPATION_FEE_PER_PERSON,
       total,
-      isDelhi: instState.toLowerCase().includes('delhi'),
     };
-  }, [activeFeeTier, totalHeadcount, instState]);
+  }, [totalHeadcount]);
 
   // Password strength check
   const passwordStrength = useMemo(() => {
@@ -378,8 +276,9 @@ export const RegistrationPage: React.FC = () => {
   // HANDLERS: TEAM MANAGEMENT
   // ==========================================
   const handleAddTeamMember = () => {
-    if (teamMembers.length >= 6) {
-      setValidationError('Maximum 7 participants allowed in a single group delegation.');
+    // Max team size is 4 (leader + 3 teammates)
+    if (teamMembers.length >= 3) {
+      setValidationError('Maximum team size is 4 members (you + 3 teammates).');
       return;
     }
     const newMember: TeamMemberInput = {
@@ -397,13 +296,6 @@ export const RegistrationPage: React.FC = () => {
     const updated = [...teamMembers, newMember];
     setTeamMembers(updated);
     setValidationError('');
-
-    const newCount = 1 + updated.length;
-    if (newCount >= 4) {
-      setSelectedTierId('4_7');
-    } else {
-      setSelectedTierId('1_3');
-    }
   };
 
   const handleRemoveTeamMember = (id: string) => {
@@ -414,13 +306,6 @@ export const RegistrationPage: React.FC = () => {
     const updated = teamMembers.filter((m) => m.id !== id);
     setTeamMembers(updated);
     setValidationError('');
-
-    const newCount = 1 + updated.length;
-    if (newCount <= 3) {
-      setSelectedTierId('1_3');
-    } else {
-      setSelectedTierId('4_7');
-    }
   };
 
   const handleUpdateTeamMember = (id: string, field: keyof TeamMemberInput, value: string) => {
@@ -433,6 +318,11 @@ export const RegistrationPage: React.FC = () => {
   // HANDLERS: INSTITUTE PARTICIPANTS (MANUAL FORM)
   // ==========================================
   const handleAddInstituteParticipant = () => {
+    // Max 4 participants per team
+    if (instituteParticipants.length >= 4) {
+      setValidationError('Maximum team size is 4 participants per team.');
+      return;
+    }
     const newP: InstituteParticipantInput = {
       id: 'inst_p_' + Date.now().toString(36),
       name: '',
@@ -447,12 +337,7 @@ export const RegistrationPage: React.FC = () => {
     };
     const updated = [...instituteParticipants, newP];
     setInstituteParticipants(updated);
-
-    if (updated.length === 5) setSelectedTierId('inst_5');
-    else if (updated.length === 10) setSelectedTierId('inst_10');
-    else if (updated.length <= 3) setSelectedTierId('1_3');
-    else if (updated.length <= 7) setSelectedTierId('4_7');
-    else setSelectedTierId('8_plus');
+    setValidationError('');
   };
 
   const handleRemoveInstituteParticipant = (id: string) => {
@@ -462,12 +347,7 @@ export const RegistrationPage: React.FC = () => {
     }
     const updated = instituteParticipants.filter((p) => p.id !== id);
     setInstituteParticipants(updated);
-
-    if (updated.length === 5) setSelectedTierId('inst_5');
-    else if (updated.length === 10) setSelectedTierId('inst_10');
-    else if (updated.length <= 3) setSelectedTierId('1_3');
-    else if (updated.length <= 7) setSelectedTierId('4_7');
-    else setSelectedTierId('8_plus');
+    setValidationError('');
   };
 
   const handleUpdateInstituteParticipant = (
@@ -594,17 +474,13 @@ export const RegistrationPage: React.FC = () => {
           };
         });
 
-        setInstituteParticipants(parsed);
+        // Limit to max 4 participants per team from Excel import
+        const limited = parsed.slice(0, 4);
+        setInstituteParticipants(limited);
         setExcelUploadFeedback({
           type: 'success',
-          message: `Successfully imported ${parsed.length} participant(s) from "${file.name}". All fields loaded into roster.`,
+          message: `Successfully imported ${limited.length} participant(s) from "${file.name}"${parsed.length > 4 ? ` (limited to 4 per team; ${parsed.length - 4} rows skipped)` : ''}.`,
         });
-
-        if (parsed.length === 5) setSelectedTierId('inst_5');
-        else if (parsed.length === 10) setSelectedTierId('inst_10');
-        else if (parsed.length <= 3) setSelectedTierId('1_3');
-        else if (parsed.length <= 7) setSelectedTierId('4_7');
-        else setSelectedTierId('8_plus');
       } catch (err) {
         setExcelUploadFeedback({
           type: 'error',
@@ -733,19 +609,11 @@ export const RegistrationPage: React.FC = () => {
       }
     }
 
-    // Statutory DPDP & Compliance
+    // DPDP Consent
     if (!dpdpConsentAccepted) {
       setValidationError(
         'Consent under the Digital Personal Data Protection (DPDP) Act, 2023 is mandatory to process personal data.'
       );
-      return false;
-    }
-    if (!managementConfirmed) {
-      setValidationError('Please confirm the participant / management undertaking.');
-      return false;
-    }
-    if (!termsAccepted) {
-      setValidationError('Please accept the AIMA Registration & Competition Terms.');
       return false;
     }
 
@@ -754,18 +622,6 @@ export const RegistrationPage: React.FC = () => {
 
   const handleProceedToPaymentStep = () => {
     if (validateStep1()) {
-      // Auto-set the correct tier for mode
-      if (regMode === 'individual') {
-        if (!isOnboardingTeam || totalHeadcount <= 3) setSelectedTierId('1_3');
-        else setSelectedTierId('4_7');
-      } else {
-        if (totalHeadcount === 5) setSelectedTierId('inst_5');
-        else if (totalHeadcount === 10) setSelectedTierId('inst_10');
-        else if (totalHeadcount <= 3) setSelectedTierId('1_3');
-        else if (totalHeadcount <= 7) setSelectedTierId('4_7');
-        else setSelectedTierId('8_plus');
-      }
-
       setCurrentStep(2);
       formSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
@@ -863,19 +719,19 @@ export const RegistrationPage: React.FC = () => {
         mobile: coordPhone,
         designation: regMode === 'individual' ? 'Participant / Leader' : 'Faculty Coordinator',
       },
-      tierId: activeFeeTier.id,
-      tierLabel: activeFeeTier.label,
+      tierId: '1_3',
+      tierLabel: `₹${PARTICIPATION_FEE_PER_PERSON} per participant`,
       participantCount: feeCalculation.participantCount,
-      ratePerPersonOrPackage: feeCalculation.rateExclGst,
-      subtotalExclGst: feeCalculation.subtotal,
-      gstAmount: feeCalculation.gst,
+      ratePerPersonOrPackage: feeCalculation.ratePerPerson,
+      subtotalExclGst: feeCalculation.total,
+      gstAmount: 0,
       totalPayable: feeCalculation.total,
-      gstRate: 18,
-      gstType: (regMode === 'institute' && !instState.toLowerCase().includes('delhi')) ? 'IGST' : 'CGST+SGST',
+      gstRate: 0,
+      gstType: 'N/A',
       sacCode: '999293',
       nominees: compiledNominees,
-      managementAuthorisationAccepted: managementConfirmed,
-      termsAccepted: termsAccepted,
+      managementAuthorisationAccepted: true,
+      termsAccepted: true,
       dpdpConsentAccepted: dpdpConsentAccepted,
       dpdpConsentTimestamp: new Date().toISOString(),
       paymentStatus: 'PENDING_INVOICE',
@@ -964,7 +820,7 @@ export const RegistrationPage: React.FC = () => {
       {/* ============================================================== */}
       <PosterHero3D
         onScrollToForm={handleScrollToForm}
-        onOpenFeeModal={() => setShowFeeModal(true)}
+        onOpenFeeModal={() => {}}
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
@@ -987,25 +843,20 @@ export const RegistrationPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Smart Button to View Payment Slabs in Modal */}
-            <button
-              type="button"
-              onClick={() => setShowFeeModal(true)}
-              className="group inline-flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700/60 hover:border-amber-400 text-slate-800 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 font-bold text-xs transition-all shadow-sm hover:shadow-md cursor-pointer shrink-0"
-            >
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 text-slate-950 flex items-center justify-center font-black text-sm shadow-xs group-hover:scale-105 transition-transform">
+            {/* Participation Fee Badge */}
+            <div className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700/60 shrink-0">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 text-slate-950 flex items-center justify-center font-black text-sm shadow-xs">
                 ₹
               </div>
               <div className="text-left">
                 <span className="block text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                  Statutory Tariff
+                  Registration Fee
                 </span>
-                <span className="block text-xs font-extrabold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                  View Payment Slabs
+                <span className="block text-xs font-extrabold text-slate-900 dark:text-white">
+                  ₹200 per Participant
                 </span>
               </div>
-              <Receipt className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors ml-1" />
-            </button>
+            </div>
           </div>
 
           {/* Stepper Navigation */}
@@ -1386,13 +1237,6 @@ export const RegistrationPage: React.FC = () => {
                           onChange={(e) => {
                             setIsOnboardingTeam(e.target.checked);
                             setValidationError('');
-                            if (e.target.checked) {
-                              const newCount = 1 + teamMembers.length;
-                              if (newCount >= 4) setSelectedTierId('4_7');
-                              else setSelectedTierId('1_3');
-                            } else {
-                              setSelectedTierId('1_3');
-                            }
                           }}
                           className="mt-0.5 w-4 h-4 rounded text-blue-600 focus:ring-blue-500 focus:ring-2 border-slate-300 dark:border-slate-700 cursor-pointer"
                         />
@@ -1419,21 +1263,21 @@ export const RegistrationPage: React.FC = () => {
                             <span>Team Squad Builder</span>
                           </div>
                           <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                            Onboard Teammates (Eligible: 1–3 or 4–7 Participants)
+                            Onboard Teammates (Max. 4 per team)
                           </h3>
                           <p className="text-xs text-slate-500 dark:text-slate-400">
-                            You (<strong>{name || 'Leader'}</strong>) are Team Leader. Add your teammates below.
+                            You (<strong>{name || 'Leader'}</strong>) are Team Leader. Add up to 3 more teammates.
                           </p>
                         </div>
 
                         <div className="flex items-center gap-2">
                           <span className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-xs font-bold border border-blue-200 dark:border-blue-800">
-                            Total Squad: {1 + teamMembers.length} Members
+                            {1 + teamMembers.length} / 4 Members
                           </span>
                           <button
                             type="button"
                             onClick={handleAddTeamMember}
-                            disabled={teamMembers.length >= 6}
+                            disabled={teamMembers.length >= 3}
                             className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
                           >
                             <Plus className="w-3.5 h-3.5" />
@@ -1753,10 +1597,10 @@ export const RegistrationPage: React.FC = () => {
                     <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
                       <div>
                         <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                          Add Institute Participants ({instituteParticipants.length} Nominated)
+                          Add Institute Participants ({instituteParticipants.length} / 4 Nominated)
                         </h3>
                         <p className="text-xs text-slate-500 dark:text-slate-400">
-                          Choose Excel import or direct multi-row participant entry. No need to re-enter institute name.
+                          Choose Excel import or direct entry. Maximum 4 participants per team.
                         </p>
                       </div>
 
@@ -1857,12 +1701,12 @@ export const RegistrationPage: React.FC = () => {
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                          Roster Entries ({instituteParticipants.length} Candidates Loaded)
+                          Roster Entries ({instituteParticipants.length} / 4 Candidates)
                         </span>
                         <button
                           type="button"
                           onClick={handleAddInstituteParticipant}
-                          className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                          className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
                         >
                           <Plus className="w-3.5 h-3.5" />
                           <span>Add Participant Row</span>
@@ -2025,16 +1869,21 @@ export const RegistrationPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Rules, DPDP Act Statutory Consent & Terms */}
-              <RulesAndTermsCard
-                managementConfirmed={managementConfirmed}
-                onToggleManagement={setManagementConfirmed}
-                termsAccepted={termsAccepted}
-                onToggleTerms={setTermsAccepted}
-                dpdpConsentAccepted={dpdpConsentAccepted}
-                onToggleDpdpConsent={setDpdpConsentAccepted}
-                regMode={regMode}
-              />
+              {/* DPDP Act Consent – Single Line */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={dpdpConsentAccepted}
+                    onChange={(e) => setDpdpConsentAccepted(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 focus:ring-2 border-indigo-300 dark:border-indigo-700 cursor-pointer shrink-0"
+                  />
+                  <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                    <span className="font-bold text-slate-900 dark:text-white">Consent (DPDP Act, 2023):</span>{' '}
+                    I hereby give free, specific, informed, and unambiguous consent to AIMA to collect and process the personal data provided in this form solely for the administration of the India Case League 2026, as required under the Digital Personal Data Protection Act, 2023.
+                  </p>
+                </label>
+              </div>
 
               {/* Validation Error Banner */}
               {validationError && (
@@ -2098,170 +1947,52 @@ export const RegistrationPage: React.FC = () => {
                   </span>
                 </div>
 
-                {/* SCENARIO 1: Pure Solo Individual */}
-                {/* Rule: "when individual there is no need to show all payment types" */}
-                {regMode === 'individual' && !isOnboardingTeam ? (
-                  <div className="p-6 rounded-2xl bg-gradient-to-br from-blue-50/80 to-indigo-50/50 dark:from-blue-950/30 dark:to-indigo-950/20 border-2 border-blue-600/80 space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block">
-                          Applicable Participation Tier
-                        </span>
-                        <h4 className="text-xl font-black text-slate-900 dark:text-white">
-                          1–3 Participants Tier (Individual Candidate)
-                        </h4>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs text-slate-500 block">Fee per person (Incl. 18% GST)</span>
-                        <span className="text-xl font-black text-blue-600 dark:text-blue-400">
-                          ₹16,520
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="p-4 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-blue-200 dark:border-blue-900 text-xs space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-slate-600 dark:text-slate-400">Fee (Excl. GST):</span>
-                        <span className="font-mono font-bold text-slate-900 dark:text-white">₹14,000 / person</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-600 dark:text-slate-400">Applicable GST (18% SAC: 999293):</span>
-                        <span className="font-mono font-bold text-slate-900 dark:text-white">₹2,520 / person</span>
-                      </div>
-                      <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between font-bold text-sm text-slate-900 dark:text-white">
-                        <span>Total Payable for 1 Participant:</span>
-                        <span className="text-emerald-600 dark:text-emerald-400 font-mono font-black text-base">₹16,520</span>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  /* SCENARIO 2: Team Leader with Squad OR SCENARIO 3: Institute */
-                  /* Rule: "if bringing team like a team leader then show the payment types like 1-3 this amount of money etc" */
-                  <div className="space-y-4">
-                    <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Select Applicable Fee Slab:
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {FEE_TIERS.filter((tier) => {
-                        // For Team Leader: show individual group tiers (1-3 and 4-7)
-                        if (regMode === 'individual') {
-                          return !tier.isPackage;
-                        }
-                        // For Institute: show all tiers
-                        return true;
-                      }).map((tier) => {
-                        const isSelected = selectedTierId === tier.id;
-                        const isRecommended = autoTierRecommendation === tier.id;
-
-                        return (
-                          <div
-                            key={tier.id}
-                            onClick={() => setSelectedTierId(tier.id)}
-                            className={`relative p-5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
-                              isSelected
-                                ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 ring-2 ring-blue-500/20 shadow-md'
-                                : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700'
-                            }`}
-                          >
-                            {isRecommended && (
-                              <span className="absolute -top-2.5 right-4 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white shadow-xs">
-                                Suggested for {totalHeadcount} Nominees
-                              </span>
-                            )}
-
-                            <div className="space-y-2">
-                              <div className="flex items-start justify-between">
-                                <div className="text-xs font-bold text-slate-900 dark:text-white">
-                                  {tier.label}
-                                </div>
-                                <div
-                                  className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                                    isSelected
-                                      ? 'border-blue-600 bg-blue-600 text-white'
-                                      : 'border-slate-300 dark:border-slate-600'
-                                  }`}
-                                >
-                                  {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                                </div>
-                              </div>
-
-                              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                {tier.subLabel}
-                              </p>
-                            </div>
-
-                            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 mt-3 space-y-1">
-                              <div className="flex items-baseline justify-between text-xs">
-                                <span className="text-[11px] text-slate-500">Fee (Excl. GST):</span>
-                                <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-                                  ₹{tier.rateExclGst.toLocaleString('en-IN')}
-                                  {tier.isPackage ? ' flat' : ' / person'}
-                                </span>
-                              </div>
-                              <div className="flex items-baseline justify-between text-xs">
-                                <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">
-                                  Fee (Incl. 18% GST):
-                                </span>
-                                <span className="font-mono font-extrabold text-sm text-blue-700 dark:text-blue-300">
-                                  ₹{tier.rateInclGst.toLocaleString('en-IN')}
-                                  {tier.isPackage ? ' flat' : ' / person'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Real-Time Participation Ledger Summary */}
-                <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-200 dark:border-slate-700/60">
+                {/* Flat ₹200 per participant fee display */}
+                <div className="p-6 rounded-2xl bg-gradient-to-br from-blue-50/80 to-indigo-50/50 dark:from-blue-950/30 dark:to-indigo-950/20 border-2 border-blue-600/80 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <div className="text-xs font-bold text-slate-900 dark:text-white">
-                        Participation Ledger Summary
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        {feeCalculation.tier.label} • {totalHeadcount} Nominee(s) • SAC Code: 999293
-                      </div>
-                    </div>
-                    {regMode === 'individual' && isOnboardingTeam && (
-                      <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold">
-                        Team: {teamName}
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block">
+                        Participation Fee – India Case League 2026
                       </span>
-                    )}
-                  </div>
-
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Base Taxable Participation Fee:</span>
-                      <span className="font-mono font-bold text-slate-900 dark:text-white text-sm">
-                        ₹{feeCalculation.subtotal.toLocaleString('en-IN')}
-                      </span>
+                      <h4 className="text-xl font-black text-slate-900 dark:text-white">
+                        ₹200 per Participant
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        {regMode === 'individual' && !isOnboardingTeam
+                          ? 'Individual registration – 1 participant'
+                          : `${totalHeadcount} participant${totalHeadcount > 1 ? 's' : ''} registered`}
+                      </p>
                     </div>
-                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                      <span>Applicable GST (18% on Training Services SAC 999293):</span>
-                      <span className="font-mono font-bold text-slate-900 dark:text-white text-sm">
-                        ₹{feeCalculation.gst.toLocaleString('en-IN')}
-                      </span>
-                    </div>
-                    <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-baseline">
-                      <div>
-                        <span className="text-sm font-bold text-slate-900 dark:text-white block">
-                          Total Amount Payable:
-                        </span>
-                        <span className="text-[11px] text-slate-400">
-                          Inclusive of all statutory taxes ({feeCalculation.isDelhi ? 'CGST 9% + SGST 9%' : 'IGST 18%'})
-                        </span>
-                      </div>
-                      <span className="font-mono font-black text-2xl text-emerald-600 dark:text-emerald-400">
+                    <div className="text-right">
+                      <span className="text-xs text-slate-500 block">Total Amount</span>
+                      <span className="text-3xl font-black text-blue-600 dark:text-blue-400">
                         ₹{feeCalculation.total.toLocaleString('en-IN')}
                       </span>
                     </div>
                   </div>
+
+                  <div className="p-4 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-blue-200 dark:border-blue-900 text-xs space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Rate per Participant:</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">₹{PARTICIPATION_FEE_PER_PERSON} / person</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Number of Participants:</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">{totalHeadcount}</span>
+                    </div>
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between font-bold text-sm text-slate-900 dark:text-white">
+                      <span>Total Payable:</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-mono font-black text-base">₹{feeCalculation.total.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
                 </div>
+
+                {/* Registration Summary */}
+                {regMode === 'individual' && isOnboardingTeam && (
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-xs text-blue-600 dark:text-blue-400 font-semibold">
+                    Team: {teamName} • {totalHeadcount} Members
+                  </div>
+                )}
 
                 {/* Dual Payment Options / Action Buttons */}
                 <div className="pt-2 space-y-4">
@@ -2481,10 +2212,7 @@ export const RegistrationPage: React.FC = () => {
           registration={activeCreatedRegistration}
         />
 
-        <PaymentSlabsModal
-          isOpen={showFeeModal}
-          onClose={() => setShowFeeModal(false)}
-        />
+
       </div>
     </div>
   );
