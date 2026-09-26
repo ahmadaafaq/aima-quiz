@@ -86,7 +86,7 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
 
       {/* Main Container - Full Width Max-7XL (Matches Home Page Hero) */}
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        
+
         {/* ============================================================== */}
         {/* TOP LANDSCAPE BAR: BRAND IDENTITY + STATUS BADGES + SECRETARIAT */}
         {/* ============================================================== */}
@@ -151,7 +151,7 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
         {/* Right: 3D Aceternity 4-Stage Roadmap Matrix                     */}
         {/* ============================================================== */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch">
-          
+
           {/* LEFT COLUMN: HERO INFORMATION & ACTION (5 Cols on Large) */}
           <div className="lg:col-span-5 flex flex-col justify-between space-y-4">
             <div className="space-y-3">
@@ -188,19 +188,11 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
                 </div>
 
                 <div
-                  onClick={onOpenFeeModal}
-                  className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-amber-400/50 space-y-0.5 cursor-pointer transition-colors group"
-                  title="Click to view full participation fee slabs"
+                  className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-0.5"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-slate-400 block font-medium">Participation Fee</span>
-                    <span className="text-[9px] font-bold text-amber-400 underline group-hover:text-amber-300 flex items-center gap-0.5">
-                      <Receipt className="w-2.5 h-2.5" />
-                      <span>Slabs</span>
-                    </span>
-                  </div>
-                  <span className="font-black text-emerald-400 text-xs block">₹14,000 / person</span>
-                  <span className="text-[10px] text-slate-300 block">Preferential group slabs</span>
+                  <span className="text-[10px] text-slate-400 block font-medium">Participation Fee</span>
+                  <span className="font-black text-emerald-400 text-xs block">₹200 / person</span>
+                  <span className="text-[10px] text-slate-300 block">Flat fee, all students</span>
                 </div>
               </div>
 
