@@ -117,116 +117,55 @@ export const RegistrationPage: React.FC = () => {
   // ==========================================
   // TRACK 1: INDIVIDUAL PARTICIPANT STATE
   // ==========================================
-  const [name, setName] = useState('Aarav Sharma');
-  const [dob, setDob] = useState('2002-05-14');
-  const [email, setEmail] = useState('aarav.sharma@domain.edu');
+  const [name, setName] = useState('');
+  const [dob, setDob] = useState('');
+  const [email, setEmail] = useState('');
   const [gender, setGender] = useState<'Male' | 'Female' | 'Other' | 'Prefer not to say'>('Male');
-  const [mobile, setMobile] = useState('+91 98765 43210');
-  const [instituteName, setInstituteName] = useState('Faculty of Management Studies (FMS), Delhi');
-  const [program, setProgram] = useState('Master of Business Administration (MBA)');
-  const [semester, setSemester] = useState('2nd Year / Semester 3');
-  const [enrolmentNumber, setEnrolmentNumber] = useState('FMS-2025-MBA-089');
-  const [password, setPassword] = useState('AimaQuiz@2026');
-  const [confirmPassword, setConfirmPassword] = useState('AimaQuiz@2026');
+  const [mobile, setMobile] = useState('');
+  const [instituteName, setInstituteName] = useState('');
+  const [program, setProgram] = useState('');
+  const [semester, setSemester] = useState('');
+  const [enrolmentNumber, setEnrolmentNumber] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Optional Checkbox: Onboard / Register Team
   const [isOnboardingTeam, setIsOnboardingTeam] = useState(false);
-  const [teamName, setTeamName] = useState('Synergy Strategists');
-  const [teamMembers, setTeamMembers] = useState<TeamMemberInput[]>([
-    {
-      id: 'tm_1',
-      name: 'Priya Sundaram',
-      dob: '2002-08-22',
-      email: 'priya.s@domain.edu',
-      gender: 'Female',
-      mobile: '+91 98110 54321',
-      program: 'Master of Business Administration (MBA)',
-      semester: '2nd Year / Semester 3',
-      enrolmentNumber: 'FMS-2025-MBA-094',
-      password: 'QuizLogin#2026',
-    },
-    {
-      id: 'tm_2',
-      name: 'Rohan Deshmukh',
-      dob: '2001-11-10',
-      email: 'rohan.d@domain.edu',
-      gender: 'Male',
-      mobile: '+91 98220 87654',
-      program: 'Master of Business Administration (MBA)',
-      semester: '2nd Year / Semester 3',
-      enrolmentNumber: 'FMS-2025-MBA-112',
-      password: 'QuizLogin#2026',
-    },
-  ]);
+  const [teamName, setTeamName] = useState('');
+  const [teamMembers, setTeamMembers] = useState<TeamMemberInput[]>([]);
 
   // ==========================================
   // TRACK 2: INSTITUTE REGISTRATION STATE
   // ==========================================
-  const [instName, setInstName] = useState('Indian Institute of Technology & Management');
-  const [instAddress, setInstAddress] = useState('Hauz Khas, Institutional Area');
-  const [instCity, setInstCity] = useState('New Delhi');
-  const [instState, setInstState] = useState('Delhi');
-  const [instPinCode, setInstPinCode] = useState('110016');
-  const [coordinatorName, setCoordinatorName] = useState('Dr. Sanjeev Kapoor');
-  const [coordinatorEmail, setCoordinatorEmail] = useState('sanjeev.kapoor@iitm.ac.in');
-  const [coordinatorPhone, setCoordinatorPhone] = useState('+91 98101 23456');
+  const [instName, setInstName] = useState('');
+  const [instAddress, setInstAddress] = useState('');
+  const [instCity, setInstCity] = useState('');
+  const [instState, setInstState] = useState('');
+  const [instPinCode, setInstPinCode] = useState('');
+  const [coordinatorName, setCoordinatorName] = useState('');
+  const [coordinatorEmail, setCoordinatorEmail] = useState('');
+  const [coordinatorPhone, setCoordinatorPhone] = useState('');
 
   // Institute teams: each team has up to 4 participants, institute can have multiple teams
   const [instituteEntryTab, setInstituteEntryTab] = useState<'form' | 'excel'>('form');
   const [instituteTeams, setInstituteTeams] = useState<InstituteTeam[]>([
     {
       id: 'inst_team_1',
-      teamName: 'Team Alpha',
+      teamName: '',
       members: [
         {
           id: 'inst_p1',
-          name: 'Kabir Mehta',
-          dob: '2002-03-15',
-          email: 'kabir.m@iitm.ac.in',
+          name: '',
+          dob: '',
+          email: '',
           gender: 'Male',
-          mobile: '+91 98111 22331',
-          program: 'PGDM - Finance & CSR Strategy',
-          semester: '2nd Year / Sem 3',
-          enrolmentNumber: 'IITM-2025-014',
-          password: 'Pass#Quiz1',
-        },
-        {
-          id: 'inst_p2',
-          name: 'Ananya Sharma',
-          dob: '2002-09-18',
-          email: 'ananya.s@iitm.ac.in',
-          gender: 'Female',
-          mobile: '+91 98111 22332',
-          program: 'PGDM - Operations & ESG',
-          semester: '2nd Year / Sem 3',
-          enrolmentNumber: 'IITM-2025-029',
-          password: 'Pass#Quiz2',
-        },
-        {
-          id: 'inst_p3',
-          name: 'Devansh Verma',
-          dob: '2003-01-24',
-          email: 'devansh.v@iitm.ac.in',
-          gender: 'Male',
-          mobile: '+91 98111 22333',
-          program: 'MBA - Business Analytics',
-          semester: '1st Year / Sem 1',
-          enrolmentNumber: 'IITM-2026-042',
-          password: 'Pass#Quiz3',
-        },
-        {
-          id: 'inst_p4',
-          name: 'Sneha Kulkarni',
-          dob: '2002-07-30',
-          email: 'sneha.k@iitm.ac.in',
-          gender: 'Female',
-          mobile: '+91 98111 22334',
-          program: 'MBA - Human Capital & CSR',
-          semester: '2nd Year / Sem 3',
-          enrolmentNumber: 'IITM-2025-055',
-          password: 'Pass#Quiz4',
+          mobile: '',
+          program: '',
+          semester: '',
+          enrolmentNumber: '',
+          password: '',
         },
       ],
     },
@@ -298,14 +237,14 @@ export const RegistrationPage: React.FC = () => {
     const newMember: TeamMemberInput = {
       id: 'tm_' + Date.now().toString(36),
       name: '',
-      dob: '2002-01-01',
+      dob: '',
       email: '',
       gender: 'Male',
-      mobile: '+91 ',
-      program: program || 'MBA',
-      semester: semester || '2nd Year',
+      mobile: '',
+      program: program || '',
+      semester: semester || '',
       enrolmentNumber: '',
-      password: 'QuizPass#' + Math.floor(100 + Math.random() * 900),
+      password: '',
     };
     const updated = [...teamMembers, newMember];
     setTeamMembers(updated);
@@ -332,22 +271,21 @@ export const RegistrationPage: React.FC = () => {
   // HANDLERS: INSTITUTE TEAMS & PARTICIPANTS
   // ==========================================
   const handleAddInstituteTeam = () => {
-    const newTeamNumber = instituteTeams.length + 1;
     const newTeam: InstituteTeam = {
       id: 'inst_team_' + Date.now().toString(36),
-      teamName: `Team ${newTeamNumber}`,
+      teamName: '',
       members: [
         {
           id: 'inst_p_' + Date.now().toString(36) + '_1',
           name: '',
-          dob: '2002-01-01',
+          dob: '',
           email: '',
           gender: 'Male',
-          mobile: '+91 ',
-          program: 'MBA / PGDM',
-          semester: '1st Year',
+          mobile: '',
+          program: '',
+          semester: '',
           enrolmentNumber: '',
-          password: 'Quiz#' + Math.floor(1000 + Math.random() * 9000),
+          password: '',
         },
       ],
     };
@@ -375,21 +313,21 @@ export const RegistrationPage: React.FC = () => {
     if (!targetTeam) return;
 
     if (targetTeam.members.length >= 4) {
-      setValidationError(`"${targetTeam.teamName}" already has 4 participants (maximum 4 participants per team).`);
+      setValidationError(`"${targetTeam.teamName || 'Team'}" already has 4 participants (maximum 4 participants per team).`);
       return;
     }
 
     const newMember: InstituteParticipantInput = {
       id: 'inst_p_' + Date.now().toString(36) + '_' + (targetTeam.members.length + 1),
       name: '',
-      dob: '2002-01-01',
+      dob: '',
       email: '',
       gender: 'Male',
-      mobile: '+91 ',
-      program: 'MBA / PGDM',
-      semester: '1st Year',
+      mobile: '',
+      program: '',
+      semester: '',
       enrolmentNumber: '',
-      password: 'Quiz#' + Math.floor(1000 + Math.random() * 9000),
+      password: '',
     };
 
     setInstituteTeams((prev) =>
@@ -811,13 +749,14 @@ export const RegistrationPage: React.FC = () => {
     }
   };
 
-  // Trigger Submission & Redirect to Gateway or Invoice
-  const handleInitiateSubmission = (method: 'gateway' | 'proforma_invoice') => {
+  // Trigger Submission & Directly Confirm Registration
+  const handleInitiateSubmission = (method: 'gateway' | 'proforma_invoice' | 'direct' = 'direct') => {
     const regNumber = 'AIMA-CL26-' + Math.floor(10000 + Math.random() * 90000);
-    const invNumber =
-      method === 'gateway'
-        ? 'INV-2026-CL-' + Math.floor(10000 + Math.random() * 90000)
-        : 'PINV-2026-CL-' + Math.floor(10000 + Math.random() * 90000);
+    const txnNumber = 'TXN-AIMA-' + Date.now().toString(36).toUpperCase() + '-' + Math.floor(1000 + Math.random() * 9000);
+    const isProforma = method === 'proforma_invoice';
+    const invNumber = isProforma
+      ? 'PINV-2026-CL-' + Math.floor(10000 + Math.random() * 90000)
+      : 'INV-2026-CL-' + Math.floor(10000 + Math.random() * 90000);
 
     const compiledNominees = compileNomineesList();
     const primaryPayer = regMode === 'individual' ? instituteName : instName;
@@ -863,7 +802,9 @@ export const RegistrationPage: React.FC = () => {
       termsAccepted: true,
       dpdpConsentAccepted: dpdpConsentAccepted,
       dpdpConsentTimestamp: new Date().toISOString(),
-      paymentStatus: 'PENDING_INVOICE',
+      paymentStatus: isProforma ? 'PENDING_INVOICE' : 'PAID',
+      paymentMethod: isProforma ? undefined : 'UPI',
+      transactionId: isProforma ? undefined : txnNumber,
       invoiceNumber: invNumber,
     };
 
@@ -886,14 +827,17 @@ export const RegistrationPage: React.FC = () => {
       console.warn('Participant account creation failed (non-critical):', err);
     });
 
-    if (method === 'gateway') {
-      setShowGatewayModal(true);
-    } else {
-      // Proforma Invoice (Institutional Pay Later)
+    // Directly finalize registration and navigate to Confirmation step
+    if (isProforma) {
       setCurrentStep(4);
       setShowInvoiceModal(true);
       confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+    } else {
+      setShowGatewayModal(false);
+      setCurrentStep(4);
+      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
     }
+    formSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const handleGatewayPaymentSuccess = (paymentMethod: string, transactionId: string) => {
@@ -1291,30 +1235,32 @@ export const RegistrationPage: React.FC = () => {
                           </div>
 
                           {/* Strength Indicator */}
-                          <div className="flex items-center gap-1.5 mt-2">
-                            <div className="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden flex">
-                              <div
-                                className={`h-full transition-all ${
-                                  passwordStrength <= 1
-                                    ? 'w-1/4 bg-red-500'
-                                    : passwordStrength === 2
-                                    ? 'w-2/4 bg-amber-500'
-                                    : passwordStrength === 3
-                                    ? 'w-3/4 bg-blue-500'
-                                    : 'w-full bg-emerald-500'
-                                }`}
-                              />
+                          {password.length > 0 && (
+                            <div className="flex items-center gap-1.5 mt-2">
+                              <div className="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden flex">
+                                <div
+                                  className={`h-full transition-all ${
+                                    passwordStrength <= 1
+                                      ? 'w-1/4 bg-red-500'
+                                      : passwordStrength === 2
+                                      ? 'w-2/4 bg-amber-500'
+                                      : passwordStrength === 3
+                                      ? 'w-3/4 bg-blue-500'
+                                      : 'w-full bg-emerald-500'
+                                  }`}
+                                />
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-medium">
+                                {passwordStrength <= 1
+                                  ? 'Weak'
+                                  : passwordStrength === 2
+                                  ? 'Medium'
+                                  : passwordStrength === 3
+                                  ? 'Good'
+                                  : 'Strong'}
+                              </span>
                             </div>
-                            <span className="text-[10px] text-slate-400 font-medium">
-                              {passwordStrength <= 1
-                                ? 'Weak'
-                                : passwordStrength === 2
-                                ? 'Medium'
-                                : passwordStrength === 3
-                                ? 'Good'
-                                : 'Strong'}
-                            </span>
-                          </div>
+                          )}
                         </div>
 
                         {/* Confirm Password */}
@@ -2238,14 +2184,14 @@ export const RegistrationPage: React.FC = () => {
                 {/* Dual Payment Options / Action Buttons */}
                 <div className="pt-2 space-y-4">
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-                    {/* Primary: Gateway */}
+                    {/* Primary: Direct Registration Submission */}
                     <button
                       type="button"
-                      onClick={() => handleInitiateSubmission('gateway')}
+                      onClick={() => handleInitiateSubmission('direct')}
                       className="flex-1 py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-700/25 hover:scale-[1.01]"
                     >
-                      <CreditCard className="w-5 h-5 stroke-[2.5]" />
-                      <span>Proceed to AIMA Payment Gateway (UPI / Cards)</span>
+                      <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
+                      <span>Submit Registration</span>
                     </button>
 
                     {/* Secondary: Proforma Invoice for Institutional Approval */}
