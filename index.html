@@ -1,9 +1,21 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AIMA-ICRC India Case League 2026</title>
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('AIMA_THEME');
+          if (saved === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
     <meta name="description" content="Official National B-School Competition Platform for AIMA-ICRC India Case League 2026. Student Registrations, Online Assessments, Case Decks, AI Evaluations, and National Leaderboards." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate icon" type="image/png" href="/favicon.png" />

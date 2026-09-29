@@ -291,7 +291,7 @@ const getInitialActiveView = (): string => {
 };
 
 export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [activeView, setActiveView] = useState<string>(getInitialActiveView);
   const [config, setConfig] = useState<CompetitionConfig>(INITIAL_CONFIG);
   
@@ -674,12 +674,12 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   };
 
-  // Load / Save from LocalStorage with Dark Mode default
+  // Load / Save from LocalStorage with Light Mode default
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem('AIMA_THEME') as 'light' | 'dark' | null;
-      // Dark mode is default
-      const initial = savedTheme === 'light' ? 'light' : 'dark';
+      // Light mode is default across the project
+      const initial = savedTheme === 'dark' ? 'dark' : 'light';
       setTheme(initial);
       if (initial === 'dark') {
         document.documentElement.classList.add('dark');
@@ -687,8 +687,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         document.documentElement.classList.remove('dark');
       }
     } catch {
-      document.documentElement.classList.add('dark');
-      setTheme('dark');
+      document.documentElement.classList.remove('dark');
+      setTheme('light');
     }
   }, []);
 
