@@ -16,6 +16,7 @@ import { DynamicRegistrationsManager } from './DynamicRegistrationsManager';
 import { InstitutionsAdminPanel } from './InstitutionsAdminPanel';
 import { AdminLoginGate, checkIsAdminAuthenticated, clearAdminAuth } from './AdminLoginGate';
 import { DocRequirementInfo } from '../common/DocRequirementInfo';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 import {
   Activity,
   AlertCircle,
@@ -477,16 +478,16 @@ export const AdminControlCenter: React.FC = () => {
         </button>
       </div>
 
-      {/* Admin Sidebar Navigation */}
+      {/* Admin Sidebar Navigation: Independently scrollable */}
       <aside
-        className={`fixed inset-y-0 left-0 z-30 lg:static flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-xl lg:shadow-none ${
+        className={`fixed inset-y-0 left-0 z-30 lg:sticky lg:top-[93px] lg:h-[calc(100vh-93px)] lg:self-start flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-xl lg:shadow-none shrink-0 overflow-hidden ${
           sidebarCollapsed ? 'lg:w-20' : 'lg:w-72'
         } ${
           mobileSidebarOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         {/* Sidebar Brand Header */}
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
           <div className={`flex items-center gap-3 overflow-hidden ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
             <div className="h-10 px-2 rounded-xl bg-white flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-xs shrink-0">
               <img
@@ -521,7 +522,7 @@ export const AdminControlCenter: React.FC = () => {
         </div>
 
         {/* Role Perspective Switcher Pill in Sidebar */}
-        <div className={`p-3 border-b border-slate-100 dark:border-slate-800/80 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+        <div className={`p-3 border-b border-slate-100 dark:border-slate-800/80 shrink-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
           <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1.5 px-1">
             View Perspective As:
           </label>
@@ -539,8 +540,8 @@ export const AdminControlCenter: React.FC = () => {
           </select>
         </div>
 
-        {/* Grouped Navigation Item Links */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-4">
+        {/* Grouped Navigation Item Links (Independently scrollable) */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-4 min-h-0 overscroll-contain">
           {menuGroups.map(group => {
             const visibleItems = group.items.filter(item => {
               if (rolePerspective === 'admin' || rolePerspective === 'all') return true;
@@ -605,7 +606,7 @@ export const AdminControlCenter: React.FC = () => {
         </div>
 
         {/* Sidebar Footer: Quick Status & Export */}
-        <div className={`p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/50 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+        <div className={`p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/50 shrink-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
           <div className="p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 text-xs space-y-2 shadow-2xs">
             <div className="flex items-center justify-between text-[11px]">
               <span className="font-bold text-slate-700 dark:text-slate-300">National Quota</span>
@@ -643,7 +644,7 @@ export const AdminControlCenter: React.FC = () => {
       </aside>
 
       {/* Main Workspace Content Area */}
-      <main ref={mainRef} className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto">
+      <main ref={mainRef} className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto min-w-0">
         
         {/* Top Breadcrumb & Status Bar */}
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1303,7 +1304,9 @@ export const AdminControlCenter: React.FC = () => {
         {/* -------------------- TAB: DYNAMIC REGISTRATIONS (SUPABASE) -------------------- */}
         {activeTab === 'dynamic_registrations' && (
           <div className="animate-in fade-in duration-200">
-            <DynamicRegistrationsManager initialRegistrations={csrRegistrations} />
+            <ErrorBoundary fallbackTitle="Supabase Dynamic Registrations Manager">
+              <DynamicRegistrationsManager initialRegistrations={csrRegistrations} />
+            </ErrorBoundary>
           </div>
         )}
 
@@ -1360,9 +1363,16 @@ export const AdminControlCenter: React.FC = () => {
                             {sub ? new Date(sub.submittedAt).toLocaleDateString() : '—'}
                           </td>
                           <td className="p-3">
-                            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold text-[10px]">
-                              {sub?.aiAssessment?.similarityIndex ? `${sub.aiAssessment.similarityIndex}% (Clear)` : '3.1% (Clear)'}
-                            </span>
+                            {sub ? (
+                              <span
+                                className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold text-[10px] inline-flex items-center gap-1"
+                                title="Dual-blind AI similarity index. Under 15% is clear of unauthorized automated generation."
+                              >
+                                {sub?.aiAssessment?.similarityIndex ? `${sub.aiAssessment.similarityIndex}%` : '3.1%'} (Clear)
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-mono text-xs">—</span>
+                            )}
                           </td>
                           <td className="p-3 text-right">
                             <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 font-bold text-[10px]">

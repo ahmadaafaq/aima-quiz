@@ -17,6 +17,7 @@ import { ChatAssistant } from './components/chat/ChatAssistant';
 import { UnifiedRegistrationModal } from './components/public/UnifiedRegistrationModal';
 import { RegistrationPage } from './components/registration/RegistrationPage';
 import { ParticipantLoginPage } from './components/auth/ParticipantLoginPage';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 const AppContent: React.FC = () => {
   const { activeView, activeCertificateModal, setActiveCertificateModal, showRegistrationModal, setShowRegistrationModal, registrationModalTrack } = useCompetition();
@@ -55,6 +56,12 @@ const AppContent: React.FC = () => {
     }
   };
 
+  const isLiveSite =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'research.aima.in' ||
+      window.location.hostname.endsWith('.research.aima.in')) &&
+    !new URLSearchParams(window.location.search).get('demo');
+
   const isRegistrationPage =
     activeView === 'registration' ||
     activeView === 'register' ||
@@ -64,14 +71,20 @@ const AppContent: React.FC = () => {
     activeView === 'public' ||
     isRegistrationPage;
 
+  // On live production (research.aima.in), hide navbar on public / registration pages.
+  // On localhost, preview domains, or when ?demo=true is passed, show the navbar for demonstrating all pages.
+  const hideNavbar = isLiveSite && isPublicOrRegistration;
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-amber-500/20 selection:text-amber-700 dark:selection:text-amber-300">
-      {/* Top Sticky Header: removed from / and /registration as requested */}
-      {!isPublicOrRegistration && <Navbar />}
+      {/* Top Sticky Header: Hidden on research.aima.in live site, visible for demo/localhost */}
+      {!hideNavbar && <Navbar />}
 
       {/* Main Routed Content */}
       <main className="flex-1">
-        {renderActiveView()}
+        <ErrorBoundary fallbackTitle="Page View">
+          {renderActiveView()}
+        </ErrorBoundary>
       </main>
 
       {/* Global Modals & Dialogs & AI Chatbot */}

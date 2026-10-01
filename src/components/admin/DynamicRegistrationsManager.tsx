@@ -38,6 +38,46 @@ interface DynamicRegistrationsManagerProps {
   initialRegistrations?: CSRBootcampRegistration[];
 }
 
+// Robust accessors to resolve candidate/coordinator name, email and phone across schema variations
+export const getCandidateName = (reg?: any): string => {
+  if (!reg) return 'Solo Candidate';
+  return (
+    reg.coordinator?.name ||
+    reg.nominees?.[0]?.name ||
+    reg.candidate_name ||
+    reg.contactPersonName ||
+    reg.raw_data?.coordinator?.name ||
+    reg.raw_data?.candidate_name ||
+    (reg.track === 'institutional' ? 'Institutional Delegation' : 'Solo Candidate')
+  );
+};
+
+export const getCandidateEmail = (reg?: any): string => {
+  if (!reg) return '';
+  return (
+    reg.coordinator?.email ||
+    reg.nominees?.[0]?.email ||
+    reg.candidate_email ||
+    reg.emailAddress ||
+    reg.raw_data?.coordinator?.email ||
+    reg.raw_data?.candidate_email ||
+    ''
+  );
+};
+
+export const getCandidatePhone = (reg?: any): string => {
+  if (!reg) return '';
+  return (
+    reg.coordinator?.mobile ||
+    reg.nominees?.[0]?.mobile ||
+    reg.nominees?.[0]?.phone ||
+    reg.candidate_phone ||
+    reg.mobileNumber ||
+    reg.raw_data?.coordinator?.mobile ||
+    ''
+  );
+};
+
 export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerProps> = ({
   initialRegistrations = [],
 }) => {
@@ -84,18 +124,27 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
     loadSupabaseData();
   }, []);
 
+  useEffect(() => {
+    if (initialRegistrations && initialRegistrations.length > 0 && registrations.length === 0) {
+      setRegistrations(initialRegistrations);
+    }
+  }, [initialRegistrations]);
+
   // Filtered registrations
   const filteredRegistrations = useMemo(() => {
+    const query = (searchQuery || '').trim().toLowerCase();
     return registrations.filter((reg) => {
-      const query = searchQuery.toLowerCase().trim();
+      const candName = getCandidateName(reg).toLowerCase();
+      const candEmail = getCandidateEmail(reg).toLowerCase();
+
       const matchesSearch =
         !query ||
-        reg.registrationNumber.toLowerCase().includes(query) ||
-        reg.organizationName.toLowerCase().includes(query) ||
-        reg.contactPersonName.toLowerCase().includes(query) ||
-        reg.emailAddress.toLowerCase().includes(query) ||
+        (reg.registrationNumber && reg.registrationNumber.toLowerCase().includes(query)) ||
+        (reg.organizationName && reg.organizationName.toLowerCase().includes(query)) ||
+        candName.includes(query) ||
+        candEmail.includes(query) ||
         (reg.teamName && reg.teamName.toLowerCase().includes(query)) ||
-        reg.nominees?.some((n) => n.name.toLowerCase().includes(query) || n.email.toLowerCase().includes(query));
+        reg.nominees?.some((n) => (n.name && n.name.toLowerCase().includes(query)) || (n.email && n.email.toLowerCase().includes(query)));
 
       const isInst = reg.track === 'institutional' || reg.organizationType === 'Academic Institution';
       const matchesMode =
@@ -133,7 +182,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
               ...r,
               paymentStatus: nextStatus,
               transactionId: txnId,
-              invoiceNumber: nextStatus === 'PAID' ? r.invoiceNumber.replace('PINV-', 'INV-') : r.invoiceNumber,
+              invoiceNumber: nextStatus === 'PAID' ? (r.invoiceNumber ? r.invoiceNumber.replace('PINV-', 'INV-') : `INV-${r.registrationNumber}`) : (r.invoiceNumber || `PINV-${r.registrationNumber}`),
             }
           : r
       )
@@ -153,9 +202,9 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
             'Registration Mode': isInst ? 'Institute' : 'Individual',
             'Institute Name': reg.organizationName,
             'Team Name': reg.teamName || 'N/A',
-            'Participant Name': reg.contactPersonName,
-            'Participant Email': reg.emailAddress,
-            'Mobile': reg.mobileNumber,
+            'Participant Name': getCandidateName(reg),
+            'Participant Email': getCandidateEmail(reg),
+            'Mobile': getCandidatePhone(reg),
             'Enrolment No': 'N/A',
             'Quiz Password': 'AimaQuiz@2026',
             'Payment Status': reg.paymentStatus,
@@ -503,10 +552,10 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                       {/* Contact */}
                       <td className="py-3.5 px-4">
                         <div className="font-bold text-slate-900 dark:text-white">
-                          {reg.contactPersonName}
+                          {getCandidateName(reg)}
                         </div>
                         <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                          {reg.emailAddress}
+                          {getCandidateEmail(reg)}
                         </div>
                       </td>
 
@@ -629,10 +678,10 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                   : [
                       {
                         id: 'lead',
-                        name: activeNomineesModal.contactPersonName,
-                        email: activeNomineesModal.emailAddress,
-                        mobile: activeNomineesModal.mobileNumber,
-                        password: 'AimaQuiz@2026',
+                        name: getCandidateName(activeNomineesModal),
+                        email: getCandidateEmail(activeNomineesModal),
+                        mobile: getCandidatePhone(activeNomineesModal),
+                        password: activeNomineesModal.participantPassword || 'AimaQuiz@2026',
                         isTeamLeader: true,
                       },
                     ]
