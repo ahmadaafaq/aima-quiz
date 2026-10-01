@@ -94,10 +94,9 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
           <div className="flex items-center gap-3">
             <div className="h-10 px-3.5 rounded-xl bg-white border border-slate-200 dark:border-slate-800 flex items-center justify-center shadow-xs shrink-0">
               <img
-                src="https://www.aima.in/img/logo.png"
-                alt="AIMA Logo"
+                src="/aima-icrc-logo.png"
+                alt="AIMA - ICRC Logo"
                 className="h-7 w-auto object-contain"
-                referrerPolicy="no-referrer"
               />
             </div>
             <div>

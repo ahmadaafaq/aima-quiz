@@ -1260,10 +1260,9 @@ export const RequirementsDoc: React.FC = () => {
             <div className="flex items-center gap-3">
               <div className="h-10 px-2.5 rounded-xl bg-white flex items-center justify-center border border-slate-700 shadow-sm shrink-0">
                 <img
-                  src="https://www.aima.in/img/logo.png"
-                  alt="AIMA Logo"
+                  src="/aima-icrc-logo.png"
+                  alt="AIMA - ICRC Logo"
                   className="h-7 w-auto object-contain"
-                  referrerPolicy="no-referrer"
                 />
               </div>
               <div>
@@ -1775,10 +1774,9 @@ export const RequirementsDoc: React.FC = () => {
             <div className="flex items-center gap-3">
               <div className="h-9 px-2 rounded-lg bg-white flex items-center justify-center shrink-0">
                 <img
-                  src="https://www.aima.in/img/logo.png"
-                  alt="AIMA Logo"
+                  src="/aima-icrc-logo.png"
+                  alt="AIMA - ICRC Logo"
                   className="h-6 w-auto object-contain"
-                  referrerPolicy="no-referrer"
                 />
               </div>
               <div>

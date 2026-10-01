@@ -140,10 +140,9 @@ export const PublicHome: React.FC = () => {
               {/* Accreditation Badge */}
               <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-slate-900/80 border border-blue-400/30 text-blue-200 text-xs font-semibold tracking-wide backdrop-blur-md shadow-sm">
                 <img
-                  src="https://www.aima.in/img/logo.png"
-                  alt="AIMA Logo"
-                  className="h-4.5 w-auto object-contain bg-white rounded px-1 py-0.5 shrink-0"
-                  referrerPolicy="no-referrer"
+                  src="/aima-icrc-logo.png"
+                  alt="AIMA - ICRC Logo"
+                  className="h-5 w-auto object-contain bg-white rounded px-1.5 py-0.5 shrink-0"
                 />
                 <span className="uppercase tracking-widest text-[11px] font-bold">All India Management Association • ICRC Case League</span>
               </div>
