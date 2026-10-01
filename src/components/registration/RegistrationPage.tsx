@@ -192,6 +192,74 @@ export const RegistrationPage: React.FC = () => {
     formSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Reset form data for a fresh registration
+  const handleResetForNewRegistration = () => {
+    setCurrentStep(1);
+    setActiveCreatedRegistration(null);
+    setValidationError('');
+    setCopiedLogins(false);
+    setShowGatewayModal(false);
+    setShowInvoiceModal(false);
+
+    // Track 1: Individual participant state
+    setName('');
+    setDob('');
+    setEmail('');
+    setGender('Male');
+    setMobile('');
+    setInstituteName('');
+    setProgram('');
+    setSemester('');
+    setEnrolmentNumber('');
+    setPassword('');
+    setConfirmPassword('');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    setIsOnboardingTeam(false);
+    setTeamName('');
+    setTeamMembers([]);
+
+    // Track 2: Institute registration state
+    setInstName('');
+    setInstAddress('');
+    setInstCity('');
+    setInstState('');
+    setInstPinCode('');
+    setCoordinatorName('');
+    setCoordinatorEmail('');
+    setCoordinatorPhone('');
+    setInstituteEntryTab('form');
+    setInstituteTeams([
+      {
+        id: 'inst_team_1',
+        teamName: '',
+        members: [
+          {
+            id: 'inst_p1',
+            name: '',
+            dob: '',
+            email: '',
+            gender: 'Male',
+            mobile: '',
+            program: '',
+            semester: '',
+            enrolmentNumber: '',
+            password: '',
+          },
+        ],
+      },
+    ]);
+    setExcelUploadFeedback(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+
+    setTimeout(() => {
+      formSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
+  };
+
+
   // Participant counts
   const totalHeadcount = useMemo(() => {
     if (regMode === 'individual') {
@@ -2333,21 +2401,18 @@ export const RegistrationPage: React.FC = () => {
 
                 {/* Actions: View Invoice, Start Another */}
                 <div className="flex flex-wrap items-center justify-center gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <button
+                  {/* <button
                     type="button"
                     onClick={() => setShowInvoiceModal(true)}
                     className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer shadow-md shadow-blue-500/20"
                   >
                     <Receipt className="w-4 h-4" />
                     <span>View Official Tax Invoice / Receipt</span>
-                  </button>
+                  </button> */}
 
                   <button
                     type="button"
-                    onClick={() => {
-                      setCurrentStep(1);
-                      setActiveCreatedRegistration(null);
-                    }}
+                    onClick={handleResetForNewRegistration}
                     className="px-5 py-3 rounded-xl bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs sm:text-sm font-semibold cursor-pointer shadow-xs"
                   >
                     Submit Another Registration
