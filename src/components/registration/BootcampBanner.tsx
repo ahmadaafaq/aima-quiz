@@ -26,10 +26,9 @@ export const BootcampBanner: React.FC = () => {
         <div className="flex items-center gap-3">
           <div className="bg-white p-2 rounded-xl shadow-md">
             <img
-              src="https://www.aima.in/img/logo.png"
-              alt="AIMA Logo"
+              src="/aima-icrc-logo.png"
+              alt="AIMA - ICRC Logo"
               className="h-8 w-auto object-contain"
-              referrerPolicy="no-referrer"
             />
           </div>
           <div>

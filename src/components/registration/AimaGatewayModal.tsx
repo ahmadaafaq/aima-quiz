@@ -65,10 +65,9 @@ export const AimaGatewayModal: React.FC<AimaGatewayModalProps> = ({
           <div className="flex items-center gap-3">
             <div className="bg-white p-1.5 rounded-xl">
               <img
-                src="https://www.aima.in/img/logo.png"
-                alt="AIMA"
+                src="/aima-icrc-logo.png"
+                alt="AIMA - ICRC Logo"
                 className="h-6 w-auto object-contain"
-                referrerPolicy="no-referrer"
               />
             </div>
             <div>

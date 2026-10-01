@@ -126,10 +126,9 @@ export const Navbar: React.FC = () => {
               <div className="flex items-center gap-2">
                 <div className="h-7 px-2 rounded-lg bg-white flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-xs shrink-0 group-hover:border-red-400 transition-colors">
                   <img
-                    src="https://www.aima.in/img/logo.png"
-                    alt="AIMA Logo"
+                    src="/aima-icrc-logo.png"
+                    alt="AIMA - ICRC Logo"
                     className="h-5 w-auto object-contain"
-                    referrerPolicy="no-referrer"
                   />
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -230,10 +229,9 @@ export const Navbar: React.FC = () => {
             >
               <div className="h-7 px-2.5 rounded-lg bg-white flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-xs shrink-0 group-hover:border-blue-400 dark:group-hover:border-blue-500 transition-colors">
                 <img
-                  src="https://www.aima.in/img/logo.png"
-                  alt="AIMA Logo"
+                  src="/aima-icrc-logo.png"
+                  alt="AIMA - ICRC Logo"
                   className="h-5 w-auto object-contain"
-                  referrerPolicy="no-referrer"
                 />
               </div>
               <div className="text-[9px] font-bold tracking-wider text-slate-500 dark:text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 uppercase truncate mt-0.5 whitespace-nowrap transition-colors">

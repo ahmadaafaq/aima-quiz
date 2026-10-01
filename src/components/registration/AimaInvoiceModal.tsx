@@ -67,10 +67,9 @@ export const AimaInvoiceModal: React.FC<AimaInvoiceModalProps> = ({
           <div className="flex flex-wrap items-start justify-between border-b pb-6 gap-4">
             <div className="space-y-1">
               <img
-                src="https://www.aima.in/img/logo.png"
-                alt="AIMA"
+                src="/aima-icrc-logo.png"
+                alt="AIMA - ICRC Logo"
                 className="h-10 w-auto object-contain mb-2"
-                referrerPolicy="no-referrer"
               />
               <div className="font-black text-sm tracking-tight text-slate-900">
                 ALL INDIA MANAGEMENT ASSOCIATION

@@ -458,10 +458,9 @@ export const AdminControlCenter: React.FC = () => {
         <div className="flex items-center gap-2">
           <div className="h-8 px-1.5 rounded-lg bg-white flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-xs shrink-0">
             <img
-              src="https://www.aima.in/img/logo.png"
-              alt="AIMA Logo"
+              src="/aima-icrc-logo.png"
+              alt="AIMA - ICRC Logo"
               className="h-5 w-auto object-contain"
-              referrerPolicy="no-referrer"
             />
           </div>
           <div>
@@ -491,10 +490,9 @@ export const AdminControlCenter: React.FC = () => {
           <div className={`flex items-center gap-3 overflow-hidden ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
             <div className="h-10 px-2 rounded-xl bg-white flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-xs shrink-0">
               <img
-                src="https://www.aima.in/img/logo.png"
-                alt="AIMA Logo"
+                src="/aima-icrc-logo.png"
+                alt="AIMA - ICRC Logo"
                 className="h-6 w-auto object-contain"
-                referrerPolicy="no-referrer"
               />
             </div>
             <div>

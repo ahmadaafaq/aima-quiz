@@ -81,10 +81,9 @@ export const AdminLoginGate: React.FC<AdminLoginGateProps> = ({ onAuthenticated 
         <div className="text-center space-y-3">
           <div className="inline-flex items-center justify-center p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-md">
             <img
-              src="https://www.aima.in/img/logo.png"
-              alt="AIMA Logo"
+              src="/aima-icrc-logo.png"
+              alt="AIMA - ICRC Logo"
               className="h-10 w-auto object-contain"
-              referrerPolicy="no-referrer"
             />
           </div>
 
