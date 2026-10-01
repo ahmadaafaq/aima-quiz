@@ -82,14 +82,13 @@ export const StudentDashboard: React.FC = () => {
   const assignedHubId = currentTeam?.assignedHub || currentUser.assignedHub || 'north';
   const hubInfo = hubs.find(h => h.id === assignedHubId) || hubs[0];
 
-  // Dynamic financial calculation from registration
+  // Dynamic financial calculation from registration (flat ₹200 per student)
   const isInstituteReg = currentTeam?.registrationMode === 'institute' || currentUser.instituteId?.includes('participant');
   const isPaymentPaid = currentTeam?.paymentStatus === 'PAID';
-  const totalAmountVal = currentTeam?.totalAmount || (isInstituteReg ? 67850 : 14750);
+  const memberCount = currentTeam?.members?.length || 1;
+  const totalAmountVal = currentTeam?.totalAmount || (memberCount * 200);
   const formattedTotalAmount = `₹${totalAmountVal.toLocaleString('en-IN')}`;
-  const perParticipantAmount = currentTeam?.members?.length
-    ? Math.round(totalAmountVal / currentTeam.members.length)
-    : (isInstituteReg ? 13570 : 14750);
+  const perParticipantAmount = 200;
   const formattedPerParticipantAmount = `₹${perParticipantAmount.toLocaleString('en-IN')}`;
 
   const handleCopyInvite = () => {
@@ -674,9 +673,9 @@ export const StudentDashboard: React.FC = () => {
                 </span>
               </div>
               <div className="text-right">
-                <span className="text-slate-500 block">GST (18% Included)</span>
-                <span className="text-[10px] font-mono text-emerald-600 font-bold">
-                  ₹{Math.round(totalAmountVal - totalAmountVal / 1.18).toLocaleString('en-IN')}
+                <span className="text-slate-500 block">Rate: ₹200 / student</span>
+                <span className="text-[11px] font-mono text-emerald-600 font-bold">
+                  {memberCount} × ₹200 = ₹{memberCount * 200}
                 </span>
               </div>
             </div>

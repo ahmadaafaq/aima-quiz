@@ -486,46 +486,33 @@ export const AdminControlCenter: React.FC = () => {
           mobileSidebarOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        {/* Sidebar Brand Header */}
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
-          <div className={`flex items-center gap-3 overflow-hidden ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-            <div className="h-10 px-2 rounded-xl bg-white flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-xs shrink-0">
-              <img
-                src="/aima-icrc-logo.png"
-                alt="AIMA - ICRC Logo"
-                className="h-6 w-auto object-contain"
-              />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-bold text-xs tracking-tight text-slate-900 dark:text-white uppercase">
-                  Central Secretariat
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                  Command Online
-                </span>
-              </div>
-            </div>
+        {/* When collapsed on desktop: show expand button */}
+        {sidebarCollapsed && (
+          <div className="hidden lg:flex p-3 border-b border-slate-100 dark:border-slate-800/80 justify-center shrink-0">
+            <button
+              onClick={() => setSidebarCollapsed(false)}
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+              title="Expand Sidebar"
+            >
+              <PanelLeftOpen className="w-4 h-4" />
+            </button>
           </div>
+        )}
 
-          {/* Desktop Collapse Toggle */}
-          <button
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="hidden lg:flex p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-            title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-          >
-            {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-          </button>
-        </div>
-
-        {/* Role Perspective Switcher Pill in Sidebar */}
+        {/* Role Perspective Switcher Pill & Inline Toggle in Sidebar */}
         <div className={`p-3 border-b border-slate-100 dark:border-slate-800/80 shrink-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1.5 px-1">
-            View Perspective As:
-          </label>
+          <div className="flex items-center justify-between mb-1.5 px-1">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              View Perspective As:
+            </label>
+            <button
+              onClick={() => setSidebarCollapsed(true)}
+              className="hidden lg:flex p-1 rounded-md border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+              title="Collapse Sidebar"
+            >
+              <PanelLeftClose className="w-3.5 h-3.5" />
+            </button>
+          </div>
           <select
             value={rolePerspective}
             onChange={e => setRolePerspective(e.target.value as any)}

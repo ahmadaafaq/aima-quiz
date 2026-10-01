@@ -583,7 +583,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                           ₹{reg.totalPayable.toLocaleString('en-IN')}
                         </div>
                         <div className="text-[10px] text-slate-400">
-                          {reg.tierName || reg.tierId || 'Nomination'}
+                          {reg.tierLabel || reg.tierName || `${reg.participantCount || reg.nominees?.length || 1} × ₹200`}
                         </div>
                       </td>
 
