@@ -25,7 +25,14 @@ const AppContent: React.FC = () => {
     document.title = 'AIMA-ICRC India Case League 2026';
   }, []);
 
+  const isPreview = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('preview') === 'true';
+
   const renderActiveView = () => {
+    // Temporary routing redirection: serve RegistrationPage on all public visits while keeping existing modules intact
+    if (!isPreview) {
+      return <RegistrationPage />;
+    }
+
     switch (activeView) {
       case 'registration':
       case 'register':
@@ -55,7 +62,7 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const isRegistrationPage = activeView === 'registration' || activeView === 'register' || activeView === 'bootcamp_registration';
+  const isRegistrationPage = !isPreview || activeView === 'registration' || activeView === 'register' || activeView === 'bootcamp_registration';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-amber-500/20 selection:text-amber-700 dark:selection:text-amber-300">

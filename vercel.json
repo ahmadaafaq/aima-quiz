@@ -1,4 +1,11 @@
 {
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/registration",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",
