@@ -4,118 +4,67 @@ import { ThreeHeroCanvas } from '../ui/ThreeHeroCanvas';
 import { AceternitySpotlight } from '../ui/AceternitySpotlight';
 import { MovingBorderButton } from '../ui/MovingBorderButton';
 import { CardContainer, CardItem } from '../ui/Aceternity3DCard';
-import { InfiniteMarquee } from '../ui/InfiniteMarquee';
-import { InteractiveWorldMap } from '../ui/InteractiveWorldMap';
 import {
   Award,
   BookOpen,
-  Building,
-  Building2,
   Calendar,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
-  Clock,
-  Coins,
-  Cpu,
   Download,
-  ExternalLink,
-  Eye,
   FileCheck,
   FileText,
-  Flame,
-  Globe,
   GraduationCap,
   HelpCircle,
-  IndianRupee,
-  Layers,
+  Mail,
   MapPin,
-  Scale,
+  Phone,
   Shield,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
   Trophy,
   Users,
-  Zap
+  X,
+  Zap,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 export const PublicHome: React.FC = () => {
-  const {
-    setActiveView,
-    switchRole,
-    announcements,
-    hubs,
-    config,
-    setActiveVerifierModal,
-    setActiveCertificateModal,
-    certificates,
-    setActiveSupportModal,
-    openRegistrationModal,
-  } = useCompetition();
+  const { setActiveView, theme, toggleTheme } = useCompetition();
 
-  const [selectedHub, setSelectedHub] = useState(hubs[0]);
-  const [activeFaq, setActiveFaq] = useState<number | null>(0);
+  const [showRulesModal, setShowRulesModal] = useState(false);
   const [showBrochureModal, setShowBrochureModal] = useState(false);
 
-  // Participating Premier B-Schools
-  const premierInstitutes = [
-    { name: 'IIM Ahmedabad', sub: 'Centre for Management in Agriculture', badge: 'Tier 1' },
-    { name: 'IIM Bangalore', sub: 'Management Innovation Park', badge: 'Host Hub' },
-    { name: 'IIM Calcutta', sub: 'Finance & Strategy Lab', badge: 'Tier 1' },
-    { name: 'FMS Delhi', sub: 'Faculty of Management Studies', badge: 'North Hub' },
-    { name: 'XLRI Jamshedpur', sub: 'School of Business & HRM', badge: 'Tier 1' },
-    { name: 'SPJIMR Mumbai', sub: 'Centre for Global Management', badge: 'West Hub' },
-    { name: 'IIT Bombay (SJMSOM)', sub: 'Tech-Strategy Research', badge: 'Tier 1' },
-    { name: 'MDI Gurgaon', sub: 'National Case Faculty', badge: 'Partner' },
-    { name: 'ISB Hyderabad', sub: 'Executive Research Observatory', badge: 'Tier 1' },
-    { name: 'IIT Guwahati (DoMS)', sub: 'North-East Regional Center', badge: 'Host Hub' },
+  // 7 Official Why Participate Points directly from India_Case_League_2026.pdf
+  const whyParticipatePoints = [
+    { title: 'Solve Real Business Problems', desc: 'Tackle genuine operational and strategic dilemmas sourced from corporate and public sector contexts.' },
+    { title: 'Compete Nationally', desc: 'Challenge your peers from approved undergraduate and postgraduate institutions across India.' },
+    { title: 'Interact with CXOs', desc: 'Present and defend your strategic recommendations directly before corporate leaders and jury panels.' },
+    { title: 'Demonstrate Leadership', desc: 'Lead high-performing teams under strict competitive deadlines and dynamic case constraints.' },
+    { title: 'Gain Industry Exposure', desc: 'Engage with practical industry challenges, root-cause analyses, and executive evaluations.' },
+    { title: 'Build Your Professional Profile', desc: 'Distinguish yourself with demonstrable decision-making, policy analysis, and strategic credentials.' },
+    { title: 'Get National Recognition', desc: 'Elevate your institution and personal standing on a premier national academic platform.' },
   ];
 
-  // Corporate & Jury Partners
-  const corporatePartners = [
-    { name: 'Tata Motors EV', sub: 'Strategic Case Partner 2026', badge: 'Case Sponsor' },
-    { name: 'Reliance Industries', sub: 'Supply Chain Jury Panel', badge: 'PPO Partner' },
-    { name: 'Mahindra & Mahindra', sub: 'Clean Mobility Strategy Desk', badge: 'Sponsor' },
-    { name: 'Infosys Consulting', sub: 'Enterprise Digital Transformation', badge: 'Jury Partner' },
-    { name: 'HDFC Bank', sub: 'Fintech & Capital Allocation Lead', badge: 'Banking Partner' },
-    { name: 'Larsen & Toubro', sub: 'Infrastructure Rollout Expert', badge: 'Industry Desk' },
-  ];
-
-  const faqs = [
-    {
-      q: 'Who is eligible to participate in the AIMA-ICRC India Case League 2026?',
-      a: 'All undergraduate and postgraduate management students enrolled in recognized universities, autonomous institutions, IITs, IIMs, and approved business schools across India. Teams consist of 3–4 students.',
-    },
-    {
-      q: 'Can students from different institutions form a joint cross-institutional team?',
-      a: 'Yes, as per AIMA-ICRC Section 5.2 regulations, cross-institutional collaborations are allowed provided each individual member is verified with a valid student ID and pays the individual Round 1/2 registration fee.',
-    },
-    {
-      q: 'What is the fee structure for each stage?',
-      a: 'Rounds 1 & 2 require an initial registration fee of ₹200 per student. Qualifying teams advancing to Round 3 (Regional Live Round) pay ₹2,000 per student. Finalists advancing to Round 4 (National Finale) pay ₹2,000 per student. Institutional bulk payments and sponsor waivers are supported.',
-    },
-    {
-      q: 'How are Round 1 Online Quiz ties resolved?',
-      a: 'Automatic evaluation applies strict tie-breaker sequences: (1) Higher total score, (2) Higher score in Analytical/Data Interpretation questions, (3) Lower total completion time, (4) Earlier submission timestamp.',
-    },
-    {
-      q: 'What are the rules regarding Generative AI usage in Round 2 Case Decks?',
-      a: 'AI may be used for preliminary research and proofreading; however, all core strategic frameworks, financial modeling, and original recommendations must be authored by students. Submissions undergo dual AI-similarity analysis and jury audit.',
-    },
-    {
-      q: 'What are the prizes and placement benefits for winners?',
-      a: 'National Champions receive ₹5,00,000 Cash + National Trophy. First Runner-Up receives ₹3,00,000. Second Runner-Up receives ₹2,00,000. All 10 Grand Finalist teams receive fast-track Pre-Placement Interviews (PPIs) & PPOs from sponsoring corporate conglomerates.',
-    },
+  // Leadership & Convenors directly from India_Case_League_2026.pdf
+  const leadershipMembers = [
+    { name: 'Dr. A. Vinay Kumar', title: 'Vice Chancellor, IFHE Hyderabad' },
+    { name: 'Dr. Muddu Vinay', title: 'Pro-Vice-Chancellor & Campus Head, IFHE Bengaluru' },
+    { name: 'Prof. (Dr.) Rohit Singh', title: 'Director, Centre for Management Education, AIMA' },
+    { name: 'Sanjib Dutta', title: 'Vice President, IBS Case Research Center, IFHE Hyderabad' },
+    { name: 'Dr. Anuja Pandey', title: 'Head, India Case Research Centre; Professor of Marketing, AIMA' },
+    { name: 'Prof. (Dr.) Vinay Joshi', title: 'Academic Dean, IFHE Bengaluru' },
+    { name: 'Dr. Shwetha Kumari', title: 'Head, Case Research Centre, IFHE Bengaluru' },
   ];
 
   return (
-    <div className="space-y-20 pb-24 animate-in fade-in duration-300">
+    <div className="space-y-16 pb-24 animate-in fade-in duration-300">
       
       {/* ------------------------------------------------------------- */}
-      {/* 1. HERO SECTION WITH 3D THREE.JS CANVAS & ACETERNITY SPOTLIGHT */}
+      {/* 1. HERO SECTION WITH 3D CANVAS & SPOTLIGHT                    */}
       {/* ------------------------------------------------------------- */}
-      <section className="relative overflow-hidden bg-slate-950 text-white pt-16 pb-24 border-b border-slate-800/80">
+      <section className="relative overflow-hidden bg-slate-950 text-white pt-14 pb-20 border-b border-slate-800/80">
         
         {/* Aceternity Spotlight Beams */}
         <AceternitySpotlight
@@ -127,155 +76,174 @@ export const PublicHome: React.FC = () => {
           fill="#a855f7"
         />
 
-        {/* Ambient Neon Gradients */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(56,189,248,0.18),rgba(255,255,255,0))] pointer-events-none" />
+        {/* Ambient Gradients */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(56,189,248,0.16),rgba(255,255,255,0))] pointer-events-none" />
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b30_1px,transparent_1px),linear-gradient(to_bottom,#1e293b30_1px,transparent_1px)] bg-[size:3rem_3rem] pointer-events-none" />
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            
-            {/* Left Content Column */}
-            <div className="lg:col-span-7 space-y-6 text-center lg:text-left z-10">
-              
-              {/* Accreditation Badge */}
-              <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-slate-900/80 border border-blue-400/30 text-blue-200 text-xs font-semibold tracking-wide backdrop-blur-md shadow-sm">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+          {/* Top Integrated Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+            <div className="flex items-center gap-3">
+              <div className="h-10 px-3.5 rounded-xl bg-white border border-slate-800 flex items-center justify-center shadow-xs shrink-0">
                 <img
                   src="/aima-icrc-logo.png"
                   alt="AIMA - ICRC Logo"
-                  className="h-5 w-auto object-contain bg-white rounded px-1.5 py-0.5 shrink-0"
+                  className="h-7 w-auto object-contain"
                 />
-                <span className="uppercase tracking-widest text-[11px] font-bold">All India Management Association • ICRC Case League</span>
+              </div>
+              <div className="text-left">
+                <div className="text-[11px] font-black uppercase tracking-wider text-amber-400">
+                  ALL INDIA MANAGEMENT ASSOCIATION (AIMA)
+                </div>
+                <div className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 flex-wrap">
+                  <span>India Case Research Centre (ICRC)</span>
+                  <span className="text-slate-500 hidden sm:inline">•</span>
+                  <span className="text-blue-400 font-bold">National Student Case Competition</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setActiveView('registration')}
+                className="h-9 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-blue-500/20 cursor-pointer transition-all shrink-0"
+              >
+                <GraduationCap className="w-3.5 h-3.5" />
+                <span>Registration</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="h-9 w-9 flex items-center justify-center rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer shadow-xs shrink-0"
+                title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                aria-label="Toggle Theme Mode"
+              >
+                {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-300" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+            
+            {/* Left Column */}
+            <div className="lg:col-span-7 space-y-6 text-center lg:text-left z-10">
+
+              {/* Main Headline */}
+              <div className="space-y-2">
+                <div className="text-xs sm:text-sm font-extrabold uppercase tracking-widest text-amber-400">
+                  COMPETITION JOURNEY: SOUTH ZONE
+                </div>
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight uppercase">
+                  INDIA CASE LEAGUE{' '}
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-blue-300 to-indigo-400">
+                    2026
+                  </span>
+                </h1>
+                <p className="text-blue-300 text-sm sm:text-base font-semibold">
+                  Your journey to the national stage • Think. Analyse. Solve. Compete. Lead.
+                </p>
               </div>
 
-              {/* Main Headline with Neon Gradient Text */}
-              <h1 className="text-4xl sm:text-6xl lg:text-6xl font-black tracking-tight leading-tight uppercase">
-                INDIA CASE LEAGUE{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-blue-300 to-indigo-400">
-                  2026
-                </span>
-              </h1>
-
-              <p className="text-slate-300 text-sm sm:text-base leading-relaxed font-normal max-w-2xl mx-auto lg:mx-0">
-                India’s premier 4-stage management case championship. Solve high-stakes corporate and national policy challenges, evaluated by distinguished industry CXOs and IIM faculty across 5 Regional Live Hubs.
+              {/* Verbatim Description from Documents */}
+              <p className="text-slate-300 text-xs sm:text-sm leading-relaxed max-w-2xl mx-auto lg:mx-0">
+                AIMA–India Case Research Centre (ICRC) invites students from institutions across India to participate in the India Case League 2026, a national platform to test their ability to solve real business and policy challenges.
               </p>
 
-              {/* Key Quick Stat Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 backdrop-blur-md text-center shadow-lg hover:border-sky-500/40 transition-colors">
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Prize Pool</p>
-                  <div className="text-lg sm:text-xl font-black text-white">₹15,00,000+</div>
-                  <div className="text-emerald-400 text-[10px] font-medium mt-0.5">+ Fast-Track PPOs</div>
+              {/* South Zone Regional Highlight Callout */}
+              <div className="p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-400/40 backdrop-blur-md text-left flex items-start gap-3 shadow-lg">
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 font-bold">
+                  <MapPin className="w-4 h-4" />
                 </div>
-                <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 backdrop-blur-md text-center shadow-lg hover:border-sky-500/40 transition-colors">
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Stages</p>
-                  <div className="text-lg sm:text-xl font-black text-white">4 Stages</div>
-                  <div className="text-sky-400 text-[10px] font-medium mt-0.5">Quiz to Grand Finale</div>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 backdrop-blur-md text-center shadow-lg hover:border-sky-500/40 transition-colors">
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Regional Hubs</p>
-                  <div className="text-lg sm:text-xl font-black text-white">5 Hubs</div>
-                  <div className="text-purple-400 text-[10px] font-medium mt-0.5">Pan-India Centers</div>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 backdrop-blur-md text-center shadow-lg hover:border-sky-500/40 transition-colors">
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Aspirants</p>
-                  <div className="text-lg sm:text-xl font-black text-white">10,000+</div>
-                  <div className="text-emerald-400 text-[10px] font-medium mt-0.5">Top B-Schools</div>
+                <div className="text-xs">
+                  <span className="inline-block px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-[10px] uppercase tracking-wider mb-1">
+                    Featured Regional Hub
+                  </span>
+                  <div className="font-extrabold text-amber-300 text-sm">
+                    SOUTH ZONE • 29 OCTOBER 2026 • BENGALURU
+                  </div>
+                  <div className="text-slate-300 text-[11px] mt-0.5">
+                    Host: IFHE Bengaluru • Regional Live Business Case Challenge
+                  </div>
                 </div>
               </div>
 
-              {/* Hero Action CTAs */}
-              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 pt-4">
-                
-                {/* Moving Border Register Team Button */}
+              {/* Verified Key Highlights Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-center">
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-0.5">Round 01–02</p>
+                  <div className="text-sm font-extrabold text-white">29 Oct 2026</div>
+                  <div className="text-sky-400 text-[10px]">Online Quiz</div>
+                </div>
+                <div className="p-3 rounded-2xl bg-slate-900/90 border border-amber-500/40 text-center">
+                  <p className="text-amber-400 text-[10px] font-bold uppercase tracking-wider mb-0.5">Round 03 (Regional)</p>
+                  <div className="text-sm font-extrabold text-amber-300">29 Oct 2026</div>
+                  <div className="text-amber-200 text-[10px]">South Zone • Bengaluru</div>
+                </div>
+                <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-center">
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-0.5">Round 04 (Finale)</p>
+                  <div className="text-sm font-extrabold text-white">18–19 Dec 2026</div>
+                  <div className="text-purple-400 text-[10px]">New Delhi</div>
+                </div>
+                <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-center">
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-0.5">Registration Fee</p>
+                  <div className="text-sm font-extrabold text-emerald-400">₹200</div>
+                  <div className="text-slate-400 text-[10px]">Per Student</div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 pt-2">
                 <MovingBorderButton
                   borderRadius="0.875rem"
-                  onClick={() => openRegistrationModal('team')}
+                  onClick={() => setActiveView('registration')}
                   className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm px-6 py-3.5 shadow-lg shadow-blue-500/30"
                 >
                   <GraduationCap className="w-4 h-4 text-sky-200" />
-                  <span>Register Student Team</span>
+                  <span>Register for Competition</span>
                   <ChevronRight className="w-4 h-4 text-sky-200" />
                 </MovingBorderButton>
 
-                {/* Institutional Bulk Registration CTA */}
                 <button
-                  onClick={() => openRegistrationModal('institute')}
-                  className="w-full sm:w-auto px-5 py-3.5 bg-indigo-950/80 hover:bg-indigo-900 text-indigo-200 font-bold text-xs sm:text-sm rounded-2xl border border-indigo-700/80 hover:border-indigo-500 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-indigo-950/40"
+                  onClick={() => setShowRulesModal(true)}
+                  className="px-4 py-3.5 bg-slate-900 hover:bg-slate-800 text-slate-200 font-bold text-xs sm:text-sm rounded-2xl border border-slate-700 hover:border-slate-500 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
                 >
-                  <Building2 className="w-4 h-4 text-indigo-400" />
-                  <span>Institutional Cohort (SPOC)</span>
+                  <FileText className="w-4 h-4 text-blue-400" />
+                  <span>Competition Rules</span>
                 </button>
 
-                {/* Direct Workspace Launcher Button */}
-                <button
-                  onClick={() => {
-                    switchRole('team_leader');
-                    setActiveView('student');
-                  }}
-                  className="w-full sm:w-auto px-4 py-3.5 bg-slate-900 hover:bg-slate-800 text-slate-100 font-bold text-xs sm:text-sm rounded-2xl border border-slate-700 hover:border-slate-500 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
-                >
-                  <span>Student Workspace</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                </button>
-
-                {/* Admin Command Desk Button */}
-                <button
-                  onClick={() => {
-                    switchRole('admin');
-                    setActiveView('admin');
-                  }}
-                  className="w-full sm:w-auto px-4 py-3.5 bg-slate-900 hover:bg-slate-800 text-slate-100 font-bold text-xs sm:text-sm rounded-2xl border border-slate-700 hover:border-slate-500 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md hover:shadow-red-500/10"
-                >
-                  <ShieldCheck className="w-4 h-4 text-red-400" />
-                  <span>Admin</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-                </button>
-
-                {/* SRS Requirements Traceability Document Button */}
-                <button
-                  onClick={() => setActiveView('requirements')}
-                  className="w-full sm:w-auto px-4 py-3.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-amber-200 text-xs sm:text-sm font-bold rounded-2xl border border-amber-500/30 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shadow-amber-500/10"
-                >
-                  <FileCheck className="w-4 h-4 text-amber-400" />
-                  <span>SRS Req Doc</span>
-                </button>
-
-                {/* Brochure Download Button */}
                 <button
                   onClick={() => setShowBrochureModal(true)}
-                  className="w-full sm:w-auto px-4 py-3.5 bg-slate-950/80 hover:bg-slate-900 text-slate-300 text-xs font-semibold rounded-2xl border border-slate-800 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  className="px-4 py-3.5 bg-slate-950/80 hover:bg-slate-900 text-slate-300 text-xs sm:text-sm font-semibold rounded-2xl border border-slate-800 hover:border-slate-700 flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
-                  <Download className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Rules (PDF)</span>
+                  <Download className="w-4 h-4 text-amber-400" />
+                  <span>Brochure (PDF)</span>
                 </button>
               </div>
 
             </div>
 
-            {/* Right 3D Interactive Three.js Canvas (Free-floating & unconstrained) */}
-            <div className="lg:col-span-5 relative w-full h-[400px] sm:h-[480px] lg:h-[540px] flex items-center justify-center overflow-visible">
-              
-              {/* Soft atmospheric ambient glow */}
+            {/* Right Column: 3D Interactive Canvas */}
+            <div className="lg:col-span-5 relative w-full h-[360px] sm:h-[440px] flex items-center justify-center">
               <div className="absolute inset-0 bg-radial from-sky-500/15 via-indigo-500/10 to-transparent blur-3xl pointer-events-none scale-125" />
-
-              {/* Three.js Canvas Instance */}
               <ThreeHeroCanvas className="w-full h-full" />
 
-              {/* Floating Floating Neon Metric Badges outside the globe radius */}
-              <div className="absolute top-2 right-2 sm:top-4 sm:right-4 p-2.5 sm:p-3 rounded-2xl bg-slate-900/80 border border-slate-800/60 backdrop-blur-md shadow-lg hidden sm:block pointer-events-none z-10">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-[10px] font-bold text-slate-300 uppercase">Live AI Proctoring</span>
+              {/* Floating Verified Callouts */}
+              <div className="absolute top-3 right-3 p-3 rounded-2xl bg-slate-900/90 border border-amber-500/50 backdrop-blur-md shadow-lg hidden sm:block pointer-events-none z-10 text-left">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                  <span className="text-[10px] font-bold text-amber-300 uppercase">South Zone Hub</span>
                 </div>
-                <div className="text-xs font-bold text-white mt-0.5">ISO 27001 Certified</div>
+                <div className="text-xs font-bold text-white mt-0.5">29 October 2026 • Bengaluru</div>
               </div>
 
-              <div className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 p-2.5 sm:p-3 rounded-2xl bg-slate-900/80 border border-slate-800/60 backdrop-blur-md shadow-lg hidden sm:block pointer-events-none z-10">
-                <div className="flex items-center gap-2">
-                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-[10px] font-bold text-slate-300 uppercase">Grand Finale Trophy</span>
+              <div className="absolute bottom-3 left-3 p-3 rounded-2xl bg-slate-900/90 border border-slate-800/80 backdrop-blur-md shadow-lg hidden sm:block pointer-events-none z-10 text-left">
+                <div className="flex items-center gap-1.5">
+                  <Trophy className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="text-[10px] font-bold text-blue-300 uppercase">National Grand Finale</span>
                 </div>
-                <div className="text-xs font-bold text-amber-300 mt-0.5">₹5,00,000 Champion Purse</div>
+                <div className="text-xs font-bold text-white mt-0.5">18–19 December 2026 • New Delhi</div>
               </div>
             </div>
 
@@ -285,37 +253,61 @@ export const PublicHome: React.FC = () => {
       </section>
 
       {/* ------------------------------------------------------------- */}
-      {/* 2. INFINITE MARQUEE CAROUSEL OF PREMIER B-SCHOOLS & SPONSORS */}
+      {/* 2. WHY PARTICIPATE? (VERBATIM FROM BROCHURE)                  */}
       {/* ------------------------------------------------------------- */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
-        <div className="text-center space-y-1">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-            Institutional Accreditation & Corporate Jury Network
-          </p>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
-            Participating Premier Business Schools & Industry Partners
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div className="text-center max-w-2xl mx-auto space-y-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+            Participant Value Proposition
+          </span>
+          <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
+            Why Participate?
           </h2>
+          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+            Official benefits codified in the AIMA–ICRC India Case League 2026 Charter.
+          </p>
         </div>
 
-        <div className="space-y-3 pt-2">
-          {/* Institutes Marquee - Left Direction */}
-          <InfiniteMarquee
-            items={premierInstitutes}
-            direction="left"
-            speed="normal"
-          />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {whyParticipatePoints.map((item, idx) => (
+            <div
+              key={idx}
+              className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs hover:border-blue-500/40 hover:shadow-md transition-all space-y-2 text-left"
+            >
+              <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-xs">
+                0{idx + 1}
+              </div>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                {item.title}
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                {item.desc}
+              </p>
+            </div>
+          ))}
 
-          {/* Corporate Sponsors Marquee - Right Direction */}
-          <InfiniteMarquee
-            items={corporatePartners}
-            direction="right"
-            speed="normal"
-          />
+          {/* Quick Registration CTA Card */}
+          <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-md flex flex-col justify-between space-y-3 text-left">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-sky-200">Get Started</span>
+              <h3 className="font-extrabold text-base text-white mt-1">Ready to Compete?</h3>
+              <p className="text-xs text-blue-100 leading-relaxed mt-1">
+                Individual registration at ₹200 or institutional bulk nominations for 3–4 member student teams.
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveView('registration')}
+              className="w-full py-2.5 px-4 rounded-xl bg-white text-blue-700 font-bold text-xs hover:bg-blue-50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <span>Go to Registration</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </section>
 
       {/* ------------------------------------------------------------- */}
-      {/* 3. 4-STAGE ARCHITECTURE WITH ACETERNITY 3D CARDS */}
+      {/* 3. THE PROGRESSIVE COMPETITION ARCHITECTURE (4 ROUNDS)        */}
       {/* ------------------------------------------------------------- */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         <div className="text-center max-w-3xl mx-auto space-y-2">
@@ -323,192 +315,135 @@ export const PublicHome: React.FC = () => {
             Competition Framework
           </span>
           <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-            The 4-Stage National Case Odyssey
+            The Progressive 4-Round Architecture
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-            Rigorous evaluation stages designed to test managerial instinct, business arithmetic, strategy formulation, and boardroom presentation.
+            Move progressively from analytical knowledge assessment to live corporate strategy and national policy governance.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           
-          {/* Stage 1 Card */}
+          {/* Round 01-02 Card */}
           <CardContainer className="w-full">
             <div className="w-full p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-blue-500/40 transition-all space-y-4">
               <CardItem translateZ={30} className="w-full flex items-center justify-between">
-                <span className="w-9 h-9 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 font-black text-sm flex items-center justify-center">
-                  01
+                <span className="min-w-[52px] h-9 px-3 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 font-black text-xs sm:text-sm flex items-center justify-center whitespace-nowrap tracking-tight shrink-0">
+                  01-02
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                  Completed
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                  29th October 2026
                 </span>
               </CardItem>
 
               <CardItem translateZ={40}>
                 <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                  Stage 1: Online Business Screening Quiz
+                  Round 01–02: National Online Quiz | Case Study Quiz
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Individual 45-min proctored exam covering business concepts, arithmetic, and current affairs.
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+                  Test your business awareness, analytical thinking, management knowledge and understanding of contemporary business and policy case.
                 </p>
               </CardItem>
 
-              <CardItem translateZ={25} className="w-full pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] space-y-1.5 text-slate-600 dark:text-slate-400">
+              <CardItem translateZ={25} className="w-full pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] space-y-2 text-slate-600 dark:text-slate-400">
                 <div className="flex justify-between">
-                  <span>Questions:</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-200">50 MCQs (+2 / -0.5)</span>
+                  <span className="font-medium">Curriculum:</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-200">Management &amp; Policy</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Qualifying Cutoff:</span>
-                  <span className="font-bold text-blue-600 dark:text-blue-400">Top 35% Advance</span>
+                  <span className="font-medium">Format:</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-200">Online Timed Assessment</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Fee:</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-200">₹200 / student</span>
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    onClick={() => {
-                      switchRole('team_leader');
-                      setActiveView('student');
-                    }}
-                    className="w-full py-2 px-3 rounded-xl bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center justify-center gap-1.5 border border-blue-200 dark:border-blue-800 transition-colors cursor-pointer"
-                  >
-                    <Zap className="w-3.5 h-3.5 text-blue-500" />
-                    <span>Take Online Quiz</span>
-                  </button>
+                  <span className="font-medium">Evaluation:</span>
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">Automated System Scoring</span>
                 </div>
               </CardItem>
             </div>
           </CardContainer>
 
-          {/* Stage 2 Card */}
+          {/* Round 03 Card - HIGHLIGHTED SOUTH ZONE */}
           <CardContainer className="w-full">
-            <div className="w-full p-6 rounded-3xl bg-white dark:bg-slate-900 border-2 border-blue-500 dark:border-blue-500/80 shadow-lg shadow-blue-500/10 hover:shadow-2xl transition-all space-y-4 relative">
-              <div className="absolute -top-3 right-6 px-2.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider shadow-sm">
-                Active Round
+            <div className="w-full p-6 rounded-3xl bg-white dark:bg-slate-900 border-2 border-amber-400 dark:border-amber-400/80 shadow-lg shadow-amber-500/10 hover:shadow-2xl transition-all space-y-4 relative">
+              <div className="absolute -top-3 right-6 px-3 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                <span>Featured South Zone</span>
               </div>
 
               <CardItem translateZ={30} className="w-full flex items-center justify-between">
-                <span className="w-9 h-9 rounded-2xl bg-blue-600 text-white font-black text-sm flex items-center justify-center shadow-md shadow-blue-500/30">
-                  02
+                <span className="w-9 h-9 rounded-2xl bg-amber-500 text-slate-950 font-black text-sm flex items-center justify-center shadow-md">
+                  03
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                  Live Submissions
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                  29th October 2026
                 </span>
               </CardItem>
 
               <CardItem translateZ={40}>
                 <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                  Stage 2: 12-Slide Strategy Case Deck
+                  Round 03: Regional Live Business Case Challenge
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Team solves live corporate case study on Indian EV ecosystem transformation.
+                <div className="mt-1.5 inline-block text-[11px] font-extrabold text-amber-600 dark:text-amber-400">
+                  📍 South Zone • Bengaluru (IFHE Bengaluru)
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+                  Face-to-Face at AIMA–ICRC Regional Hubs. Take on a Live Corporate Business Case Challenge and present your solution before corporate leaders, industry experts and academicians.
                 </p>
               </CardItem>
 
-              <CardItem translateZ={25} className="w-full pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] space-y-1.5 text-slate-600 dark:text-slate-400">
+              <CardItem translateZ={25} className="w-full pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] space-y-2 text-slate-600 dark:text-slate-400">
                 <div className="flex justify-between">
-                  <span>Format:</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-200">12 Slides PDF + Excel</span>
+                  <span className="font-medium">Mode:</span>
+                  <span className="font-bold text-amber-600 dark:text-amber-400">In-Person at Regional Hub</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Evaluation:</span>
-                  <span className="font-bold text-blue-600 dark:text-blue-400">Dual AI + Blind Jury</span>
+                  <span className="font-medium">Focus:</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-200">Live Corporate Challenge</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Advancement:</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-200">Top 200 Teams</span>
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    onClick={() => {
-                      switchRole('team_leader');
-                      setActiveView('student');
-                    }}
-                    className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-blue-500/20"
-                  >
-                    <FileCheck className="w-3.5 h-3.5" />
-                    <span>Upload Case Deck</span>
-                  </button>
+                  <span className="font-medium">Jury:</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-200">Corporate &amp; Academic Panel</span>
                 </div>
               </CardItem>
             </div>
           </CardContainer>
 
-          {/* Stage 3 Card */}
+          {/* Round 04 Card */}
           <CardContainer className="w-full">
             <div className="w-full p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-purple-500/40 transition-all space-y-4">
               <CardItem translateZ={30} className="w-full flex items-center justify-between">
                 <span className="w-9 h-9 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 font-black text-sm flex items-center justify-center">
-                  03
-                </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                  5 Pan-India Hubs
-                </span>
-              </CardItem>
-
-              <CardItem translateZ={40}>
-                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                  Stage 3: Regional Live Presentations
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  15-min in-person live boardroom pitch + 10-min grilling by jury panel across 5 regional centers.
-                </p>
-              </CardItem>
-
-              <CardItem translateZ={25} className="w-full pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] space-y-1.5 text-slate-600 dark:text-slate-400">
-                <div className="flex justify-between">
-                  <span>Hubs:</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-200">Delhi, Mum, Blr, Kol, Guw</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Finalists:</span>
-                  <span className="font-bold text-purple-600 dark:text-purple-400">Top 10 Teams Advance</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Fee:</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-200">₹2,000 / student</span>
-                </div>
-              </CardItem>
-            </div>
-          </CardContainer>
-
-          {/* Stage 4 Card */}
-          <CardContainer className="w-full">
-            <div className="w-full p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-amber-500/40 transition-all space-y-4">
-              <CardItem translateZ={30} className="w-full flex items-center justify-between">
-                <span className="w-9 h-9 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 font-black text-sm flex items-center justify-center">
                   04
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                  National Gala
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                  18th–19th Dec 2026
                 </span>
               </CardItem>
 
               <CardItem translateZ={40}>
                 <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                  Stage 4: Grand National Finale
+                  Round 04: National Grand Finale
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Surprise twist case study presented before AIMA Council, CEOs & Ministry Dignitaries in New Delhi.
+                <div className="mt-1.5 inline-block text-[11px] font-semibold text-purple-600 dark:text-purple-400">
+                  🏛️ New Delhi • National Stage
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+                  Regional winners compete in a National Policy &amp; Governance Case Challenge and present their strategy before a distinguished national jury.
                 </p>
               </CardItem>
 
-              <CardItem translateZ={25} className="w-full pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] space-y-1.5 text-slate-600 dark:text-slate-400">
+              <CardItem translateZ={25} className="w-full pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] space-y-2 text-slate-600 dark:text-slate-400">
                 <div className="flex justify-between">
-                  <span>Purse:</span>
-                  <span className="font-bold text-amber-600 dark:text-amber-400">₹15,00,000 Total</span>
+                  <span className="font-medium">Theme:</span>
+                  <span className="font-semibold text-purple-600 dark:text-purple-400">Solve for India</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Recognition:</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-200">PPOs + Gold Trophy</span>
+                  <span className="font-medium">Domain:</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-200">National Policy &amp; Governance</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Venue:</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-200">AIMA Headquarters</span>
+                  <span className="font-medium">Jury:</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-200">Distinguished National Jury</span>
                 </div>
               </CardItem>
             </div>
@@ -518,191 +453,267 @@ export const PublicHome: React.FC = () => {
       </section>
 
       {/* ------------------------------------------------------------- */}
-      {/* 4. INTERACTIVE PAN-INDIA & GLOBAL REGIONAL HUB MAP */}
+      {/* 4. GENERAL RULES & PARTICIPANT GUIDELINES                    */}
       {/* ------------------------------------------------------------- */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <InteractiveWorldMap
-          hubs={hubs}
-          selectedHub={selectedHub}
-          onSelectHub={hub => setSelectedHub(hub)}
-        />
-      </section>
-
-      {/* ------------------------------------------------------------- */}
-      {/* 5. AWARDS & PRIZE PURSE HIGHLIGHTS */}
-      {/* ------------------------------------------------------------- */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 text-white border border-slate-800 shadow-2xl relative overflow-hidden">
-          
-          <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
-
-          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            <div className="lg:col-span-7 space-y-4">
-              <span className="text-[10px] font-bold tracking-widest px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase">
-                Prize Distribution & Accreditations
+        <div className="p-8 sm:p-10 rounded-3xl bg-slate-900 text-white border border-slate-800 shadow-xl space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+            <div>
+              <span className="text-[10px] font-bold tracking-widest px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 uppercase">
+                General Rules for Participants
               </span>
-              <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
-                ₹15,00,000 Total Cash Bounty + Fast-Track PPO Offers
+              <h2 className="text-xl sm:text-2xl font-black text-white mt-2">
+                Eligibility &amp; Competition Regulations
               </h2>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-xl">
-                Beyond the substantial cash rewards, qualifying finalists gain privileged executive placement interviews with our leading corporate partners and full publication in AIMA’s Indian Management Journal.
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
-                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
-                  <div className="text-amber-400 font-bold text-xs uppercase">🥇 1st Place National</div>
-                  <div className="text-2xl font-black text-white mt-1">₹5,00,000</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">+ Gold Case Trophy</div>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
-                  <div className="text-slate-300 font-bold text-xs uppercase">🥈 1st Runner-Up</div>
-                  <div className="text-2xl font-black text-white mt-1">₹3,00,000</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">+ Silver Trophy</div>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
-                  <div className="text-amber-600 font-bold text-xs uppercase">🥉 2nd Runner-Up</div>
-                  <div className="text-2xl font-black text-white mt-1">₹2,00,000</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">+ Bronze Trophy</div>
-                </div>
-              </div>
             </div>
-
-            {/* Right Pillar Badges */}
-            <div className="lg:col-span-5 space-y-3">
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-start gap-3 backdrop-blur-md">
-                <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
-                  <Building2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-xs text-white">Pre-Placement Interview (PPI) Fast-Tracks</h4>
-                  <p className="text-[11px] text-slate-300 mt-0.5">
-                    Direct access to CXO interviews at partner conglomerates for all 10 Grand Finalist teams.
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-start gap-3 backdrop-blur-md">
-                <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
-                  <BookOpen className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-xs text-white">National ICRC Case Publishing</h4>
-                  <p className="text-[11px] text-slate-300 mt-0.5">
-                    Winning case strategies are edited and cataloged in the official ICRC Academic Case Repository.
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-start gap-3 backdrop-blur-md">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-xs text-white">Cryptographically Verified Credentials</h4>
-                  <p className="text-[11px] text-slate-300 mt-0.5">
-                    Tamper-proof verifiable digital certificates issued with individual verification hashes.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <button
+              onClick={() => setShowRulesModal(true)}
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer self-start sm:self-auto transition-colors"
+            >
+              <FileCheck className="w-4 h-4" />
+              <span>Read Full Framework</span>
+            </button>
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <div className="font-bold text-amber-400 text-xs uppercase flex items-center gap-1.5">
+                <GraduationCap className="w-4 h-4" />
+                <span>Eligibility</span>
+              </div>
+              <p className="text-slate-300 leading-relaxed text-[11px]">
+                Open to eligible undergraduate and postgraduate students across management, engineering and other approved disciplines.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <div className="font-bold text-sky-400 text-xs uppercase flex items-center gap-1.5">
+                <Users className="w-4 h-4" />
+                <span>Team Composition</span>
+              </div>
+              <p className="text-slate-300 leading-relaxed text-[11px]">
+                Teams shall consist of 3–4 registered students. Each participant may be in only one team. One member must be nominated as Team Leader.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <div className="font-bold text-emerald-400 text-xs uppercase flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Registration Fee</span>
+              </div>
+              <p className="text-slate-300 leading-relaxed text-[11px]">
+                ₹200 initial registration structure for individual participant or bulk payment by institute on bulk upload roster.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <div className="font-bold text-purple-400 text-xs uppercase flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4" />
+                <span>Generative AI Policy</span>
+              </div>
+              <p className="text-slate-300 leading-relaxed text-[11px]">
+                AI may support research or language. The team&apos;s diagnosis, judgment, recommendation and defence before the jury must remain its own.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
       {/* ------------------------------------------------------------- */}
-      {/* 6. FREQUENTLY ASKED QUESTIONS (FAQ) ACCORDION */}
+      {/* 5. PEOPLE & LEADERSHIP CONVENORS                             */}
       {/* ------------------------------------------------------------- */}
-      <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        <div className="text-center space-y-2">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div className="text-center max-w-2xl mx-auto space-y-2">
           <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-            Rules & Regulations
+            Academic &amp; Institutional Governance
           </span>
           <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-            Frequently Asked Questions
+            People &amp; Contacts: Leadership and Convenors
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-            Official guidelines codified under AIMA-ICRC Competition Charter 2026.
+            Distinguished academic leaders steering the India Case League 2026.
           </p>
         </div>
 
-        <div className="space-y-3">
-          {faqs.map((faq, idx) => {
-            const isOpen = activeFaq === idx;
-            return (
-              <div
-                key={idx}
-                className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden transition-all shadow-xs"
-              >
-                <button
-                  onClick={() => setActiveFaq(isOpen ? null : idx)}
-                  className="w-full p-4 sm:p-5 text-left flex items-center justify-between gap-4 font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
-                >
-                  <span>{faq.q}</span>
-                  <ChevronDown
-                    className={`w-4 h-4 shrink-0 text-slate-400 transition-transform duration-200 ${
-                      isOpen ? 'rotate-180 text-blue-600' : ''
-                    }`}
-                  />
-                </button>
-
-                {isOpen && (
-                  <div className="px-4 sm:px-5 pb-5 text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed border-t border-slate-100 dark:border-slate-800 pt-3 animate-in fade-in duration-150">
-                    {faq.a}
-                  </div>
-                )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {leadershipMembers.map((member, idx) => (
+            <div
+              key={idx}
+              className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between space-y-2 text-left"
+            >
+              <div>
+                <div className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs flex items-center justify-center mb-2">
+                  {member.name.split(' ').map((p) => p[0]).slice(0, 2).join('')}
+                </div>
+                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                  {member.name}
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-snug">
+                  {member.title}
+                </p>
               </div>
-            );
-          })}
-        </div>
-
-        {/* Support Helpdesk Callout */}
-        <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 flex items-center justify-between gap-4 text-xs">
-          <div className="flex items-center gap-3">
-            <HelpCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
-            <span className="text-slate-700 dark:text-slate-300 font-medium">
-              Have inquiries regarding institutional bulk waivers or proctoring specs?
-            </span>
-          </div>
-          <button
-            onClick={() => setActiveSupportModal(true)}
-            className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shrink-0 cursor-pointer shadow-xs transition-colors"
-          >
-            Contact Secretariat
-          </button>
+            </div>
+          ))}
         </div>
       </section>
 
       {/* ------------------------------------------------------------- */}
-      {/* BROCHURE DOWNLOAD MODAL */}
+      {/* 6. OFFICIAL SECRETARIAT CONTACT DETAILS                       */}
+      {/* ------------------------------------------------------------- */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="p-6 sm:p-8 rounded-3xl bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+          <div className="border-b border-slate-200 dark:border-slate-800 pb-3">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400">
+              Direct Communication Lines
+            </span>
+            <h3 className="text-xl font-black text-slate-900 dark:text-white">
+              Official Contact &amp; Registration Details
+            </h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
+            {/* National Coordinator */}
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 space-y-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-600 dark:text-blue-400 block">
+                National Coordinator
+              </span>
+              <div className="font-bold text-sm text-slate-900 dark:text-white">Dr. Anuja Pandey</div>
+              <div className="text-slate-600 dark:text-slate-400 text-xs">Head, AIMA India Case Research Centre</div>
+              <div className="text-slate-500 dark:text-slate-400 text-[11px]">All India Management Association</div>
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 space-y-1">
+                <div>Tel: 011-47673009, 47673000, 49868399 Extn.: 709</div>
+                <div>Email: apandey@aima.in, caseresearchcentre@aima.in</div>
+              </div>
+            </div>
+
+            {/* South Zone Coordinator */}
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-400/40 space-y-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 dark:text-amber-300 block">
+                South Zone Coordinator
+              </span>
+              <div className="font-bold text-sm text-slate-900 dark:text-white">Dr. Shwetha Kumari</div>
+              <div className="text-slate-700 dark:text-slate-300 text-xs">Head, Case Research Centre, IFHE Bengaluru</div>
+              <div className="pt-2 border-t border-amber-200 dark:border-amber-800/40 text-slate-700 dark:text-slate-300 space-y-1">
+                <div>Email: shwethakumari@ibsindia.org</div>
+                <div>Mobile: 7795075348</div>
+              </div>
+            </div>
+
+            {/* Registration Inquiries */}
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 space-y-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
+                Registration Details
+              </span>
+              <div className="font-bold text-sm text-slate-900 dark:text-white">Shini James</div>
+              <div className="text-slate-600 dark:text-slate-400 text-xs">Manager, AIMA India Case Research Centre</div>
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 space-y-1">
+                <div>Tel: 011-47673000, 49868399 Extn.: 726</div>
+                <div>Mobile: +91 9971479392 • Email: sjames@aima.in</div>
+                <div className="pt-1 text-[11px] text-blue-600 dark:text-blue-400 font-semibold">
+                  www.aima.in • www.caseresearchaima.in
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 7. FULL COMPETITION RULES MODAL                               */}
+      {/* ------------------------------------------------------------- */}
+      {showRulesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-3xl w-full max-h-[85vh] overflow-y-auto border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5 text-left">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  Official Document Reference
+                </span>
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+                  Competition Rules, Participant Guidelines &amp; Jury Framework
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowRulesModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+              <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900">
+                <strong className="text-blue-950 dark:text-blue-200 block text-sm font-bold mb-1">
+                  A. General Rules for Participants
+                </strong>
+                <ul className="list-disc pl-5 space-y-1 text-[11px]">
+                  <li>The competition is open to eligible undergraduate and postgraduate students across management, engineering and other approved disciplines.</li>
+                  <li>Every participant must register individually on the ICL portal.</li>
+                  <li>Teams shall consist of 3–4 registered students.</li>
+                  <li>Each participant may be a member of only one team.</li>
+                  <li>One member must be nominated as the Team Leader.</li>
+                  <li>Team composition will be locked after the notified deadline.</li>
+                </ul>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <strong className="text-slate-900 dark:text-white block text-sm font-bold mb-1">
+                  B. Originality and Use of Generative AI
+                </strong>
+                <p className="text-[11px]">
+                  AI may support research, brainstorming, language improvement, data analysis or visualisation unless a particular round expressly restricts it. The team&apos;s diagnosis, judgment, recommendation and defence before the jury must remain its own. Any material use of generative AI must be disclosed in the submission form.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-400/40">
+                <strong className="text-amber-950 dark:text-amber-200 block text-sm font-bold mb-1">
+                  C. Confidentiality &amp; Disqualification
+                </strong>
+                <p className="text-[11px]">
+                  Live corporate and national cases may contain confidential information. Participants shall not circulate the case outside their team, upload it to public AI tools, or publicly release their solution. Automatic disqualification applies for impersonation, multi-team registration, deliberate plagiarism, or external assistance during closed live-analysis periods.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+              <button
+                onClick={() => setShowRulesModal(false)}
+                className="py-2 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer shadow-xs transition-colors"
+              >
+                Close Rulebook
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* 8. OFFICIAL BROCHURE DOWNLOAD MODAL                           */}
       {/* ------------------------------------------------------------- */}
       {showBrochureModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
               <Download className="w-6 h-6" />
             </div>
 
-            <div className="text-center space-y-1">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                Download Official Rulebook 2026
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                Official Competition Brochure
               </h3>
-              <p className="text-xs text-slate-500">
-                Contains complete stage timelines, rubric weightages, eligibility rules, and proctoring guidelines.
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                AIMA–ICRC India Case League 2026 South Zone Brochure
               </p>
             </div>
 
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs space-y-1 text-slate-600 dark:text-slate-400">
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs space-y-1 text-slate-600 dark:text-slate-400 text-left">
               <div className="flex justify-between">
-                <span>Document:</span>
-                <span className="font-mono font-bold text-slate-900 dark:text-slate-100">AIMA_ICL_2026_Charter.pdf</span>
+                <span>File:</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-white">India_Case_League_2026.pdf</span>
               </div>
               <div className="flex justify-between">
-                <span>File Size:</span>
-                <span>4.8 MB (Verified PDF)</span>
+                <span>Location:</span>
+                <span>South Zone • Bengaluru</span>
               </div>
             </div>
 
@@ -713,15 +724,15 @@ export const PublicHome: React.FC = () => {
               >
                 Cancel
               </button>
-              <button
-                onClick={() => {
-                  alert('Initiating download of AIMA-ICRC India Case League 2026 Official Rulebook PDF...');
-                  setShowBrochureModal(false);
-                }}
-                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 cursor-pointer"
+              <a
+                href="/India_Case_League_2026.pdf"
+                download="India_Case_League_2026.pdf"
+                onClick={() => setShowBrochureModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 cursor-pointer flex items-center justify-center gap-1.5"
               >
-                Download PDF
-              </button>
+                <Download className="w-3.5 h-3.5" />
+                <span>Download PDF</span>
+              </a>
             </div>
           </div>
         </div>

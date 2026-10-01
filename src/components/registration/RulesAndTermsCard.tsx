@@ -47,10 +47,10 @@ export const RulesAndTermsCard: React.FC<RulesAndTermsCardProps> = ({
           </div>
           <div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-              Registration, Fee Terms &amp; DPDP Act Compliance
+              Competition Rules, Fee Terms &amp; Integrity Compliance
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Official AIMA rules &amp; statutory personal data protection disclosures for Certified CSR Leader Bootcamp
+              Official AIMA-ICRC rules &amp; participant guidelines for India Case League 2026
             </p>
           </div>
         </div>
@@ -67,59 +67,59 @@ export const RulesAndTermsCard: React.FC<RulesAndTermsCardProps> = ({
 
       {expanded && (
         <div className="space-y-4 animate-in fade-in duration-200">
-          {/* Important Highlight Box for PSUs & Govt Bodies */}
+          {/* Important Highlight Box for Institutions */}
           <div className="bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 rounded-2xl p-4 text-xs space-y-2">
             <div className="flex items-center gap-2 font-bold text-blue-900 dark:text-blue-300">
               <Landmark className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              <span>Special Provision for PSUs, Govt Bodies &amp; Corporates</span>
+              <span>Institutional Cohort Nominations &amp; Invoicing</span>
             </div>
             <p className="text-blue-800/90 dark:text-blue-300/90 leading-relaxed">
-              Upon initiating this form, your registration is immediately captured and dispatched to <strong>Ms Ekta Nayyar (enayyar@aima.in)</strong>. Payment is not mandatory upfront for submission—organisations requiring invoice-first approval can generate a formal AIMA Proforma Invoice with Bank NEFT/RTGS details and PO tracking for subsequent clearance.
+              Upon initiating this form, your registration is immediately captured and logged with the AIMA-ICRC Secretariat. Institutions submitting bulk rosters can generate an official AIMA Proforma Invoice with Bank NEFT/RTGS details for institutional clearance. For registration details contact <strong>Shini James (sjames@aima.in | +91 9971479392)</strong>.
             </p>
           </div>
 
-          {/* Verbatim REGISTRATION & FEE TERMS from Client Email */}
+          {/* Verbatim REGISTRATION & FEE TERMS from Document */}
           <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 space-y-3">
             <div className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
               <FileText className="w-4 h-4 text-amber-500" />
-              <span>Official Terms &amp; Guidelines (Verbatim)</span>
+              <span>Official Rules &amp; Participant Guidelines</span>
             </div>
 
             <ul className="space-y-2.5 text-xs text-slate-700 dark:text-slate-300">
               <li className="flex items-start gap-2.5">
                 <span className="text-amber-500 font-bold">•</span>
                 <span>
-                  <strong>Online registration and payment:</strong> Online registration and payment are preferred for faster processing of application. For Offline Registration Form, contact <strong>Ms Ekta Nayyar, AIMA | enayyar@aima.in | +91 11 47673000 Extn: 732</strong>.
+                  <strong>Eligibility:</strong> Open to eligible undergraduate and postgraduate students across management, engineering and other approved disciplines.
                 </span>
               </li>
               <li className="flex items-start gap-2.5">
                 <span className="text-amber-500 font-bold">•</span>
                 <span>
-                  <strong>Single submission:</strong> Please submit only one registration form, online or offline.
+                  <strong>Team Structure:</strong> Teams shall consist of 3–4 registered students. Each participant may be a member of only one team. One member must be nominated as Team Leader.
                 </span>
               </li>
               <li className="flex items-start gap-2.5">
                 <span className="text-amber-500 font-bold">•</span>
                 <span>
-                  <strong>Fee structure:</strong> Fee is based on the number of nominees, as per Section 3. Preferential fees apply for larger nominations.
+                  <strong>Fee structure:</strong> ₹200 initial registration structure for individual participant or bulk payment by institute on bulk upload.
                 </span>
               </li>
               <li className="flex items-start gap-2.5">
                 <span className="text-amber-500 font-bold">•</span>
                 <span>
-                  <strong>Confirmation condition:</strong> Registration is confirmed upon receipt and clearance of payment by AIMA.
+                  <strong>Generative AI Policy:</strong> AI may support research, brainstorming, language improvement, data analysis or visualisation. The team&apos;s diagnosis, judgment, recommendation and defence before the jury must remain its own.
                 </span>
               </li>
               <li className="flex items-start gap-2.5">
                 <span className="text-amber-500 font-bold">•</span>
                 <span>
-                  <strong>Refunds &amp; substitution:</strong> Fees once paid are non-refundable. Nominee substitution is permitted with prior intimation to AIMA, preferably 48 hours before the Bootcamp.
+                  <strong>Academic Integrity &amp; Confidentiality:</strong> Submissions must represent the team&apos;s own analysis. Confidential cases must not be shared outside the team or uploaded to public AI tools.
                 </span>
               </li>
               <li className="flex items-start gap-2.5">
                 <span className="text-amber-500 font-bold">•</span>
                 <span>
-                  <strong>Support &amp; Invoicing inquiries:</strong> For invoicing, registration or any clarification: <strong>Ms Ekta Nayyar, AIMA | enayyar@aima.in | +91 11 47673000 Extn: 732</strong>.
+                  <strong>Registration Contacts:</strong> Shini James (sjames@aima.in | +91 9971479392) • Dr. Anuja Pandey (apandey@aima.in | 011-47673009 Extn 709).
                 </span>
               </li>
             </ul>

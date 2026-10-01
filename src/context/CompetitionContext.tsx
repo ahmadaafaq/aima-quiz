@@ -283,24 +283,12 @@ const INITIAL_QUIZ_ATTEMPTS: QuizAttempt[] = [
 const getInitialActiveView = (): string => {
   if (typeof window !== 'undefined') {
     const path = window.location.pathname.toLowerCase();
-    const params = new URLSearchParams(window.location.search);
-    const isPreview = params.get('preview') === 'true';
-
-    // Allow developer preview via ?preview=true
-    if (isPreview) {
-      if (path === '/registration' || path === '/register' || path.startsWith('/registration')) {
-        return 'registration';
-      }
-      return 'public';
+    if (path === '/registration' || path === '/register' || path.startsWith('/registration')) {
+      return 'registration';
     }
-
-    // Default: Redirect any route to /registration while preserving query parameters
-    if (path !== '/registration') {
-      window.history.replaceState({ view: 'registration' }, '', '/registration' + window.location.search);
-    }
-    return 'registration';
+    return 'public';
   }
-  return 'registration';
+  return 'public';
 };
 
 export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -705,23 +693,9 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   }, []);
 
-  // Sync URL route with activeView (/registration redirect enforcement)
+  // Sync URL route with activeView
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
-    const params = new URLSearchParams(window.location.search);
-    const isPreview = params.get('preview') === 'true';
-
-    if (!isPreview) {
-      const currentPath = window.location.pathname.toLowerCase();
-      if (currentPath !== '/registration') {
-        window.history.replaceState({ view: 'registration' }, '', '/registration' + window.location.search);
-      }
-      if (activeView !== 'registration') {
-        setActiveView('registration');
-      }
-      return;
-    }
 
     const currentPath = window.location.pathname.toLowerCase();
     const isRegView = activeView === 'registration' || activeView === 'register' || activeView === 'bootcamp_registration';
@@ -742,18 +716,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (typeof window === 'undefined') return;
 
     const handlePopState = () => {
-      const params = new URLSearchParams(window.location.search);
-      const isPreview = params.get('preview') === 'true';
-
       const path = window.location.pathname.toLowerCase();
-      if (!isPreview) {
-        if (path !== '/registration') {
-          window.history.replaceState({ view: 'registration' }, '', '/registration' + window.location.search);
-        }
-        setActiveView('registration');
-        return;
-      }
-
       if (path === '/registration' || path === '/register' || path.startsWith('/registration')) {
         setActiveView('registration');
       } else if (path === '/' || path === '') {

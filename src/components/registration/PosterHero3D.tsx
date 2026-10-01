@@ -7,6 +7,7 @@ import {
   MapPin,
   CheckCircle2,
   ArrowRight,
+  ArrowLeft,
   Brain,
   FileCheck,
   Lightbulb,
@@ -21,47 +22,37 @@ interface PosterHero3DProps {
 }
 
 export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOpenFeeModal }) => {
-  const { theme, toggleTheme } = useCompetition();
+  const { theme, toggleTheme, setActiveView } = useCompetition();
   const stages = [
     {
-      step: '01',
-      title: 'NATIONAL ONLINE QUIZ',
-      date: '8–11 October 2026',
-      desc: 'Test business awareness, analytical thinking & contemporary policy understanding.',
+      step: '01-02',
+      title: 'NATIONAL ONLINE QUIZ | CASE STUDY QUIZ',
+      date: '29 October 2026',
+      desc: 'Test your business awareness, analytical thinking, management knowledge and understanding of contemporary business and policy case.',
       icon: Brain,
       gradient: 'from-blue-600 to-cyan-500',
       borderAccent: 'border-blue-500/20 dark:border-blue-500/30',
       badgeBg: 'bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/20',
     },
     {
-      step: '02',
-      title: 'NATIONAL CASE CHALLENGE',
-      date: 'Submission: 18 Oct 2026',
-      desc: '2–3 Days To Analyse. Strategise. Build solutions for real-world industry challenges.',
-      icon: FileCheck,
-      gradient: 'from-cyan-600 to-teal-500',
-      borderAccent: 'border-cyan-500/20 dark:border-cyan-500/30',
-      badgeBg: 'bg-cyan-500/10 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/20',
-    },
-    {
       step: '03',
-      title: 'REGIONAL LIVE CHALLENGE',
-      date: '29 October 2026',
-      desc: 'Face-to-Face presentation round at designated AIMA-ICRC Regional Hubs across India.',
+      title: 'REGIONAL LIVE BUSINESS CASE CHALLENGE',
+      date: '29 October 2026 • South Zone (Bengaluru)',
+      desc: 'Face-to-Face at AIMA-ICRC Regional Hubs. Solve a Live Corporate Case Challenge and present before corporate leaders & academicians.',
       icon: MapPin,
-      gradient: 'from-indigo-600 to-blue-600',
-      borderAccent: 'border-indigo-500/20 dark:border-indigo-500/30',
-      badgeBg: 'bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20',
+      gradient: 'from-amber-500 to-amber-600',
+      borderAccent: 'border-amber-500/40 dark:border-amber-500/50 ring-2 ring-amber-400/30',
+      badgeBg: 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 font-black',
     },
     {
       step: '04',
       title: 'NATIONAL GRAND FINALE',
-      date: '18–19 December 2026',
-      desc: 'New Delhi • Policy & Governance Challenge before esteemed industry jury & CXOs.',
+      date: '18–19 December 2026 • New Delhi',
+      desc: 'Regional winners compete in a National Policy & Governance Case Challenge and present their strategy before a distinguished national jury.',
       icon: Trophy,
-      gradient: 'from-amber-500 to-yellow-400',
-      borderAccent: 'border-amber-500/20 dark:border-amber-500/30',
-      badgeBg: 'bg-amber-500/10 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/20',
+      gradient: 'from-indigo-600 to-purple-600',
+      borderAccent: 'border-purple-500/20 dark:border-purple-500/30',
+      badgeBg: 'bg-purple-500/10 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/20',
     },
   ];
 
@@ -91,8 +82,12 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
         {/* TOP LANDSCAPE BAR: BRAND IDENTITY + STATUS BADGES + SECRETARIAT */}
         {/* ============================================================== */}
         <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800/80">
-          <div className="flex items-center gap-3">
-            <div className="h-10 px-3.5 rounded-xl bg-white border border-slate-200 dark:border-slate-800 flex items-center justify-center shadow-xs shrink-0">
+          <div
+            className="flex items-center gap-3 cursor-pointer group"
+            onClick={() => setActiveView('public')}
+            title="AIMA-ICRC India Case League 2026 Home"
+          >
+            <div className="h-10 px-3.5 rounded-xl bg-white border border-slate-200 dark:border-slate-800 flex items-center justify-center shadow-xs shrink-0 group-hover:border-blue-400 dark:group-hover:border-blue-500 transition-colors">
               <img
                 src="/aima-icrc-logo.png"
                 alt="AIMA - ICRC Logo"
@@ -100,7 +95,7 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
               />
             </div>
             <div>
-              <div className="text-[11px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
+              <div className="text-[11px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 group-hover:text-amber-500 transition-colors">
                 ALL INDIA MANAGEMENT ASSOCIATION (AIMA)
               </div>
               <div className="text-xs text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1.5 flex-wrap">
@@ -112,6 +107,16 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveView('public')}
+              className="h-9 px-3.5 rounded-xl bg-white dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 hover:border-blue-400 dark:hover:border-blue-500 text-slate-800 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs text-xs font-bold shrink-0"
+              title="Return to Home"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Home</span>
+            </button>
+
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
               <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
               Registrations Open
@@ -245,7 +250,7 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
                           <div
-                            className={`w-7 h-7 rounded-lg bg-gradient-to-br ${st.gradient} text-white font-black text-xs flex items-center justify-center shadow-md`}
+                            className={`min-w-[28px] h-7 px-2 rounded-lg bg-gradient-to-br ${st.gradient} text-white font-black text-[11px] sm:text-xs flex items-center justify-center shadow-md whitespace-nowrap tracking-tight shrink-0`}
                           >
                             {st.step}
                           </div>
@@ -284,7 +289,7 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
                   National Dual-Blind Evaluation Standards
                 </span>
                 <span className="text-amber-600 dark:text-amber-300 font-bold">
-                  Cash Pool &amp; CXO Mentorship
+                  Distinguished National Jury &amp; CXO Interaction
                 </span>
               </div>
             </CardContainer>
@@ -317,9 +322,12 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
           {/* Helpdesk & Secretariat Links */}
           <div className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1 md:text-right shrink-0">
             <div>
-              <strong className="text-slate-900 dark:text-white">ICRC Secretariats: </strong>
-              <span className="text-amber-600 dark:text-amber-300 font-semibold">Dr. Anuja Pandey (Extn: 709)</span> •{' '}
-              <span className="text-blue-600 dark:text-blue-300 font-semibold">Shini James (+91 9971479392)</span>
+              <strong className="text-slate-900 dark:text-white">National: </strong>
+              <span className="text-blue-600 dark:text-blue-300 font-semibold">Dr. Anuja Pandey (011-47673009 Extn 709)</span> •{' '}
+              <strong className="text-slate-900 dark:text-white">South Zone: </strong>
+              <span className="text-amber-600 dark:text-amber-300 font-semibold">Dr. Shwetha Kumari (7795075348)</span> •{' '}
+              <strong className="text-slate-900 dark:text-white">Registration: </strong>
+              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Shini James (+91 9971479392)</span>
             </div>
             <div className="flex items-center md:justify-end gap-3 text-blue-600 dark:text-blue-400 font-medium flex-wrap">
               <a href="mailto:caseresearchcentre@aima.in" className="hover:underline">
