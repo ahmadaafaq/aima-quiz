@@ -48,10 +48,8 @@ import {
   BookOpen,
   Award,
   Layers,
-  Send,
   Zap,
-  CheckCheck,
-  Database
+  CheckCheck
 } from 'lucide-react';
 
 // Flat participation fee as per brochure: ₹200 per participant
@@ -2332,36 +2330,6 @@ export const RegistrationPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* AUTOMATED EMAIL DISPATCH CONFIRMATION CARD (NO INSPECT BUTTON) */}
-                <div className="text-left p-5 rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Send className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                    <span className="font-bold text-blue-950 dark:text-blue-200 text-xs">
-                      Official Email Dispatched to AIMA Secretariat &amp; Candidates
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-blue-900/80 dark:text-blue-300/80 leading-relaxed">
-                    An automated registration dossier with participant roster and invoice data has been securely transmitted to <strong>Ms. Ekta Nayyar &amp; ICRC Secretariats (caseresearchcentre@aima.in)</strong>, and confirmation credentials have been emailed to <strong>{regMode === 'individual' ? email : coordinatorEmail}</strong>.
-                  </p>
-                </div>
-
-                {/* SUPABASE DYNAMIC CLOUD SYNC CARD */}
-                <div className="text-left p-5 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800/80 space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Database className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                      <span className="font-bold text-emerald-950 dark:text-emerald-200 text-xs">
-                        Supabase Dynamic Persistence: Synchronized
-                      </span>
-                    </div>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-400/40">
-                      Live Cloud Sync
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-emerald-900/80 dark:text-emerald-300/80 leading-relaxed">
-                    Registration record <strong>{activeCreatedRegistration?.registrationNumber}</strong> with <strong>{activeCreatedRegistration?.participantCount || 1} participant(s)</strong> has been dynamically saved and verified with the AIMA Secretariat database.
-                  </p>
-                </div>
 
                 {/* Actions: View Invoice, Start Another */}
                 <div className="flex flex-wrap items-center justify-center gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
