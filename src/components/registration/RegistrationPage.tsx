@@ -2260,8 +2260,8 @@ export const RegistrationPage: React.FC = () => {
                       <span>Submit Registration</span>
                     </button>
 
-                    {/* Secondary: Proforma Invoice for Institutional Approval */}
-                    {regMode === 'institute' && (
+                    {/* Secondary: Proforma Invoice for Institutional Approval (Commented Out as requested) */}
+                    {/* {regMode === 'institute' && (
                       <button
                         type="button"
                         onClick={() => handleInitiateSubmission('proforma_invoice')}
@@ -2270,7 +2270,7 @@ export const RegistrationPage: React.FC = () => {
                         <FileText className="w-4 h-4 text-amber-500 stroke-[2.5]" />
                         <span>Generate Proforma Tax Invoice (NEFT / PO)</span>
                       </button>
-                    )}
+                    )} */}
                   </div>
 
                   <div className="text-[11px] text-slate-500 text-center flex items-center justify-center gap-2">

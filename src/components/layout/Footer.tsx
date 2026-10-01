@@ -41,7 +41,7 @@ export const Footer: React.FC = () => {
               </h3>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               {/* Column 1: Dr. Anuja Pandey */}
               <div className="flex items-start gap-3.5">
                 <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-md">
@@ -59,7 +59,7 @@ export const Footer: React.FC = () => {
                   <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 pt-0.5">
                     <Phone className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                     <span className="font-medium text-[11px] sm:text-xs">
-                      011–47673009 / 47673000 / 49868399 Extn. 709
+                      011–47673009 / 47673000 Extn. 709
                     </span>
                   </div>
 
@@ -69,33 +69,61 @@ export const Footer: React.FC = () => {
                       <a href="mailto:apandey@aima.in" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline">
                         apandey@aima.in
                       </a>
-                      <span className="text-slate-400 dark:text-slate-500">•</span>
-                      <a href="mailto:caseresearchcentre@aima.in" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline">
-                        caseresearchcentre@aima.in
-                      </a>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Column 2: Shini James */}
-              <div className="flex items-start gap-3.5 md:border-l md:border-slate-200 dark:md:border-slate-800 md:pl-8">
+              {/* Column 2: South Zone Coordinator Dr. Shwetha Kumari */}
+              <div className="flex items-start gap-3.5 md:border-l md:border-slate-200 dark:md:border-slate-800 md:pl-6">
+                <div className="w-9 h-9 rounded-full bg-amber-500 flex items-center justify-center text-slate-950 shrink-0 shadow-md">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <div className="space-y-1.5 text-xs">
+                  <div>
+                    <span className="font-bold text-slate-900 dark:text-white text-sm">Dr. Shwetha Kumari</span>
+                    <span className="text-amber-600 dark:text-amber-400 font-bold block text-xs">
+                      South Zone Coordinator
+                    </span>
+                    <div className="text-slate-500 dark:text-slate-400 text-xs">
+                      Head, Case Research Centre, IFHE Bengaluru
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 pt-0.5">
+                    <Phone className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span className="font-medium text-[11px] sm:text-xs">
+                      Mob: <a href="tel:7795075348" className="text-blue-600 dark:text-blue-400 hover:underline">7795075348</a>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                    <Mail className="w-4 h-4 text-amber-500 shrink-0" />
+                    <a href="mailto:shwethakumari@ibsindia.org" className="text-blue-600 dark:text-blue-400 hover:underline text-[11px] sm:text-xs">
+                      shwethakumari@ibsindia.org
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* Column 3: Shini James */}
+              <div className="flex items-start gap-3.5 md:border-l md:border-slate-200 dark:md:border-slate-800 md:pl-6">
                 <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-md">
                   <User className="w-5 h-5" />
                 </div>
                 <div className="space-y-1.5 text-xs">
                   <div>
-                    <span className="font-bold text-slate-900 dark:text-white text-sm">Registration: Shini James</span>
+                    <span className="font-bold text-slate-900 dark:text-white text-sm">Shini James</span>
                     <span className="text-slate-600 dark:text-slate-300 font-normal">, Manager,</span>
                     <div className="text-slate-500 dark:text-slate-400 text-xs">
-                      AIMA India Case Research Centre
+                      Registration Details Desk • AIMA ICRC
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 pt-0.5">
                     <Phone className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                     <span className="font-medium text-[11px] sm:text-xs">
-                      011–47673000 / 49868399 Extn. 726 • <a href="tel:+919971479392" className="text-blue-600 dark:text-blue-400 hover:underline">+91 9971479392</a>
+                      011–47673000 Extn. 726 • <a href="tel:+919971479392" className="text-blue-600 dark:text-blue-400 hover:underline">+91 9971479392</a>
                     </span>
                   </div>
 
@@ -117,20 +145,17 @@ export const Footer: React.FC = () => {
             <div className="space-y-3">
               <h4 className="text-slate-900 dark:text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
                 <Calendar className="w-4 h-4 text-amber-500 dark:text-amber-400" />
-                <span>Key Schedule & Dates</span>
+                <span>Key Schedule &amp; Dates</span>
               </h4>
               <ul className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
                 <li>
-                  <strong className="text-slate-900 dark:text-white">Round 1 Online Quiz:</strong> 8–11 October 2026
+                  <strong className="text-slate-900 dark:text-white">Round 01–02 Online Quiz:</strong> 29 October 2026
                 </li>
                 <li>
-                  <strong className="text-slate-900 dark:text-white">Round 2 Case Deck Submission:</strong> 18 October 2026
+                  <strong className="text-amber-600 dark:text-amber-400">Round 03 Regional Live:</strong> 29 October 2026 (South Zone • Bengaluru)
                 </li>
                 <li>
-                  <strong className="text-slate-900 dark:text-white">Round 3 Regional Live:</strong> 29 October 2026
-                </li>
-                <li>
-                  <strong className="text-slate-900 dark:text-white">Round 4 Grand Finale:</strong> 18–19 December 2026 (New Delhi)
+                  <strong className="text-slate-900 dark:text-white">Round 04 Grand Finale:</strong> 18–19 December 2026 (New Delhi)
                 </li>
                 <li className="flex items-start gap-1.5 pt-1 text-[11px] text-slate-500 dark:text-slate-400">
                   <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
@@ -274,20 +299,16 @@ export const Footer: React.FC = () => {
             </h4>
             <ul className="space-y-2 text-xs">
               <li className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                Round 1: Online Business Quiz
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                <span>Round 01–02: Online Quiz &amp; Case Quiz (29 Oct)</span>
+              </li>
+              <li className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                <span>Round 03: Regional Live • South Zone (29 Oct)</span>
               </li>
               <li className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                Round 2: PPT/PDF Case Deck
-              </li>
-              <li className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                Round 3: Regional Live Case
-              </li>
-              <li className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                Round 4: National Grand Finale
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+                <span>Round 04: Grand Finale • New Delhi (18–19 Dec)</span>
               </li>
             </ul>
           </div>
@@ -295,15 +316,25 @@ export const Footer: React.FC = () => {
           {/* Col 3: Regional Hubs */}
           <div>
             <h4 className="text-slate-900 dark:text-white font-bold text-xs uppercase tracking-wider mb-3">
-              Regional Hubs
+              Regional Focus
             </h4>
-            <ul className="space-y-2 text-xs text-slate-600 dark:text-slate-400">
-              <li><strong className="text-slate-800 dark:text-slate-300">North:</strong> New Delhi (AIMA / FMS)</li>
-              <li><strong className="text-slate-800 dark:text-slate-300">West:</strong> Mumbai (JBIMS / SPJIMR)</li>
-              <li><strong className="text-slate-800 dark:text-slate-300">South:</strong> Bengaluru (IIMB)</li>
-              <li><strong className="text-slate-800 dark:text-slate-300">East:</strong> Kolkata (IIMC / XLRI)</li>
-              <li><strong className="text-slate-800 dark:text-slate-300">Central:</strong> Bhopal (IIFM / MANIT)</li>
-            </ul>
+            <div className="space-y-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-400/40">
+                <div className="font-extrabold text-amber-700 dark:text-amber-300 text-xs">
+                  ⭐ SOUTH ZONE HUB (BENGALURU)
+                </div>
+                <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
+                  Host: IFHE Bengaluru
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Regional Live Case Challenge: 29 Oct 2026
+                </div>
+              </div>
+
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-1">
+                <strong className="text-slate-700 dark:text-slate-300">Grand Finale Venue:</strong> New Delhi
+              </div>
+            </div>
           </div>
 
           {/* Col 4: Secretarial Contacts & Resources */}
@@ -311,58 +342,30 @@ export const Footer: React.FC = () => {
             <h4 className="text-slate-900 dark:text-white font-bold text-xs uppercase tracking-wider mb-3">
               Secretariat Desk
             </h4>
-            <ul className="space-y-2 text-xs text-slate-600 dark:text-slate-400">
-              <li className="flex items-start gap-2">
-                <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-                <span>Management House, 14 Institutional Area, Lodhi Road, New Delhi 110003</span>
+            <ul className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
+              <li>
+                <strong className="text-slate-800 dark:text-slate-200">National:</strong> Dr. Anuja Pandey (011-47673009 Extn 709)
               </li>
-              <li className="flex items-center gap-2">
-                <Mail className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                <span>caseleague@aima.in</span>
+              <li>
+                <strong className="text-amber-600 dark:text-amber-400">South Zone:</strong> Dr. Shwetha Kumari (7795075348)
               </li>
-              <li className="flex items-center gap-2">
-                <Phone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                <span>+91 11 24645100 / 43128100</span>
+              <li>
+                <strong className="text-slate-800 dark:text-slate-200">Registration:</strong> Shini James (+91 9971479392)
+              </li>
+              <li className="pt-1 flex items-center gap-2 text-blue-600 dark:text-blue-400 font-semibold">
+                <a href="mailto:caseresearchcentre@aima.in" className="hover:underline">
+                  caseresearchcentre@aima.in
+                </a>
               </li>
             </ul>
-
-            <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-1.5">
-              <button
-                onClick={() => setActiveView('requirements')}
-                className="text-left text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-semibold flex items-center gap-1 cursor-pointer"
-              >
-                <FileText className="w-3.5 h-3.5" /> Full SRS Requirements Spec & Traceability
-              </button>
-              <button
-                onClick={() => setActiveVerifierModal(true)}
-                className="text-left text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-semibold flex items-center gap-1 cursor-pointer"
-              >
-                <ShieldCheck className="w-3.5 h-3.5" /> Digital Certificate Verifier
-              </button>
-              <button
-                onClick={() => setActiveSupportModal(true)}
-                className="text-left text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium flex items-center gap-1 cursor-pointer"
-              >
-                <FileText className="w-3.5 h-3.5" /> Helpdesk & War-Room Ticket
-              </button>
-            </div>
           </div>
 
         </div>
 
         {/* Bottom Legal Copyright */}
-        <div className="mt-10 pt-6 border-t border-slate-200 dark:border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
+        <div className="mt-10 pt-6 border-t border-slate-200 dark:border-slate-900 flex items-center justify-center text-center text-[11px] text-slate-500">
           <div>
             © 2026 All India Management Association (AIMA) &amp; India Case Research Centre (ICRC). All rights reserved.
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="hover:text-slate-600 dark:hover:text-slate-400 cursor-pointer">Privacy Policy</span>
-            <span>•</span>
-            <span className="hover:text-slate-600 dark:hover:text-slate-400 cursor-pointer">Terms & Conditions</span>
-            <span>•</span>
-            <span className="hover:text-slate-600 dark:hover:text-slate-400 cursor-pointer">Plagiarism & Generative AI Policy</span>
-            <span>•</span>
-            <span className="hover:text-slate-600 dark:hover:text-slate-400 cursor-pointer">Confidentiality Terms</span>
           </div>
         </div>
 

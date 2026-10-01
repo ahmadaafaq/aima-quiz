@@ -51,22 +51,20 @@ export const Navbar: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const websiteNavItems = [
-    { id: 'public', label: 'Overview', fullTitle: 'Competition Overview & Eligibility Rules', icon: BookOpen },
-    { id: 'registration', label: 'CSR Bootcamp', fullTitle: 'Certified CSR Leader Bootcamp (27-28 Oct) Registration Form', icon: Sparkles },
-    { id: 'student', label: 'Workspace', fullTitle: 'Student Participant Workspace & Submissions', icon: LayoutDashboard },
-    { id: 'institute', label: 'Institutes', fullTitle: 'Institute Coordinator Portal & Roster', icon: Building2 },
-    { id: 'evaluator', label: 'Jury', fullTitle: 'Jury Evaluation & Dual-Blind Scoring Station', icon: Scale },
-    { id: 'regional_hub', label: 'Hubs', fullTitle: 'Regional Semi-Final Hubs & Slot Schedule', icon: MapPin },
-    { id: 'corporate', label: 'Partners', fullTitle: 'Corporate Partner Desk & Talent Fast-Track', icon: ShieldCheck },
+    { id: 'public', label: 'Home', fullTitle: 'India Case League 2026 - Home', icon: BookOpen },
+    { id: 'registration', label: 'Registration', fullTitle: 'Registration & Participant Onboarding', icon: GraduationCap },
   ];
 
   const visibleWebsiteNav = websiteNavItems;
 
   const isAdminView = activeView === 'admin';
-  const isRegistrationView = activeView === 'registration' || activeView === 'register' || activeView === 'bootcamp_registration';
+  const isPublicOrRegistration =
+    activeView === 'public' ||
+    activeView === 'registration' ||
+    activeView === 'register' ||
+    activeView === 'bootcamp_registration';
 
-  // Appbar removed on registration page as requested
-  if (isRegistrationView) {
+  if (isPublicOrRegistration) {
     return null;
   }
 
@@ -78,35 +76,11 @@ export const Navbar: React.FC = () => {
         <div className="flex items-center gap-2.5 overflow-hidden truncate">
           <span className="inline-flex items-center gap-1.5 font-bold text-blue-400 uppercase tracking-widest text-[10px] px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Live
+            Official
           </span>
           <span className="truncate text-slate-300 font-medium text-xs">
-            AIMA-ICRC India Case League 2026 • Round 2 Case Decks Open • Cash Pool ₹15,00,000+
+            AIMA–ICRC India Case League 2026 • South Zone: 29 October 2026 (Bengaluru) • Grand Finale: 18–19 December 2026 (New Delhi)
           </span>
-        </div>
-        <div className="flex items-center gap-2.5 sm:gap-3.5 shrink-0 text-slate-400 text-xs">
-          <button
-            onClick={() => openChatWithQuery()}
-            className="hover:text-blue-300 text-blue-400 transition-colors font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap bg-blue-500/15 hover:bg-blue-500/25 px-2.5 py-0.5 rounded-md border border-blue-400/30 shadow-xs"
-            title="Open AI Competition Assistant"
-          >
-            <Bot className="w-3.5 h-3.5 text-blue-400" />
-            <span className="font-bold">AI Assistant</span>
-          </button>
-          <button
-            onClick={() => setActiveVerifierModal(true)}
-            className="hover:text-blue-400 transition-colors font-medium flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
-            <span className="hidden sm:inline">Verify Certificate</span>
-          </button>
-          <button
-            onClick={() => setActiveSupportModal(true)}
-            className="hover:text-blue-400 transition-colors font-medium flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-          >
-            <HelpCircle className="w-3.5 h-3.5 text-blue-400" />
-            <span className="hidden sm:inline">War-Room Support</span>
-          </button>
         </div>
       </div>
 
@@ -239,8 +213,8 @@ export const Navbar: React.FC = () => {
               </div>
             </div>
 
-            {/* Desktop Website Nav Items */}
-            <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5 shrink-0">
+            {/* Desktop Website Nav Items (Only Home & Registration) */}
+            <nav className="hidden sm:flex items-center gap-2 shrink-0">
               {visibleWebsiteNav.map(item => {
                 const Icon = item.icon;
                 const isActive = activeView === item.id;
@@ -250,94 +224,21 @@ export const Navbar: React.FC = () => {
                     key={item.id}
                     onClick={() => setActiveView(item.id)}
                     title={item.fullTitle}
-                    className={`h-9 inline-flex items-center gap-1.5 px-2.5 xl:px-3 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+                    className={`h-9 inline-flex items-center gap-2 px-3.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                       isActive
-                        ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shadow-xs font-bold'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
                     }`}
                   >
-                    <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`} />
+                    <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
                     <span>{item.label}</span>
                   </button>
                 );
               })}
-
-              {/* Admin Panel Direct Button */}
-              <button
-                onClick={() => {
-                  if (currentUser.role !== 'admin') {
-                    switchRole('admin');
-                  }
-                  setActiveView('admin');
-                }}
-                title="AIMA-ICRC Secretariat Command & Control Center"
-                className="h-9 inline-flex items-center gap-1.5 px-2.5 xl:px-3 ml-0.5 rounded-xl text-xs font-bold whitespace-nowrap bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 transition-all cursor-pointer shrink-0"
-              >
-                <Shield className="w-3.5 h-3.5 text-red-600 dark:text-red-400 shrink-0" />
-                <span>Admin</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
-              </button>
             </nav>
 
-            {/* Right Controls: Register CTA + Req Doc CTA Button + Role Switcher + Dark Mode + Mobile Toggle */}
+            {/* Right Controls: Dark / Light Mode Toggle + Mobile Menu Button */}
             <div className="flex items-center gap-2 shrink-0">
-              
-              {/* Register Now CTA Button */}
-              <button
-                onClick={() => setActiveView('registration')}
-                className={`h-9 inline-flex items-center gap-1.5 px-3.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 hover:scale-102 ${
-                  activeView === 'registration'
-                    ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-400/40'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20'
-                }`}
-                title="Register for Certified CSR Leader Bootcamp (27-28 Oct)"
-              >
-                <GraduationCap className="w-3.5 h-3.5 text-white" />
-                <span>Register</span>
-              </button>
-
-              {/* Participant Login / Session */}
-              {participantUser ? (
-                <div className="h-9 hidden sm:inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 shrink-0">
-                  <User className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <span className="truncate max-w-[100px]">{participantUser.name.split(' ')[0]}</span>
-                  <button
-                    onClick={logoutParticipant}
-                    title="Logout"
-                    className="ml-1 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setActiveView('participant_login')}
-                  className="h-9 hidden sm:inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer shadow-xs whitespace-nowrap shrink-0"
-                  title="Participant Login"
-                >
-                  <User className="w-3.5 h-3.5 text-blue-500" />
-                  <span>Login</span>
-                </button>
-              )}
-
-              {/* Requirements Document (SRS) CTA Button in Appbar */}
-              <button
-                onClick={() => setActiveView('requirements')}
-                className={`h-9 hidden md:inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shadow-xs shrink-0 hover:scale-102 ${
-                  activeView === 'requirements'
-                    ? 'bg-amber-500 text-white border border-amber-600 shadow-sm'
-                    : 'text-amber-800 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800'
-                }`}
-                title="View Interactive Requirements Specification & Live Traceability Matrix"
-              >
-                <FileCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                <span>Req Doc</span>
-              </button>
-
-              {/* Quick RBAC Role Switcher */}
-              <RoleSwitcher />
-
-              {/* Dark / Light Mode Toggle */}
               <button
                 onClick={toggleTheme}
                 className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 transition-colors cursor-pointer shadow-xs shrink-0"
@@ -349,7 +250,7 @@ export const Navbar: React.FC = () => {
               {/* Mobile Menu Button */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="h-9 w-9 flex items-center justify-center lg:hidden rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+                className="h-9 w-9 flex items-center justify-center sm:hidden rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
                 aria-label="Toggle Navigation Menu"
               >
                 {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -360,113 +261,38 @@ export const Navbar: React.FC = () => {
         </div>
       )}
 
-      {/* Mobile Menu Dropdown */}
+      {/* Mobile Menu Dropdown (Only Home & Registration) */}
       {mobileMenuOpen && (
-        <div className="lg:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 pt-2 pb-4 space-y-1 animate-in slide-in-from-top-2 duration-150 shadow-xl">
+        <div className="sm:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 pt-2 pb-4 space-y-1 animate-in slide-in-from-top-2 duration-150 shadow-xl">
           <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-3 py-1">
-            {isAdminView ? 'Admin Quick Actions' : 'Website Navigation'}
+            Menu
           </div>
 
-          {isAdminView ? (
-            <div className="space-y-1">
-              <button
-                onClick={() => {
-                  setActiveView('public');
-                  setMobileMenuOpen(false);
-                }}
-                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Globe className="w-4 h-4 text-blue-500" />
-                  <span>Exit to Public Website</span>
-                </div>
-                <ArrowUpRight className="w-3.5 h-3.5 text-blue-400" />
-              </button>
-            </div>
-          ) : (
-            <>
-              {visibleWebsiteNav.map(item => {
-                const Icon = item.icon;
-                const isActive = activeView === item.id;
+          <div className="space-y-1">
+            {visibleWebsiteNav.map(item => {
+              const Icon = item.icon;
+              const isActive = activeView === item.id;
 
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveView(item.id);
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
-                      isActive
-                        ? 'bg-blue-600 text-white font-bold'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Icon className="w-4 h-4 shrink-0" />
-                      <div className="text-left">
-                        <div className="font-bold text-xs">{item.label}</div>
-                        <div className={`text-[10px] ${isActive ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
-                          {item.fullTitle}
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-
-              <button
-                onClick={() => {
-                  if (currentUser.role !== 'admin') {
-                    switchRole('admin');
-                  }
-                  setActiveView('admin');
-                  setMobileMenuOpen(false);
-                }}
-                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Shield className="w-4 h-4" />
-                  <span>Admin Control Center</span>
-                </div>
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-600 text-white font-bold">
-                  Secretariat
-                </span>
-              </button>
-            </>
-          )}
-
-          <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-2">
-            <button
-              onClick={() => {
-                setActiveView('requirements');
-                setMobileMenuOpen(false);
-              }}
-              className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-xs font-semibold text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
-            >
-              <FileCheck className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-              Req Doc
-            </button>
-            <button
-              onClick={() => {
-                setActiveVerifierModal(true);
-                setMobileMenuOpen(false);
-              }}
-              className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300"
-            >
-              <ShieldCheck className="w-4 h-4 text-blue-500" />
-              Verify Cert
-            </button>
-            <button
-              onClick={() => {
-                setActiveSupportModal(true);
-                setMobileMenuOpen(false);
-              }}
-              className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300"
-            >
-              <HelpCircle className="w-4 h-4 text-blue-500" />
-              Helpdesk
-            </button>
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveView(item.id);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+                    isActive
+                      ? 'bg-blue-600 text-white font-bold'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span className="font-bold text-xs">{item.label}</span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
