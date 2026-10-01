@@ -138,14 +138,8 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("/", (req, res) => {
-      res.redirect(302, "/registration");
-    });
     app.get("*", (req, res) => {
-      if (req.path === "/registration" || req.query.preview === "true") {
-        return res.sendFile(path.join(distPath, "index.html"));
-      }
-      res.redirect(302, "/registration");
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
