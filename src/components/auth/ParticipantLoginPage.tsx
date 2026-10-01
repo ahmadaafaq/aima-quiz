@@ -115,7 +115,7 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
           <div className="space-y-1">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-300 dark:border-blue-700/50">
               <GraduationCap className="w-3.5 h-3.5" />
-              <span>Participant Portal • CSR Bootcamp 2026</span>
+              <span>Participant Portal • National Online Quiz 2026</span>
             </div>
             <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
               Participant Login
@@ -224,7 +224,7 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
             className="w-full py-2.5 px-4 rounded-xl border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <GraduationCap className="w-4 h-4" />
-            Register for CSR Bootcamp 2026
+            Register for National Online Quiz 2026
           </button>
         </div>
 
