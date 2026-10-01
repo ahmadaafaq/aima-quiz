@@ -355,8 +355,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const participantCount = reg.participantCount || reg.nominees?.length || 1;
     const totalAmount =
       reg.totalPayable ||
-      (reg.ratePerPersonOrPackage ? Math.round(reg.ratePerPersonOrPackage * participantCount * 1.18) : (isInst ? 67850 : 14750));
-    const perStudentAmount = Math.round(totalAmount / participantCount);
+      (reg.ratePerPersonOrPackage ? Math.round(reg.ratePerPersonOrPackage * participantCount) : participantCount * 200);
+    const perStudentAmount = Math.round(totalAmount / participantCount) || 200;
 
     const teamMembers: TeamMember[] = (reg.nominees && reg.nominees.length > 0)
       ? reg.nominees.map((n) => {

@@ -13,7 +13,8 @@ import {
   Lightbulb,
   Receipt,
   Sun,
-  Moon
+  Moon,
+  Award
 } from 'lucide-react';
 
 interface PosterHero3DProps {
@@ -33,6 +34,8 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
       gradient: 'from-blue-600 to-cyan-500',
       borderAccent: 'border-blue-500/20 dark:border-blue-500/30',
       badgeBg: 'bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/20',
+      stageLabel: 'Stage 01-02',
+      roundBadge: 'Official Round',
     },
     {
       step: '03',
@@ -43,6 +46,8 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
       gradient: 'from-amber-500 to-amber-600',
       borderAccent: 'border-amber-500/40 dark:border-amber-500/50 ring-2 ring-amber-400/30',
       badgeBg: 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 font-black',
+      stageLabel: 'Stage 03',
+      roundBadge: 'Official Round',
     },
     {
       step: '04',
@@ -53,6 +58,21 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
       gradient: 'from-indigo-600 to-purple-600',
       borderAccent: 'border-purple-500/20 dark:border-purple-500/30',
       badgeBg: 'bg-purple-500/10 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/20',
+      stageLabel: 'Stage 04',
+      roundBadge: 'Official Round',
+    },
+    {
+      step: 'HONOURS',
+      title: 'NATIONAL RECOGNITION & AWARDS',
+      date: 'Grand Finale Ceremony • New Delhi',
+      desc: 'National Champions Trophy, Cash Awards, official AIMA-ICRC Certificates of Excellence, and direct spotlight before top CXO networks.',
+      icon: Award,
+      logoUrl: '/aima-icrc-logo.png',
+      gradient: 'from-emerald-600 via-teal-600 to-cyan-600',
+      borderAccent: 'border-emerald-500/30 dark:border-emerald-500/40 ring-1 ring-emerald-400/30',
+      badgeBg: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-bold',
+      stageLabel: 'National Honors',
+      roundBadge: 'Official Felicitation',
     },
   ];
 
@@ -229,11 +249,11 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400 animate-pulse" />
                   <h3 className="font-black text-slate-900 dark:text-white text-xs sm:text-sm uppercase tracking-wider">
-                    COMPETITION JOURNEY (4-STAGE ROADMAP)
+                    COMPETITION JOURNEY &amp; NATIONAL HONOURS
                   </h3>
                 </div>
                 <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-                  Online Quiz ➔ Case Challenge ➔ Regional Hubs ➔ Grand Finale
+                  Online Quiz ➔ Case Challenge ➔ Regional Hubs ➔ Grand Finale &amp; Awards
                 </span>
               </div>
 
@@ -254,7 +274,16 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
                           >
                             {st.step}
                           </div>
-                          <IconComponent className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors" />
+                          <div className="flex items-center gap-1.5">
+                            {st.logoUrl && (
+                              <img
+                                src={st.logoUrl}
+                                alt="AIMA ICRC Logo"
+                                className="h-5 w-auto object-contain bg-white dark:bg-slate-900 p-0.5 rounded-md border border-slate-200 dark:border-slate-700 shadow-xs"
+                              />
+                            )}
+                            <IconComponent className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors" />
+                          </div>
                         </div>
 
                         <div>
@@ -272,9 +301,11 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
                       </div>
 
                       <div className="pt-1.5 border-t border-slate-200 dark:border-white/10 flex items-center justify-between text-[10px]">
-                        <span className="text-slate-500 dark:text-slate-400 font-medium">Stage {st.step}</span>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium">
+                          {st.stageLabel || `Stage ${st.step}`}
+                        </span>
                         <span className={`px-2 py-0.5 rounded-full font-bold ${st.badgeBg}`}>
-                          Official Round
+                          {st.roundBadge || 'Official Round'}
                         </span>
                       </div>
                     </CardItem>
