@@ -490,20 +490,54 @@ export async function updateRegistrationPaymentInSupabase(
   transactionId?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(registrationIdOrNumber);
+
+    // 1. Fetch current row to preserve & update raw_data and invoice number
+    let fetchQuery = supabase.from('registrations').select('*');
+    if (isUuid) {
+      fetchQuery = fetchQuery.or(`registration_number.eq.${registrationIdOrNumber},id.eq.${registrationIdOrNumber}`);
+    } else {
+      fetchQuery = fetchQuery.eq('registration_number', registrationIdOrNumber);
+    }
+    const { data: existingRows } = await fetchQuery;
+    const existing = existingRows?.[0];
+
+    const currentInvoice = existing?.invoice_number || `PINV-${registrationIdOrNumber}`;
+    const nextInvoice = paymentStatus === 'PAID'
+      ? (currentInvoice.startsWith('PINV-') ? currentInvoice.replace('PINV-', 'INV-') : currentInvoice)
+      : (currentInvoice.startsWith('INV-') ? currentInvoice.replace('INV-', 'PINV-') : currentInvoice);
+
     const updatePayload: any = {
       payment_status: paymentStatus,
       payment_method: paymentMethod,
+      invoice_number: nextInvoice,
+      transaction_id: transactionId || null,
     };
-    if (transactionId) {
-      updatePayload.transaction_id = transactionId;
+
+    if (existing?.raw_data) {
+      updatePayload.raw_data = {
+        ...existing.raw_data,
+        paymentStatus,
+        paymentMethod,
+        transactionId: transactionId || undefined,
+        invoiceNumber: nextInvoice,
+      };
     }
 
-    await supabase
-      .from('registrations')
-      .update(updatePayload)
-      .or(`registration_number.eq.${registrationIdOrNumber},id.eq.${registrationIdOrNumber}`);
+    // 2. Perform database update
+    let updateQuery = supabase.from('registrations').update(updatePayload);
+    if (isUuid) {
+      updateQuery = updateQuery.or(`registration_number.eq.${registrationIdOrNumber},id.eq.${registrationIdOrNumber}`);
+    } else {
+      updateQuery = updateQuery.eq('registration_number', registrationIdOrNumber);
+    }
+    const { error } = await updateQuery;
 
-    // Update local cache as well
+    if (error) {
+      console.warn('Supabase update notice:', error.message);
+    }
+
+    // 3. Update local cache as well
     const cached = getLocalRegistrationsCache();
     const updated = cached.map((r) => {
       if (r.id === registrationIdOrNumber || r.registrationNumber === registrationIdOrNumber) {
@@ -512,15 +546,16 @@ export async function updateRegistrationPaymentInSupabase(
           paymentStatus,
           paymentMethod: paymentMethod as any,
           transactionId: transactionId || r.transactionId,
-          invoiceNumber: paymentStatus === 'PAID' ? r.invoiceNumber.replace('PINV-', 'INV-') : r.invoiceNumber,
+          invoiceNumber: nextInvoice,
         };
       }
       return r;
     });
     saveLocalRegistrationCache(updated);
 
-    return { success: true };
+    return { success: !error, error: error?.message };
   } catch (err: any) {
+    console.error('Error updating payment in Supabase:', err);
     return { success: false, error: err?.message };
   }
 }
