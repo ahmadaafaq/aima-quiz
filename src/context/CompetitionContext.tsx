@@ -282,9 +282,34 @@ const INITIAL_QUIZ_ATTEMPTS: QuizAttempt[] = [
 
 const getInitialActiveView = (): string => {
   if (typeof window !== 'undefined') {
-    const path = window.location.pathname.toLowerCase();
-    if (path === '/registration' || path === '/register' || path.startsWith('/registration')) {
+    const rawPath = window.location.pathname.toLowerCase();
+    const path = rawPath.replace(/\/+$/, '') || '/';
+    if (path === '/admin' || path.startsWith('/admin/')) {
+      return 'admin';
+    }
+    if (path === '/registration' || path === '/register' || path.startsWith('/registration') || path.startsWith('/register')) {
       return 'registration';
+    }
+    if (path === '/login' || path === '/participant_login' || path === '/participant-login') {
+      return 'participant_login';
+    }
+    if (path === '/student' || path === '/workspace') {
+      return 'student';
+    }
+    if (path === '/institute' || path === '/institutes') {
+      return 'institute';
+    }
+    if (path === '/evaluator' || path === '/jury') {
+      return 'evaluator';
+    }
+    if (path === '/hub' || path === '/regional_hub') {
+      return 'regional_hub';
+    }
+    if (path === '/corporate' || path === '/sponsor') {
+      return 'corporate';
+    }
+    if (path === '/requirements' || path === '/req_doc' || path === '/docs') {
+      return 'requirements';
     }
     return 'public';
   }
@@ -504,7 +529,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [registrationModalTrack, setRegistrationModalTrack] = useState<'team' | 'institute'>('team');
   const [csrRegistrations, setCsrRegistrations] = useState<CSRBootcampRegistration[]>([]);
   const [csrEmailLogs, setCsrEmailLogs] = useState<CSREmailLog[]>(MOCK_CSR_EMAIL_LOGS);
-  const [adminActiveTab, setAdminActiveTab] = useState<string>('overview');
+  const [adminActiveTab, setAdminActiveTab] = useState<string>('dynamic_registrations');
   const [targetRequirementSection, setTargetRequirementSection] = useState<string | null>(null);
   const [targetRequirementClause, setTargetRequirementClause] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
@@ -697,15 +722,47 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const currentPath = window.location.pathname.toLowerCase();
+    const currentPath = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
     const isRegView = activeView === 'registration' || activeView === 'register' || activeView === 'bootcamp_registration';
 
-    if (isRegView) {
+    if (activeView === 'admin') {
+      if (currentPath !== '/admin') {
+        window.history.pushState({ view: 'admin' }, '', '/admin');
+      }
+    } else if (isRegView) {
       if (currentPath !== '/registration') {
         window.history.pushState({ view: 'registration' }, '', '/registration');
       }
+    } else if (activeView === 'participant_login' || activeView === 'login') {
+      if (currentPath !== '/login') {
+        window.history.pushState({ view: 'login' }, '', '/login');
+      }
+    } else if (activeView === 'student') {
+      if (currentPath !== '/student') {
+        window.history.pushState({ view: 'student' }, '', '/student');
+      }
+    } else if (activeView === 'institute') {
+      if (currentPath !== '/institute') {
+        window.history.pushState({ view: 'institute' }, '', '/institute');
+      }
+    } else if (activeView === 'evaluator') {
+      if (currentPath !== '/evaluator') {
+        window.history.pushState({ view: 'evaluator' }, '', '/evaluator');
+      }
+    } else if (activeView === 'regional_hub') {
+      if (currentPath !== '/hub') {
+        window.history.pushState({ view: 'regional_hub' }, '', '/hub');
+      }
+    } else if (activeView === 'corporate') {
+      if (currentPath !== '/corporate') {
+        window.history.pushState({ view: 'corporate' }, '', '/corporate');
+      }
+    } else if (activeView === 'requirements' || activeView === 'req_doc') {
+      if (currentPath !== '/requirements') {
+        window.history.pushState({ view: 'requirements' }, '', '/requirements');
+      }
     } else if (activeView === 'public') {
-      if (currentPath === '/registration' || currentPath === '/register') {
+      if (currentPath !== '/' && currentPath !== '') {
         window.history.pushState({ view: 'public' }, '', '/');
       }
     }
@@ -716,9 +773,25 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (typeof window === 'undefined') return;
 
     const handlePopState = () => {
-      const path = window.location.pathname.toLowerCase();
-      if (path === '/registration' || path === '/register' || path.startsWith('/registration')) {
+      const path = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+      if (path === '/admin' || path.startsWith('/admin/')) {
+        setActiveView('admin');
+      } else if (path === '/registration' || path === '/register' || path.startsWith('/registration') || path.startsWith('/register')) {
         setActiveView('registration');
+      } else if (path === '/login' || path === '/participant_login' || path === '/participant-login') {
+        setActiveView('participant_login');
+      } else if (path === '/student' || path === '/workspace') {
+        setActiveView('student');
+      } else if (path === '/institute' || path === '/institutes') {
+        setActiveView('institute');
+      } else if (path === '/evaluator' || path === '/jury') {
+        setActiveView('evaluator');
+      } else if (path === '/hub' || path === '/regional_hub') {
+        setActiveView('regional_hub');
+      } else if (path === '/corporate' || path === '/sponsor') {
+        setActiveView('corporate');
+      } else if (path === '/requirements' || path === '/req_doc' || path === '/docs') {
+        setActiveView('requirements');
       } else if (path === '/' || path === '') {
         setActiveView('public');
       }

@@ -62,17 +62,18 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
       roundBadge: 'Official Round',
     },
     {
-      step: 'HONOURS',
-      title: 'NATIONAL RECOGNITION & AWARDS',
-      date: 'Grand Finale Ceremony • New Delhi',
-      desc: 'National Champions Trophy, Cash Awards, official AIMA-ICRC Certificates of Excellence, and direct spotlight before top CXO networks.',
-      icon: Award,
-      logoUrl: '/aima-icrc-logo.png',
-      gradient: 'from-emerald-600 via-teal-600 to-cyan-600',
-      borderAccent: 'border-emerald-500/30 dark:border-emerald-500/40 ring-1 ring-emerald-400/30',
-      badgeBg: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-bold',
-      stageLabel: 'National Honors',
-      roundBadge: 'Official Felicitation',
+      step: '70°',
+      title: 'AIMA PLATINUM JUBILEE 2027',
+      date: '70 Years of Excellence • 1957–2027',
+      desc: "India Case League 2026 is proudly presented under AIMA's 70th Platinum Jubilee - celebrating 70 years of shaping India's management thought and leadership.",
+      icon: Sparkles,
+      logoUrl: '/aima-70-platinum-jubilee.jpg',
+      gradient: 'from-amber-500 via-yellow-400 to-orange-400',
+      borderAccent: 'border-amber-400/50 dark:border-amber-400/60 ring-2 ring-amber-400/40',
+      badgeBg: 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 font-black',
+      stageLabel: 'Platinum Jubilee',
+      roundBadge: '1957 – 2027',
+      isJubilee: true,
     },
   ];
 
@@ -261,6 +262,64 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
                 {stages.map((st) => {
                   const IconComponent = st.icon;
+
+                  // Special rendering for the Jubilee card
+                  if ((st as any).isJubilee) {
+                    return (
+                      <CardItem
+                        key={st.step}
+                        translateZ={30}
+                        className={`p-0 rounded-2xl border-2 ${st.borderAccent} shadow-lg overflow-hidden flex flex-col justify-between group relative`}
+                      >
+                        {/* Jubilee shimmer background */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 dark:from-amber-950/40 dark:via-yellow-950/30 dark:to-orange-950/40 pointer-events-none" />
+                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(251,191,36,0.18),transparent_60%)] pointer-events-none" />
+
+                        {/* Jubilee badge */}
+                        <div className="absolute -top-0.5 -right-0.5 z-10">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-bl-xl rounded-tr-xl bg-gradient-to-r from-amber-500 to-orange-400 text-white text-[9px] font-black uppercase tracking-wider shadow-md">
+                            <Sparkles className="w-2.5 h-2.5" />
+                            Platinum Jubilee
+                          </span>
+                        </div>
+
+                        <div className="relative z-[1] p-3.5 flex flex-col justify-between h-full space-y-2">
+                          {/* Logo prominently shown */}
+                          <div className="flex items-center justify-center bg-white dark:bg-slate-900/80 rounded-xl border border-amber-200 dark:border-amber-700/50 shadow-sm overflow-hidden">
+                            <img
+                              src={st.logoUrl}
+                              alt="AIMA 70th Platinum Jubilee Logo"
+                              className="w-full h-auto max-h-[64px] object-contain p-1.5"
+                            />
+                          </div>
+
+                          <div>
+                            <h4 className="font-black text-xs text-amber-700 dark:text-amber-300 group-hover:text-amber-600 dark:group-hover:text-amber-200 transition-colors uppercase tracking-wide">
+                              {st.title}
+                            </h4>
+                            <div className="text-[10px] font-bold text-orange-600 dark:text-orange-300 mt-0.5">
+                              {st.date}
+                            </div>
+                          </div>
+
+                          <p className="text-[10.5px] text-slate-600 dark:text-slate-300 leading-snug">
+                            {st.desc}
+                          </p>
+
+                          <div className="pt-1.5 border-t border-amber-200 dark:border-amber-700/40 flex items-center justify-between text-[10px]">
+                            <span className="text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-1">
+                              <Trophy className="w-3 h-3" />
+                              {st.stageLabel}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full font-black ${st.badgeBg}`}>
+                              {st.roundBadge}
+                            </span>
+                          </div>
+                        </div>
+                      </CardItem>
+                    );
+                  }
+
                   return (
                     <CardItem
                       key={st.step}

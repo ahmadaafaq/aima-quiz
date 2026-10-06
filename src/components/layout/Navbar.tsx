@@ -88,32 +88,34 @@ export const Navbar: React.FC = () => {
   return (
     <header className="sticky top-0 z-40 w-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors shadow-xs">
       
-      {/* Top Banner Notice - Executive Slate Bar */}
-      <div className="bg-[#1E293B] text-slate-200 text-[11px] py-1.5 px-3 sm:px-5 lg:px-6 border-b border-slate-700/60 flex items-center justify-between">
-        <div className="flex items-center gap-2.5 overflow-hidden truncate">
-          <span className="inline-flex items-center gap-1.5 font-bold text-blue-400 uppercase tracking-widest text-[10px] px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Official
-          </span>
-          <span className="truncate text-slate-300 font-medium text-xs">
-            AIMA–ICRC India Case League 2026 • South Zone: 29 October 2026 (Bengaluru) • Grand Finale: 18–19 December 2026 (New Delhi)
-          </span>
+      {/* Top Banner Notice - Executive Slate Bar (Hidden in Admin View) */}
+      {!isAdminView && (
+        <div className="bg-[#1E293B] text-slate-200 text-[11px] py-1.5 px-3 sm:px-5 lg:px-6 border-b border-slate-700/60 flex items-center justify-between">
+          <div className="flex items-center gap-2.5 overflow-hidden truncate">
+            <span className="inline-flex items-center gap-1.5 font-bold text-blue-400 uppercase tracking-widest text-[10px] px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Official
+            </span>
+            <span className="truncate text-slate-300 font-medium text-xs">
+              AIMA–ICRC India Case League 2026 • South Zone: 29 October 2026 (Bengaluru) • Grand Finale: 18–19 December 2026 (New Delhi)
+            </span>
+          </div>
+          {!isLiveSite && (
+            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-bold text-[10px] border border-amber-500/30 shrink-0 ml-2">
+              Demo / Review Mode (All Pages Active)
+            </span>
+          )}
         </div>
-        {!isLiveSite && (
-          <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-bold text-[10px] border border-amber-500/30 shrink-0 ml-2">
-            Demo / Review Mode (All Pages Active)
-          </span>
-        )}
-      </div>
+      )}
 
       {/* ========================================================================= */}
-      {/* CASE 1: DEDICATED ADMIN SECRETARIAT APPBAR (NO WEBSITE MENUS) */}
+      {/* CASE 1: DEDICATED ADMIN SECRETARIAT APPBAR (LOGO & THEME TOGGLE ONLY)     */}
       {/* ========================================================================= */}
       {isAdminView ? (
         <div className="w-full px-3 sm:px-5 lg:px-6 max-w-[1600px] mx-auto">
           <div className="flex items-center justify-between h-16">
             
-            {/* Left: Admin Identity & Status with Subtitle strictly below logo */}
+            {/* Left: Admin Identity & Status */}
             <div
               className="flex flex-col items-start justify-center cursor-pointer shrink-0 group py-0.5"
               onClick={() => setActiveView('admin')}
@@ -141,70 +143,14 @@ export const Navbar: React.FC = () => {
               </div>
             </div>
 
-            {/* Center: Real-time Live Telemetry Pill (Desktop) */}
-            <div className="hidden xl:flex items-center gap-3 px-3.5 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs shrink-0">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">Phase: Round 2 Active</span>
-              </div>
-              <span className="text-slate-300 dark:text-slate-600">•</span>
-              <span className="text-slate-500 dark:text-slate-400 whitespace-nowrap">944 Teams Allocated</span>
-              <span className="text-slate-300 dark:text-slate-600">•</span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">Dual Blind Rubric</span>
-            </div>
-
-            {/* Right: Exit to Website + Role Switcher CTA + Theme Toggle */}
-            <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-              
-              {/* Secretariat AI Assistant Quick Query in Admin */}
-              <button
-                onClick={() => openChatWithQuery()}
-                className="h-9 hidden sm:inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 transition-colors cursor-pointer shadow-xs whitespace-nowrap shrink-0"
-                title="Ask Secretariat AI: Rankings, Quiz Participants, Revenue"
-              >
-                <Bot className="w-3.5 h-3.5 text-indigo-500" />
-                <span>Secretariat AI</span>
-              </button>
-
-              {/* Req Doc Button in Admin */}
-              <button
-                onClick={() => setActiveView('requirements')}
-                className="h-9 hidden sm:inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/50 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 transition-colors cursor-pointer shadow-xs whitespace-nowrap shrink-0"
-                title="View Requirement Specification & Traceability Matrix"
-              >
-                <FileCheck className="w-3.5 h-3.5 text-blue-500" />
-                <span>Req Doc (SRS)</span>
-              </button>
-
-              {/* Return to Public Website CTA */}
-              <button
-                onClick={() => setActiveView('public')}
-                className="h-9 inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer shadow-xs whitespace-nowrap shrink-0"
-                title="Return to Public Website"
-              >
-                <Globe className="w-3.5 h-3.5 text-blue-500" />
-                <span className="hidden sm:inline">Exit to Website</span>
-                <ArrowUpRight className="w-3 h-3 text-slate-400" />
-              </button>
-
-              {/* Polished Persona Role Switcher */}
-              <RoleSwitcher />
-
-              {/* Theme Toggle */}
+            {/* Right: Theme Toggle Only */}
+            <div className="flex items-center shrink-0">
               <button
                 onClick={toggleTheme}
-                className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 transition-colors cursor-pointer shadow-xs shrink-0"
+                className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 transition-colors cursor-pointer shadow-xs"
                 title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
               >
                 {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
-              </button>
-
-              {/* Mobile Menu Button */}
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="h-9 w-9 flex items-center justify-center lg:hidden rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
-              >
-                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
             </div>
 

@@ -238,8 +238,17 @@ export const Footer: React.FC = () => {
             <div>
               © 2026 All India Management Association (AIMA) &amp; India Case Research Centre (ICRC). All rights reserved.
             </div>
-            <div className="text-slate-600 dark:text-slate-400">
-              India Case League (ICL 2026) • National B-School Championship
+            <div className="flex items-center gap-3 text-slate-600 dark:text-slate-400">
+              <span>India Case League (ICL 2026)</span>
+              <span className="text-slate-300 dark:text-slate-700">•</span>
+              <button
+                onClick={() => setActiveView('admin')}
+                className="inline-flex items-center gap-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                title="AIMA Secretariat Admin Portal (/admin)"
+              >
+                <Shield className="w-3 h-3 text-amber-500" />
+                <span>Admin Portal</span>
+              </button>
             </div>
           </div>
 
@@ -363,10 +372,18 @@ export const Footer: React.FC = () => {
         </div>
 
         {/* Bottom Legal Copyright */}
-        <div className="mt-10 pt-6 border-t border-slate-200 dark:border-slate-900 flex items-center justify-center text-center text-[11px] text-slate-500">
+        <div className="mt-10 pt-6 border-t border-slate-200 dark:border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left text-[11px] text-slate-500">
           <div>
             © 2026 All India Management Association (AIMA) &amp; India Case Research Centre (ICRC). All rights reserved.
           </div>
+          <button
+            onClick={() => setActiveView('admin')}
+            className="inline-flex items-center gap-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            title="AIMA Secretariat Admin Portal (/admin)"
+          >
+            <Shield className="w-3.5 h-3.5 text-amber-500" />
+            <span>Admin Portal</span>
+          </button>
         </div>
 
       </div>

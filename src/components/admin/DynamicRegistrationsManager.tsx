@@ -31,7 +31,8 @@ import {
   Code,
   Check,
   Sparkles,
-  ArrowUpRight
+  ArrowUpRight,
+  CreditCard
 } from 'lucide-react';
 
 interface DynamicRegistrationsManagerProps {
@@ -99,6 +100,13 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
   const [showSqlModal, setShowSqlModal] = useState<boolean>(false);
   const [copiedLogins, setCopiedLogins] = useState<boolean>(false);
   const [copiedSql, setCopiedSql] = useState<boolean>(false);
+
+  // Edit Payment Status Modal State
+  const [activeEditPaymentReg, setActiveEditPaymentReg] = useState<CSRBootcampRegistration | null>(null);
+  const [editStatus, setEditStatus] = useState<'PAID' | 'PENDING_INVOICE'>('PAID');
+  const [editMethod, setEditMethod] = useState<string>('NEFT/RTGS Bank Transfer');
+  const [editTxnId, setEditTxnId] = useState<string>('');
+  const [isSavingPayment, setIsSavingPayment] = useState<boolean>(false);
 
   // Load from Supabase on mount
   const loadSupabaseData = async () => {
@@ -168,6 +176,50 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
 
     return { totalRegs, paidRegs, pendingRegs, totalCandidates, totalRevenue };
   }, [registrations]);
+
+  // Open Edit Payment Modal
+  const handleOpenEditPayment = (reg: CSRBootcampRegistration) => {
+    setActiveEditPaymentReg(reg);
+    setEditStatus(reg.paymentStatus === 'PAID' ? 'PAID' : 'PENDING_INVOICE');
+    setEditMethod(reg.paymentMethod || 'NEFT/RTGS Bank Transfer');
+    setEditTxnId(reg.transactionId || '');
+  };
+
+  // Save Payment Status & Sync Supabase
+  const handleSavePaymentEdit = async () => {
+    if (!activeEditPaymentReg) return;
+    setIsSavingPayment(true);
+
+    const regNum = activeEditPaymentReg.registrationNumber;
+    const finalTxn = editStatus === 'PAID' ? (editTxnId.trim() || 'MANUAL-AIMA-' + Date.now().toString(36).toUpperCase()) : undefined;
+    const finalInvoice = editStatus === 'PAID'
+      ? (activeEditPaymentReg.invoiceNumber ? activeEditPaymentReg.invoiceNumber.replace('PINV-', 'INV-') : `INV-${regNum}`)
+      : (activeEditPaymentReg.invoiceNumber ? activeEditPaymentReg.invoiceNumber.replace('INV-', 'PINV-') : `PINV-${regNum}`);
+
+    // Optimistic local state update
+    setRegistrations((prev) =>
+      prev.map((r) =>
+        r.id === activeEditPaymentReg.id || r.registrationNumber === regNum
+          ? {
+              ...r,
+              paymentStatus: editStatus,
+              paymentMethod: editMethod as any,
+              transactionId: finalTxn,
+              invoiceNumber: finalInvoice,
+            }
+          : r
+      )
+    );
+
+    try {
+      await updateRegistrationPaymentInSupabase(regNum, editStatus, editMethod, finalTxn);
+    } catch (err) {
+      console.warn('Supabase payment sync notice:', err);
+    } finally {
+      setIsSavingPayment(false);
+      setActiveEditPaymentReg(null);
+    }
+  };
 
   // Toggle Payment Status
   const handleTogglePaymentStatus = async (reg: CSRBootcampRegistration) => {
@@ -264,18 +316,9 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
   return (
     <div className="space-y-6">
       
-      {/* Top Header Card */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Top Header Card (Single Clean Card) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700/50 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Supabase Dynamic Sync</span>
-            </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-              Refreshed: {lastRefreshed}
-            </span>
-          </div>
           <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
             Case League Registrations Master
           </h2>
@@ -285,34 +328,14 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
         </div>
 
         {/* Action Controls */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={loadSupabaseData}
-            disabled={isLoading}
-            className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>{isLoading ? 'Syncing...' : 'Sync Supabase'}</span>
-          </button>
-
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
             onClick={handleExportExcel}
-            className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-sm shadow-emerald-600/20"
           >
-            <Download className="w-3.5 h-3.5 text-emerald-600" />
+            <Download className="w-4 h-4 text-white" />
             <span>Export Roster (.xlsx)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowSqlModal(true)}
-            className="px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-            title="View Supabase SQL Table Schema"
-          >
-            <Code className="w-3.5 h-3.5" />
-            <span>SQL Schema</span>
           </button>
         </div>
       </div>
@@ -591,13 +614,13 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                       <td className="py-3.5 px-4 text-center">
                         <button
                           type="button"
-                          onClick={() => handleTogglePaymentStatus(reg)}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition-all ${
+                          onClick={() => handleOpenEditPayment(reg)}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition-all ${
                             isPaid
                               ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
                               : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25'
                           }`}
-                          title="Click to toggle payment status"
+                          title="Click to edit payment status & details"
                         >
                           {isPaid ? <CheckCircle2 className="w-3 h-3 text-emerald-500" /> : <Clock className="w-3 h-3 text-amber-500" />}
                           <span>{isPaid ? 'PAID' : 'PENDING'}</span>
@@ -607,6 +630,16 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
+                          {/* Edit Payment Status Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditPayment(reg)}
+                            className="p-1.5 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
+                            title="Edit Payment Status & Transaction Details"
+                          >
+                            <CreditCard className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => setActiveNomineesModal(reg)}
@@ -738,6 +771,150 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
         onClose={() => setActiveInvoiceReg(null)}
         registration={activeInvoiceReg}
       />
+
+      {/* MODAL 3: EDIT PAYMENT STATUS */}
+      {activeEditPaymentReg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-white">Update Payment Status</h3>
+                  <div className="text-[11px] text-slate-400 font-mono">
+                    Ref: {activeEditPaymentReg.registrationNumber}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveEditPaymentReg(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              {/* Registration & Amount Summary */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-slate-900 dark:text-white">
+                    {getCandidateName(activeEditPaymentReg)}
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {activeEditPaymentReg.organizationName}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] text-slate-400">Payable</div>
+                  <div className="text-sm font-black font-mono text-slate-900 dark:text-white">
+                    ₹{activeEditPaymentReg.totalPayable.toLocaleString('en-IN')}
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Radio / Select */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 dark:text-slate-300">
+                  Payment Status:
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setEditStatus('PAID')}
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                      editStatus === 'PAID'
+                        ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>PAID / CLEARED</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditStatus('PENDING_INVOICE')}
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                      editStatus === 'PENDING_INVOICE'
+                        ? 'bg-amber-500 text-white border-amber-600 shadow-sm'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    <Clock className="w-4 h-4" />
+                    <span>PENDING</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Payment Method */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 dark:text-slate-300">
+                  Payment Method:
+                </label>
+                <select
+                  value={editMethod}
+                  onChange={(e) => setEditMethod(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-medium cursor-pointer"
+                >
+                  <option value="NEFT/RTGS Bank Transfer">NEFT / RTGS Bank Transfer</option>
+                  <option value="UPI">UPI Transfer / QR</option>
+                  <option value="Net Banking">Net Banking</option>
+                  <option value="Credit Card">Credit Card</option>
+                  <option value="Debit Card">Debit Card</option>
+                  <option value="Cheque/DD">Cheque / Demand Draft</option>
+                  <option value="PO/NEFT_Pending">Pending Clearance</option>
+                </select>
+              </div>
+
+              {/* Transaction / UTR Number */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 dark:text-slate-300">
+                  Bank UTR / Transaction Reference ID:
+                </label>
+                <input
+                  type="text"
+                  value={editTxnId}
+                  onChange={(e) => setEditTxnId(e.target.value)}
+                  placeholder="e.g. UTR-20261006-XXXXX or Bank Reference"
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono text-xs"
+                />
+              </div>
+
+              {/* Generated Invoice Note */}
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between">
+                <span>Resulting Document:</span>
+                <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                  {editStatus === 'PAID'
+                    ? (activeEditPaymentReg.invoiceNumber?.replace('PINV-', 'INV-') || `INV-${activeEditPaymentReg.registrationNumber}`)
+                    : (activeEditPaymentReg.invoiceNumber?.replace('INV-', 'PINV-') || `PINV-${activeEditPaymentReg.registrationNumber}`)}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setActiveEditPaymentReg(null)}
+                className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSavePaymentEdit}
+                disabled={isSavingPayment}
+                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer shadow-md shadow-blue-500/20 flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isSavingPayment ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                <span>{isSavingPayment ? 'Updating...' : 'Save Payment Status'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL 3: SUPABASE SQL TABLE SETUP HELPER */}
       {showSqlModal && (

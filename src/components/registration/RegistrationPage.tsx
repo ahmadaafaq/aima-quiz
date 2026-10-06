@@ -867,11 +867,10 @@ export const RegistrationPage: React.FC = () => {
       managementAuthorisationAccepted: true,
       termsAccepted: true,
       dpdpConsentAccepted: dpdpConsentAccepted,
-      dpdpConsentTimestamp: new Date().toISOString(),
-      paymentStatus: isProforma ? 'PENDING_INVOICE' : 'PAID',
-      paymentMethod: isProforma ? undefined : 'UPI',
-      transactionId: isProforma ? undefined : txnNumber,
-      invoiceNumber: invNumber,
+      paymentStatus: 'PENDING_INVOICE',
+      paymentMethod: 'PO/NEFT_Pending',
+      transactionId: undefined,
+      invoiceNumber: invNumber.startsWith('INV-') ? invNumber.replace('INV-', 'PINV-') : invNumber,
     };
 
     const result = registerCSRBootcamp(payload);
