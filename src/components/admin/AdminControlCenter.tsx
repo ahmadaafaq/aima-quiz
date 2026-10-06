@@ -144,11 +144,11 @@ export const AdminControlCenter: React.FC = () => {
     if (t === 'audit_logs' || t === 'audit') return 'audit_logs';
     if (t === 'system_settings' || t === 'governance') return 'system_settings';
     if (t === 'telemetry') return 'overview';
-    return t || 'overview';
+    return t || 'dynamic_registrations';
   };
 
-  // Active Tab from Global Context with local fallback
-  const activeTab = normalizeTab(adminActiveTab || 'overview');
+  // Active Tab from Global Context with local fallback (defaults to dynamic registrations)
+  const activeTab = normalizeTab(adminActiveTab || 'dynamic_registrations');
 
   const setActiveTab = (
     tab: any,
@@ -285,14 +285,16 @@ export const AdminControlCenter: React.FC = () => {
   const menuGroups: MenuGroup[] = [
     {
       id: 'command_broadcast',
-      title: 'Command & Broadcast',
+      title: 'Registrations',
       items: [
+        /*
         {
           id: 'overview',
           label: 'Executive Command',
           icon: LayoutDashboard,
           roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
         },
+        */
         {
           id: 'dynamic_registrations',
           label: 'Dynamic Registrations (Supabase)',
@@ -300,6 +302,7 @@ export const AdminControlCenter: React.FC = () => {
           badge: `${csrRegistrations.length}`,
           roles: ['admin', 'all', 'institute_coordinator'],
         },
+        /*
         {
           id: 'announcements',
           label: 'Official Bulletins',
@@ -314,8 +317,10 @@ export const AdminControlCenter: React.FC = () => {
           badge: 'Live R2',
           roles: ['admin', 'all'],
         },
+        */
       ],
     },
+    /*
     {
       id: 'round1_quiz',
       title: 'Round 1: Screening Quiz',
@@ -445,6 +450,7 @@ export const AdminControlCenter: React.FC = () => {
         },
       ],
     },
+    */
   ];
 
   if (!isAdminAuthed) {
@@ -499,7 +505,8 @@ export const AdminControlCenter: React.FC = () => {
           </div>
         )}
 
-        {/* Role Perspective Switcher Pill & Inline Toggle in Sidebar */}
+        {/* Role Perspective Switcher Pill & Inline Toggle in Sidebar (Commented Out) */}
+        {/*
         <div className={`p-3 border-b border-slate-100 dark:border-slate-800/80 shrink-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
           <div className="flex items-center justify-between mb-1.5 px-1">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
@@ -526,6 +533,19 @@ export const AdminControlCenter: React.FC = () => {
             <option value="all">🌐 All Perspectives Combined</option>
           </select>
         </div>
+        */}
+
+        {!sidebarCollapsed && (
+          <div className="hidden lg:flex p-2 justify-end border-b border-slate-100 dark:border-slate-800/80 shrink-0">
+            <button
+              onClick={() => setSidebarCollapsed(true)}
+              className="p-1 rounded-md border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+              title="Collapse Sidebar"
+            >
+              <PanelLeftClose className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Grouped Navigation Item Links (Independently scrollable) */}
         <div className="flex-1 overflow-y-auto p-3 space-y-4 min-h-0 overscroll-contain">
@@ -592,35 +612,12 @@ export const AdminControlCenter: React.FC = () => {
           })}
         </div>
 
-        {/* Sidebar Footer: Quick Status & Export */}
+        {/* Sidebar Footer: Logout */}
         <div className={`p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/50 shrink-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-          <div className="p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 text-xs space-y-2 shadow-2xs">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="font-bold text-slate-700 dark:text-slate-300">National Quota</span>
-              <span className="text-emerald-600 font-bold">100% Verified</span>
-            </div>
-            <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-red-500 h-full w-4/5 rounded-full" />
-            </div>
-            <button
-              onClick={() => {
-                const data = JSON.stringify({ config, teams, payments, auditLogs }, null, 2);
-                const blob = new Blob([data], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `AIMA_ICL_2026_Admin_Export_${Date.now()}.json`;
-                a.click();
-              }}
-              className="w-full py-1.5 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Audit Data</span>
-            </button>
-
+          <div className="p-2 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 text-xs shadow-2xs">
             <button
               onClick={handleAdminLogout}
-              className="w-full py-1.5 px-2.5 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 text-[11px] font-bold flex items-center justify-center gap-1.5 border border-red-200 dark:border-red-900/80 transition-colors cursor-pointer"
+              className="w-full py-2 px-2.5 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 text-[11px] font-bold flex items-center justify-center gap-1.5 border border-red-200 dark:border-red-900/80 transition-colors cursor-pointer"
               title="Sign Out of Central Admin Session"
             >
               <Lock className="w-3.5 h-3.5 text-red-500" />
@@ -633,82 +630,7 @@ export const AdminControlCenter: React.FC = () => {
       {/* Main Workspace Content Area */}
       <main ref={mainRef} className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto min-w-0">
         
-        {/* Top Breadcrumb & Status Bar */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-              <span>Admin Portal</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-              <span className="text-red-600 dark:text-red-400 capitalize font-bold">
-                {activeTab.replace('_', ' ')}
-              </span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 mt-1 capitalize">
-              {activeTab === 'overview'
-                ? 'Central Executive Command Desk'
-                : activeTab === 'dynamic_registrations'
-                ? 'Supabase Dynamic Registrations Master'
-                : activeTab === 'quiz_programs'
-                ? 'Quiz Programs & Pan-India Live Assessments'
-                : activeTab === 'quiz_results'
-                ? 'National Quiz Standings, Cutoffs & Qualifiers'
-                : activeTab === 'participants'
-                ? 'Candidate Master Roster & ID Verification'
-                : activeTab === 'stages'
-                ? 'Competition Phase Progression Controller'
-                : activeTab === 'quiz_bank'
-                ? 'Round 1 Assessment Question Bank'
-                : activeTab === 'case_decks'
-                ? 'Round 2 Case Deck Repository & AI Evaluation'
-                : activeTab === 'evaluations'
-                ? 'National Jury Evaluation & Rubrics Engine'
-                : activeTab === 'hubs'
-                ? 'Regional Hub Logistics & Capacity Allocation'
-                : activeTab === 'institutions'
-                ? 'Accredited B-Schools & Corporate Desks'
-                : activeTab === 'finances'
-                ? 'B2B Financial Ledger & GST Tax Escrow'
-                : activeTab === 'announcements'
-                ? 'Broadcast Bulletins & Candidate Pushes'
-                : activeTab === 'audit_logs'
-                ? 'ISO 27001 Immutable Proctoring Audit Trail'
-                : 'System Configuration & Eligibility Controls'}
-            </h1>
-          </div>
 
-          {/* Perspective Indicator Pill & Auth Logout Action */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
-              <Eye className="w-3.5 h-3.5 text-red-500" />
-              <span>Perspective: {rolePerspective.toUpperCase().replace('_', ' ')}</span>
-            </span>
-
-            <button
-              onClick={() => setActiveTab('stages')}
-              className="px-3 py-1.5 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-bold border border-red-500/20 hover:bg-red-500/20 transition-all cursor-pointer flex items-center gap-1"
-            >
-              <Zap className="w-3.5 h-3.5" />
-              <span>Phase: {config.activeStage.toUpperCase()}</span>
-            </button>
-
-            {/* Authenticated Admin Badge */}
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/60 text-xs font-bold">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-              <span>admin@aima.in</span>
-            </div>
-
-            {/* Logout Action */}
-            <button
-              type="button"
-              onClick={handleAdminLogout}
-              className="px-3 py-1.5 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 text-xs font-bold border border-red-500/20 transition-all cursor-pointer flex items-center gap-1.5"
-              title="Logout from Central Secretariat Session"
-            >
-              <Lock className="w-3.5 h-3.5" />
-              <span>Logout</span>
-            </button>
-          </div>
-        </div>
 
         {/* -------------------- TAB: OVERVIEW & TELEMETRY -------------------- */}
         {activeTab === 'overview' && (
