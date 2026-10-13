@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useCompetition } from '../../context/CompetitionContext';
 import {
   FileText,
   ShieldCheck,
@@ -35,6 +36,7 @@ export const RulesAndTermsCard: React.FC<RulesAndTermsCardProps> = ({
   onToggleDpdpConsent,
   regMode = 'individual',
 }) => {
+  const { setActiveView } = useCompetition();
   const [expanded, setExpanded] = useState<boolean>(false);
   const [showDpdpDetails, setShowDpdpDetails] = useState<boolean>(false);
 
@@ -203,7 +205,16 @@ export const RulesAndTermsCard: React.FC<RulesAndTermsCardProps> = ({
             <span className="font-extrabold text-indigo-950 dark:text-indigo-300">
               CONSENT UNDER DIGITAL PERSONAL DATA PROTECTION (DPDP) ACT, 2023 (Mandatory):
             </span>{' '}
-            I hereby give free, specific, informed, unconditional, and unambiguous affirmative consent to All India Management Association (AIMA) to collect, process, and retain the personal data provided in this form strictly for the administration of the Certified CSR Leader Bootcamp, cohort certification, statutory GST invoicing, and official correspondence in compliance with the Digital Personal Data Protection Act, 2023. I understand that I / nominated participants have the right to access, rectify, or withdraw this consent at any time by contacting AIMA at enayyar@aima.in.
+            I hereby give affirmative consent to All India Management Association (AIMA) to process personal data strictly in accordance with the{' '}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setActiveView('privacy_policy'); }}
+              className="font-bold underline text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 cursor-pointer inline-flex items-center gap-0.5"
+            >
+              <span>AIMA Privacy Policy</span>
+              <ExternalLink className="w-3 h-3 inline" />
+            </button>{' '}
+            for registration, cohort certification, statutory GST invoicing, and official correspondence.
           </div>
         </label>
 
@@ -234,8 +245,26 @@ export const RulesAndTermsCard: React.FC<RulesAndTermsCardProps> = ({
             className="mt-0.5 w-4 h-4 rounded text-blue-600 focus:ring-blue-500 focus:ring-2 border-slate-300 dark:border-slate-700 cursor-pointer"
           />
           <div className="text-xs text-slate-700 dark:text-slate-300 leading-snug">
-            <span className="font-semibold text-slate-900 dark:text-white">Acceptance of Registration Terms:</span>{' '}
-            I agree to the AIMA fee terms, 48-hour substitution timeline, and clearance provisions.
+            <span className="font-semibold text-slate-900 dark:text-white">Acceptance of Registration &amp; Fee Terms:</span>{' '}
+            I agree to the official{' '}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setActiveView('terms'); }}
+              className="font-bold underline text-blue-600 dark:text-blue-400 hover:text-blue-800 cursor-pointer inline-flex items-center gap-0.5"
+            >
+              <span>Terms &amp; Conditions</span>
+              <ExternalLink className="w-3 h-3 inline" />
+            </button>{' '}
+            and the{' '}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setActiveView('refund_policy'); }}
+              className="font-bold underline text-blue-600 dark:text-blue-400 hover:text-blue-800 cursor-pointer inline-flex items-center gap-0.5"
+            >
+              <span>Refund &amp; Cancellation Policy</span>
+              <ExternalLink className="w-3 h-3 inline" />
+            </button>{' '}
+            (including the 48-hour candidate substitution rule).
           </div>
         </label>
       </div>

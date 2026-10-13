@@ -293,6 +293,21 @@ const getInitialActiveView = (): string => {
     if (path === '/login' || path === '/participant_login' || path === '/participant-login') {
       return 'participant_login';
     }
+    if (path === '/terms' || path === '/terms-and-conditions' || path === '/terms-conditions') {
+      return 'terms';
+    }
+    if (path === '/refund' || path === '/refund-policy' || path === '/cancellation-policy' || path === '/refunds') {
+      return 'refund_policy';
+    }
+    if (path === '/disclaimer' || path === '/disclaimers') {
+      return 'disclaimer';
+    }
+    if (path === '/privacy' || path === '/privacy-policy') {
+      return 'privacy_policy';
+    }
+    if (path === '/contact' || path === '/contact-us' || path === '/contactus') {
+      return 'contact_us';
+    }
     if (path === '/student' || path === '/workspace') {
       return 'student';
     }
@@ -718,9 +733,13 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   }, []);
 
-  // Sync URL route with activeView
+  // Sync URL route with activeView & reset scroll to top of page
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
 
     const currentPath = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
     const isRegView = activeView === 'registration' || activeView === 'register' || activeView === 'bootcamp_registration';
@@ -736,6 +755,26 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     } else if (activeView === 'participant_login' || activeView === 'login') {
       if (currentPath !== '/login') {
         window.history.pushState({ view: 'login' }, '', '/login');
+      }
+    } else if (activeView === 'terms' || activeView === 'terms_conditions') {
+      if (currentPath !== '/terms-and-conditions' && currentPath !== '/terms') {
+        window.history.pushState({ view: 'terms' }, '', '/terms-and-conditions');
+      }
+    } else if (activeView === 'refund_policy') {
+      if (currentPath !== '/refund-policy' && currentPath !== '/refund') {
+        window.history.pushState({ view: 'refund_policy' }, '', '/refund-policy');
+      }
+    } else if (activeView === 'disclaimer') {
+      if (currentPath !== '/disclaimer' && currentPath !== '/disclaimers') {
+        window.history.pushState({ view: 'disclaimer' }, '', '/disclaimer');
+      }
+    } else if (activeView === 'privacy_policy') {
+      if (currentPath !== '/privacy-policy' && currentPath !== '/privacy') {
+        window.history.pushState({ view: 'privacy_policy' }, '', '/privacy-policy');
+      }
+    } else if (activeView === 'contact_us' || activeView === 'contact') {
+      if (currentPath !== '/contact-us' && currentPath !== '/contact') {
+        window.history.pushState({ view: 'contact_us' }, '', '/contact-us');
       }
     } else if (activeView === 'student') {
       if (currentPath !== '/student') {
@@ -780,6 +819,16 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setActiveView('registration');
       } else if (path === '/login' || path === '/participant_login' || path === '/participant-login') {
         setActiveView('participant_login');
+      } else if (path === '/terms' || path === '/terms-and-conditions' || path === '/terms-conditions') {
+        setActiveView('terms');
+      } else if (path === '/refund' || path === '/refund-policy' || path === '/cancellation-policy' || path === '/refunds') {
+        setActiveView('refund_policy');
+      } else if (path === '/disclaimer' || path === '/disclaimers') {
+        setActiveView('disclaimer');
+      } else if (path === '/privacy' || path === '/privacy-policy') {
+        setActiveView('privacy_policy');
+      } else if (path === '/contact' || path === '/contact-us' || path === '/contactus') {
+        setActiveView('contact_us');
       } else if (path === '/student' || path === '/workspace') {
         setActiveView('student');
       } else if (path === '/institute' || path === '/institutes') {
