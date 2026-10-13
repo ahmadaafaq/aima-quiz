@@ -17,6 +17,12 @@ import { ChatAssistant } from './components/chat/ChatAssistant';
 import { UnifiedRegistrationModal } from './components/public/UnifiedRegistrationModal';
 import { RegistrationPage } from './components/registration/RegistrationPage';
 import { ParticipantLoginPage } from './components/auth/ParticipantLoginPage';
+import { TermsAndConditionsPage } from './components/legal/TermsAndConditionsPage';
+import { RefundPolicyPage } from './components/legal/RefundPolicyPage';
+import { DisclaimerPage } from './components/legal/DisclaimerPage';
+import { PrivacyPolicyPage } from './components/legal/PrivacyPolicyPage';
+import { ContactUsPage } from './components/legal/ContactUsPage';
+import { PolicyConsentModal } from './components/legal/PolicyConsentModal';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 const AppContent: React.FC = () => {
@@ -25,6 +31,14 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     document.title = 'AIMA-ICRC India Case League 2026';
   }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }
+  }, [activeView]);
 
   const renderActiveView = () => {
     switch (activeView) {
@@ -35,6 +49,21 @@ const AppContent: React.FC = () => {
       case 'participant_login':
       case 'login':
         return <ParticipantLoginPage />;
+      case 'terms':
+      case 'terms_conditions':
+        return <TermsAndConditionsPage />;
+      case 'refund_policy':
+      case 'refund':
+        return <RefundPolicyPage />;
+      case 'disclaimer':
+      case 'disclaimers':
+        return <DisclaimerPage />;
+      case 'privacy_policy':
+      case 'privacy':
+        return <PrivacyPolicyPage />;
+      case 'contact_us':
+      case 'contact':
+        return <ContactUsPage />;
       case 'student':
         return <StudentDashboard />;
       case 'institute':
@@ -67,13 +96,25 @@ const AppContent: React.FC = () => {
     activeView === 'register' ||
     activeView === 'bootcamp_registration';
 
+  const isLegalPage =
+    activeView === 'terms' ||
+    activeView === 'terms_conditions' ||
+    activeView === 'refund_policy' ||
+    activeView === 'refund' ||
+    activeView === 'disclaimer' ||
+    activeView === 'disclaimers' ||
+    activeView === 'privacy_policy' ||
+    activeView === 'privacy' ||
+    activeView === 'contact_us' ||
+    activeView === 'contact';
+
   const isPublicOrRegistration =
     activeView === 'public' ||
     isRegistrationPage;
 
-  // On live production (research.aima.in), hide navbar on public / registration pages.
+  // On live production (research.aima.in), hide navbar on public / registration / legal pages.
   // On localhost, preview domains, or when ?demo=true is passed, show the navbar for demonstrating all pages.
-  const hideNavbar = isLiveSite && isPublicOrRegistration;
+  const hideNavbar = isLegalPage || (isLiveSite && isPublicOrRegistration);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-amber-500/20 selection:text-amber-700 dark:selection:text-amber-300">
@@ -99,6 +140,7 @@ const AppContent: React.FC = () => {
       />
       <CertificateVerifier />
       <SupportModal />
+      <PolicyConsentModal />
       {/* {!isRegistrationPage && <ChatAssistant />} */}
 
       {/* Bottom Footer */}

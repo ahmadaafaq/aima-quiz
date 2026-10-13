@@ -30,6 +30,8 @@ import {
   ExternalLink,
   Bot,
   GraduationCap,
+  Phone,
+  FileText,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -59,6 +61,8 @@ export const Navbar: React.FC = () => {
   const fullDemoNavItems = [
     { id: 'public', label: 'Home', fullTitle: 'India Case League 2026 - Home', icon: BookOpen },
     { id: 'registration', label: 'Registration', fullTitle: 'Candidate & Institute Registration', icon: GraduationCap },
+    { id: 'contact_us', label: 'Contact Us', fullTitle: 'AIMA Secretariat & Hub Contacts', icon: Phone },
+    { id: 'participant_login', label: 'Login', fullTitle: 'Participant Portal Login', icon: User },
     { id: 'student', label: 'Workspace', fullTitle: 'Student Participant Workspace & Submissions', icon: LayoutDashboard },
     { id: 'institute', label: 'Institutes', fullTitle: 'Institute Coordinator Portal & Roster', icon: Building2 },
     { id: 'evaluator', label: 'Jury', fullTitle: 'Jury Evaluation & Dual-Blind Scoring Station', icon: Scale },
@@ -70,6 +74,8 @@ export const Navbar: React.FC = () => {
     ? [
         { id: 'public', label: 'Home', fullTitle: 'India Case League 2026 - Home', icon: BookOpen },
         { id: 'registration', label: 'Registration', fullTitle: 'Registration & Participant Onboarding', icon: GraduationCap },
+        { id: 'contact_us', label: 'Contact Us', fullTitle: 'AIMA Secretariat & Hub Contacts', icon: Phone },
+        { id: 'participant_login', label: 'Login', fullTitle: 'Participant Portal Login', icon: User },
       ]
     : fullDemoNavItems;
 

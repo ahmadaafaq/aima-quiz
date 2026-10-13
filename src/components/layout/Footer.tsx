@@ -23,17 +23,27 @@ import { useCompetition } from '../../context/CompetitionContext';
 export const Footer: React.FC = () => {
   const { setActiveVerifierModal, setActiveSupportModal, setActiveView, activeView } = useCompetition();
 
-  const isRegistrationPage = activeView === 'registration' || activeView === 'register' || activeView === 'bootcamp_registration';
+  const isRegistrationPage =
+    activeView === 'registration' || activeView === 'register' || activeView === 'bootcamp_registration';
 
-  // Dedicated Official Footer for Registration View
+  const navigateToLegal = (view: string) => {
+    setActiveView(view);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }
+  };
+
+  // ==============================================================
+  // 1. DEDICATED OFFICIAL FOOTER FOR REGISTRATION VIEW
+  // ==============================================================
   if (isRegistrationPage) {
     return (
       <footer className="bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-300 text-xs border-t border-slate-200 dark:border-slate-800 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-10">
 
-          {/* ============================================================== */}
-          {/* OFFICIAL CONTACT SECTION (MATCHING USER SPECIFICATION)        */}
-          {/* ============================================================== */}
+          {/* OFFICIAL CONTACT SECTION */}
           <div className="bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/80 rounded-3xl p-6 sm:p-8 space-y-5 shadow-sm">
             <div className="border-b border-blue-500/20 dark:border-blue-500/30 pb-2">
               <h3 className="text-xs sm:text-sm font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-2">
@@ -138,8 +148,8 @@ export const Footer: React.FC = () => {
             </div>
           </div>
 
-          {/* 3-Column Schedule, Statutory Terms & Bank Details */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* 4-COLUMN ROW: SCHEDULE, STATUTORY TERMS, BANK DETAILS & POLICIES */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
 
             {/* Col 1: Competition Schedule & Key Dates */}
             <div className="space-y-3">
@@ -231,10 +241,70 @@ export const Footer: React.FC = () => {
               </div>
             </div>
 
+            {/* Col 4: Statutory Legal Policies */}
+            <div className="space-y-3">
+              <h4 className="text-slate-900 dark:text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>Policies &amp; Legal</span>
+              </h4>
+              <ul className="space-y-2 text-xs">
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                  <a
+                    href="/terms-and-conditions"
+                    onClick={(e) => { e.preventDefault(); navigateToLegal('terms'); }}
+                    className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                  >
+                    Terms &amp; Condition
+                  </a>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <a
+                    href="/refund-policy"
+                    onClick={(e) => { e.preventDefault(); navigateToLegal('refund_policy'); }}
+                    className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                  >
+                    Refund Policy
+                  </a>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+                  <a
+                    href="/disclaimer"
+                    onClick={(e) => { e.preventDefault(); navigateToLegal('disclaimer'); }}
+                    className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                  >
+                    Disclaimers
+                  </a>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  <a
+                    href="/privacy-policy"
+                    onClick={(e) => { e.preventDefault(); navigateToLegal('privacy_policy'); }}
+                    className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                  >
+                    Privacy Policy
+                  </a>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0" />
+                  <a
+                    href="/contact-us"
+                    onClick={(e) => { e.preventDefault(); navigateToLegal('contact_us'); }}
+                    className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                  >
+                    Contact Us
+                  </a>
+                </li>
+              </ul>
+            </div>
+
           </div>
 
           {/* Bottom Legal Copyright */}
-          <div className="pt-6 border-t border-slate-200 dark:border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
             <div>
               © 2026 All India Management Association (AIMA) &amp; India Case Research Centre (ICRC). All rights reserved.
             </div>
@@ -257,16 +327,18 @@ export const Footer: React.FC = () => {
     );
   }
 
-  // Standard Website Footer for Competition Overview & Portals
+  // ==============================================================
+  // 2. STANDARD WEBSITE FOOTER (FOR HOMEPAGE & ALL PORTALS)
+  // ==============================================================
   return (
     <footer className="bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 text-xs border-t border-slate-200 dark:border-slate-800 transition-colors">
 
       {/* Main Footer Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
 
-          {/* Col 1: Brand & Accreditation */}
-          <div className="lg:col-span-2 space-y-4">
+          {/* Col 1: Brand & Accreditation (Left side: 4 or 5 columns on desktop) */}
+          <div className="lg:col-span-5 space-y-4">
             <div className="flex items-center gap-3">
               <div className="h-10 px-2.5 rounded-xl bg-white flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-xs shrink-0">
                 <img
@@ -301,72 +373,136 @@ export const Footer: React.FC = () => {
             </div>
           </div>
 
-          {/* Col 2: Competition Stages */}
-          <div>
-            <h4 className="text-slate-900 dark:text-white font-bold text-xs uppercase tracking-wider mb-3">
-              Competition Stages
-            </h4>
-            <ul className="space-y-2 text-xs">
-              <li className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                <span>Round 01–02: Online Quiz &amp; Case Quiz (29 Oct)</span>
-              </li>
-              <li className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                <span>Round 03: Regional Live • South Zone (29 Oct)</span>
-              </li>
-              <li className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
-                <span>Round 04: Grand Finale • New Delhi (18–19 Dec)</span>
-              </li>
-            </ul>
-          </div>
+          {/* Right Side: 2 ON TOP, 2 BELOW IT (2x2 GRID) */}
+          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-7">
 
-          {/* Col 3: Regional Hubs */}
-          <div>
-            <h4 className="text-slate-900 dark:text-white font-bold text-xs uppercase tracking-wider mb-3">
-              Regional Focus
-            </h4>
-            <div className="space-y-2 text-xs">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-400/40">
-                <div className="font-extrabold text-amber-700 dark:text-amber-300 text-xs">
-                  ⭐ SOUTH ZONE HUB (BENGALURU)
-                </div>
-                <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
-                  Host: IFHE Bengaluru
-                </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Regional Live Case Challenge: 29 Oct 2026
-                </div>
-              </div>
+            {/* 1. COMPETITION STAGES (Top Left) */}
+            <div>
+              <h4 className="text-slate-900 dark:text-white font-bold text-xs uppercase tracking-wider mb-3">
+                Competition Stages
+              </h4>
+              <ul className="space-y-2 text-xs">
+                <li className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                  <span>Round 01–02: Online Quiz &amp; Case Quiz (29 Oct)</span>
+                </li>
+                <li className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <span>Round 03: Regional Live • South Zone (29 Oct)</span>
+                </li>
+                <li className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+                  <span>Round 04: Grand Finale • New Delhi (18–19 Dec)</span>
+                </li>
+              </ul>
+            </div>
 
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-1">
-                <strong className="text-slate-700 dark:text-slate-300">Grand Finale Venue:</strong> New Delhi
+            {/* 2. REGIONAL FOCUS (Top Right) */}
+            <div>
+              <h4 className="text-slate-900 dark:text-white font-bold text-xs uppercase tracking-wider mb-3">
+                Regional Focus
+              </h4>
+              <div className="space-y-2 text-xs">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-400/40">
+                  <div className="font-extrabold text-amber-700 dark:text-amber-300 text-xs">
+                    ⭐ SOUTH ZONE HUB (BENGALURU)
+                  </div>
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
+                    Host: IFHE Bengaluru
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Regional Live Case Challenge: 29 Oct 2026
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-1">
+                  <strong className="text-slate-700 dark:text-slate-300">Grand Finale Venue:</strong> New Delhi
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Col 4: Secretarial Contacts & Resources */}
-          <div>
-            <h4 className="text-slate-900 dark:text-white font-bold text-xs uppercase tracking-wider mb-3">
-              Secretariat Desk
-            </h4>
-            <ul className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
-              <li>
-                <strong className="text-slate-800 dark:text-slate-200">National:</strong> Dr. Anuja Pandey (011-47673009 Extn 709)
-              </li>
-              <li>
-                <strong className="text-amber-600 dark:text-amber-400">South Zone:</strong> Dr. Shwetha Kumari (7795075348)
-              </li>
-              <li>
-                <strong className="text-slate-800 dark:text-slate-200">Registration:</strong> Shini James (+91 9971479392)
-              </li>
-              <li className="pt-1 flex items-center gap-2 text-blue-600 dark:text-blue-400 font-semibold">
-                <a href="mailto:caseresearchcentre@aima.in" className="hover:underline">
-                  caseresearchcentre@aima.in
-                </a>
-              </li>
-            </ul>
+            {/* 3. POLICIES & LEGAL (Bottom Left) */}
+            <div>
+              <h4 className="text-slate-900 dark:text-white font-bold text-xs uppercase tracking-wider mb-3">
+                Policies &amp; Legal
+              </h4>
+              <ul className="space-y-2 text-xs">
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                  <a
+                    href="/terms-and-conditions"
+                    onClick={(e) => { e.preventDefault(); navigateToLegal('terms'); }}
+                    className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                  >
+                    Terms &amp; Condition
+                  </a>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <a
+                    href="/refund-policy"
+                    onClick={(e) => { e.preventDefault(); navigateToLegal('refund_policy'); }}
+                    className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                  >
+                    Refund Policy
+                  </a>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+                  <a
+                    href="/disclaimer"
+                    onClick={(e) => { e.preventDefault(); navigateToLegal('disclaimer'); }}
+                    className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                  >
+                    Disclaimers
+                  </a>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  <a
+                    href="/privacy-policy"
+                    onClick={(e) => { e.preventDefault(); navigateToLegal('privacy_policy'); }}
+                    className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                  >
+                    Privacy Policy
+                  </a>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0" />
+                  <a
+                    href="/contact-us"
+                    onClick={(e) => { e.preventDefault(); navigateToLegal('contact_us'); }}
+                    className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                  >
+                    Contact Us
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            {/* 4. SECRETARIAT DESK (Bottom Right) */}
+            <div>
+              <h4 className="text-slate-900 dark:text-white font-bold text-xs uppercase tracking-wider mb-3">
+                Secretariat Desk
+              </h4>
+              <ul className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
+                <li>
+                  <strong className="text-slate-800 dark:text-slate-200">National:</strong> Dr. Anuja Pandey (011-47673009 Extn 709)
+                </li>
+                <li>
+                  <strong className="text-amber-600 dark:text-amber-400">South Zone:</strong> Dr. Shwetha Kumari (7795075348)
+                </li>
+                <li>
+                  <strong className="text-slate-800 dark:text-slate-200">Registration:</strong> Shini James (+91 9971479392)
+                </li>
+                <li className="pt-1 flex items-center gap-2 text-blue-600 dark:text-blue-400 font-semibold">
+                  <a href="mailto:caseresearchcentre@aima.in" className="hover:underline">
+                    caseresearchcentre@aima.in
+                  </a>
+                </li>
+              </ul>
+            </div>
+
           </div>
 
         </div>
@@ -390,4 +526,3 @@ export const Footer: React.FC = () => {
     </footer>
   );
 };
-

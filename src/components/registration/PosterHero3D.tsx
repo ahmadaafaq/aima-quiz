@@ -14,7 +14,10 @@ import {
   Receipt,
   Sun,
   Moon,
-  Award
+  Award,
+  LogIn,
+  Phone,
+  FileText,
 } from 'lucide-react';
 
 interface PosterHero3DProps {
@@ -127,31 +130,57 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
             <button
               type="button"
               onClick={() => setActiveView('public')}
-              className="h-9 px-3.5 rounded-xl bg-white dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 hover:border-blue-400 dark:hover:border-blue-500 text-slate-800 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs text-xs font-bold shrink-0"
+              className="h-9 px-3 rounded-xl bg-white dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 hover:border-blue-400 dark:hover:border-blue-500 text-slate-800 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs text-xs font-bold shrink-0"
               title="Return to Home"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Home</span>
             </button>
 
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+            <button
+              type="button"
+              onClick={() => setActiveView('participant_login')}
+              className="h-9 px-3 rounded-xl bg-white dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 hover:border-blue-400 text-slate-800 dark:text-slate-200 hover:text-blue-600 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs text-xs font-bold shrink-0"
+              title="Participant Login (/login)"
+            >
+              <LogIn className="w-3.5 h-3.5 text-blue-500" />
+              <span>Login</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveView('contact_us')}
+              className="h-9 px-3 rounded-xl bg-white dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 hover:border-blue-400 text-slate-800 dark:text-slate-200 hover:text-blue-600 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs text-xs font-bold shrink-0"
+              title="Secretariat Contact Details (/contact-us)"
+            >
+              <Phone className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Contact</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveView('terms')}
+              className="h-9 px-3 rounded-xl bg-white dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 hover:border-blue-400 text-slate-800 dark:text-slate-200 hover:text-blue-600 transition-all hidden sm:flex items-center gap-1.5 cursor-pointer shadow-xs text-xs font-bold shrink-0"
+              title="Terms & Policies (/terms-and-conditions)"
+            >
+              <FileText className="w-3.5 h-3.5 text-amber-500" />
+              <span>Policies</span>
+            </button>
+
+            <span className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
               <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
               Registrations Open
-            </span>
-            <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
-              National Level
             </span>
 
             {/* Dark / Light Mode Toggle: Right Top Corner */}
             <button
               type="button"
               onClick={toggleTheme}
-              className="h-9 px-3.5 rounded-xl bg-white dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-500 text-slate-800 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white transition-all flex items-center gap-2 cursor-pointer shadow-xs shrink-0"
+              className="h-9 px-3 rounded-xl bg-white dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-500 text-slate-800 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white transition-all flex items-center gap-2 cursor-pointer shadow-xs shrink-0"
               title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
               aria-label="Toggle Theme Mode"
             >
