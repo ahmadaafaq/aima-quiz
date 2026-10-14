@@ -590,7 +590,7 @@ export interface CSRBootcampRegistration {
     mobile: string;
     extension?: string;
   };
-  tierId: '1_3' | '4_7' | '8_plus' | 'inst_5' | 'inst_10';
+  tierId: '1_3' | '4_7' | '8_plus' | 'inst_5' | 'inst_10' | 'early_bird_free' | 'standard_per_person';
   tierLabel: string;
   participantCount: number;
   ratePerPersonOrPackage: number;
@@ -606,7 +606,7 @@ export interface CSRBootcampRegistration {
   dpdpConsentAccepted: boolean;
   dpdpConsentTimestamp?: string;
   paymentStatus: 'PAID' | 'PENDING_INVOICE';
-  paymentMethod?: 'UPI' | 'Credit Card' | 'Debit Card' | 'Net Banking' | 'PO/NEFT_Pending';
+  paymentMethod?: 'UPI' | 'Credit Card' | 'Debit Card' | 'Net Banking' | 'PO/NEFT_Pending' | 'EARLY_BIRD_COMPLIMENTARY';
   transactionId?: string;
   invoiceNumber: string;
   paidAt?: string;
