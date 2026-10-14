@@ -52,21 +52,13 @@ import {
   CheckCheck
 } from 'lucide-react';
 
-// Flat participation fee as per brochure: ₹200 per participant
-export const PARTICIPATION_FEE_PER_PERSON = 200;
-
-export const FEE_TIERS = [
-  {
-    id: 'per_student',
-    label: 'Standard Registration',
-    rateExclGst: 200,
-    rateInclGst: 200,
-    isPackage: false,
-    minCount: 1,
-    maxCount: 4,
-    subLabel: '₹200 per student participant',
-  },
-];
+import {
+  IS_EARLY_BIRD_FREE,
+  PARTICIPATION_FEE_PER_PERSON,
+  EARLY_BIRD_FEE_PER_PERSON,
+  FEE_TIERS,
+} from '../../data/feeConfig';
+export { IS_EARLY_BIRD_FREE, PARTICIPATION_FEE_PER_PERSON, EARLY_BIRD_FEE_PER_PERSON, FEE_TIERS };
 
 interface TeamMemberInput {
   id: string;
@@ -269,13 +261,23 @@ export const RegistrationPage: React.FC = () => {
     return count || 1;
   }, [regMode, isOnboardingTeam, teamMembers.length, instituteTeams]);
 
-  // Simple ₹200/participant fee calculation
+  // Participation fee calculation with Early Bird promotional support
   const feeCalculation = useMemo(() => {
-    const total = PARTICIPATION_FEE_PER_PERSON * totalHeadcount;
+    const standardRate = PARTICIPATION_FEE_PER_PERSON;
+    const standardTotal = standardRate * totalHeadcount;
+    const effectiveRate = IS_EARLY_BIRD_FREE ? EARLY_BIRD_FEE_PER_PERSON : standardRate;
+    const total = IS_EARLY_BIRD_FREE ? 0 : standardTotal;
+    const discountAmount = IS_EARLY_BIRD_FREE ? standardTotal : 0;
+
     return {
       participantCount: totalHeadcount,
-      ratePerPerson: PARTICIPATION_FEE_PER_PERSON,
+      standardRate,
+      effectiveRate,
+      ratePerPerson: effectiveRate,
+      standardTotal,
+      discountAmount,
       total,
+      isEarlyBird: IS_EARLY_BIRD_FREE,
     };
   }, [totalHeadcount]);
 
@@ -853,8 +855,8 @@ export const RegistrationPage: React.FC = () => {
         mobile: coordPhone,
         designation: regMode === 'individual' ? 'Participant / Leader' : 'Faculty Coordinator',
       },
-      tierId: '1_3',
-      tierLabel: `₹${PARTICIPATION_FEE_PER_PERSON} per participant`,
+      tierId: IS_EARLY_BIRD_FREE ? 'early_bird_free' : 'standard_per_person',
+      tierLabel: IS_EARLY_BIRD_FREE ? 'Early Bird Complimentary (₹0)' : `₹${PARTICIPATION_FEE_PER_PERSON} per participant`,
       participantCount: feeCalculation.participantCount,
       ratePerPersonOrPackage: feeCalculation.ratePerPerson,
       subtotalExclGst: feeCalculation.total,
@@ -867,9 +869,9 @@ export const RegistrationPage: React.FC = () => {
       managementAuthorisationAccepted: true,
       termsAccepted: true,
       dpdpConsentAccepted: dpdpConsentAccepted,
-      paymentStatus: 'PENDING_INVOICE',
-      paymentMethod: 'PO/NEFT_Pending',
-      transactionId: undefined,
+      paymentStatus: IS_EARLY_BIRD_FREE ? 'PAID' : 'PENDING_INVOICE',
+      paymentMethod: IS_EARLY_BIRD_FREE ? 'EARLY_BIRD_COMPLIMENTARY' : 'PO/NEFT_Pending',
+      transactionId: IS_EARLY_BIRD_FREE ? txnNumber : undefined,
       invoiceNumber: invNumber.startsWith('INV-') ? invNumber.replace('INV-', 'PINV-') : invNumber,
     };
 
@@ -2208,42 +2210,109 @@ export const RegistrationPage: React.FC = () => {
                   </span>
                 </div>
 
-                {/* Flat ₹200 per participant fee display */}
-                <div className="p-6 rounded-2xl bg-gradient-to-br from-blue-50/80 to-indigo-50/50 dark:from-blue-950/30 dark:to-indigo-950/20 border-2 border-blue-600/80 space-y-4">
+                {/* Participation Fee Display Box (Controlled cleanly by IS_EARLY_BIRD_FREE toggle) */}
+                <div
+                  className={`p-6 rounded-2xl border-2 space-y-4 transition-all ${
+                    IS_EARLY_BIRD_FREE
+                      ? 'bg-gradient-to-br from-emerald-50/90 via-teal-50/40 to-blue-50/60 dark:from-emerald-950/30 dark:via-teal-950/20 dark:to-blue-950/20 border-emerald-500/80 shadow-md shadow-emerald-500/10'
+                      : 'bg-gradient-to-br from-blue-50/80 to-indigo-50/50 dark:from-blue-950/30 dark:to-indigo-950/20 border-blue-600/80'
+                  }`}
+                >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block">
-                        Participation Fee – India Case League 2026
-                      </span>
-                      <h4 className="text-xl font-black text-slate-900 dark:text-white">
-                        ₹200 per Participant
-                      </h4>
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                          Participation Fee – India Case League 2026
+                        </span>
+                        {IS_EARLY_BIRD_FREE && (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black text-[9px] uppercase tracking-wider shadow-xs">
+                            Early Bird Free • 100% Free
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        {IS_EARLY_BIRD_FREE ? (
+                          <>
+                            <h4 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                              <span>₹0 (Free)</span>
+                            </h4>
+                            <span className="line-through text-slate-400 dark:text-slate-500 text-sm font-semibold">
+                              ₹{PARTICIPATION_FEE_PER_PERSON} per Participant
+                            </span>
+                          </>
+                        ) : (
+                          <h4 className="text-xl font-black text-slate-900 dark:text-white">
+                            ₹{PARTICIPATION_FEE_PER_PERSON} per Participant
+                          </h4>
+                        )}
+                      </div>
+
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                         {regMode === 'individual' && !isOnboardingTeam
                           ? 'Individual registration – 1 participant'
                           : `${totalHeadcount} participant${totalHeadcount > 1 ? 's' : ''} registered`}
+                        {IS_EARLY_BIRD_FREE && ' • Complimentary Early Bird Access'}
                       </p>
                     </div>
+
                     <div className="text-right">
                       <span className="text-xs text-slate-500 block">Total Amount</span>
-                      <span className="text-3xl font-black text-blue-600 dark:text-blue-400">
-                        ₹{feeCalculation.total.toLocaleString('en-IN')}
-                      </span>
+                      {IS_EARLY_BIRD_FREE ? (
+                        <div className="space-y-0.5">
+                          <span className="line-through text-slate-400 dark:text-slate-500 text-xs block font-semibold">
+                            ₹{feeCalculation.standardTotal.toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
+                            ₹0
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-3xl font-black text-blue-600 dark:text-blue-400">
+                          ₹{feeCalculation.total.toLocaleString('en-IN')}
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-blue-200 dark:border-blue-900 text-xs space-y-2">
-                    <div className="flex justify-between">
+                  <div className="p-4 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-xs space-y-2">
+                    <div className="flex justify-between items-center">
                       <span className="text-slate-600 dark:text-slate-400">Rate per Participant:</span>
-                      <span className="font-mono font-bold text-slate-900 dark:text-white">₹{PARTICIPATION_FEE_PER_PERSON} / person</span>
+                      <div className="flex items-center gap-1.5 font-mono">
+                        {IS_EARLY_BIRD_FREE ? (
+                          <>
+                            <span className="line-through text-slate-400 text-[11px]">
+                              ₹{PARTICIPATION_FEE_PER_PERSON}
+                            </span>
+                            <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                              ₹0 / person (Free)
+                            </span>
+                          </>
+                        ) : (
+                          <span className="font-bold text-slate-900 dark:text-white">
+                            ₹{PARTICIPATION_FEE_PER_PERSON} / person
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex justify-between">
+
+                    <div className="flex justify-between items-center">
                       <span className="text-slate-600 dark:text-slate-400">Number of Participants:</span>
                       <span className="font-mono font-bold text-slate-900 dark:text-white">{totalHeadcount}</span>
                     </div>
-                    <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between font-bold text-sm text-slate-900 dark:text-white">
+
+                    {IS_EARLY_BIRD_FREE && (
+                      <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 font-semibold">
+                        <span>Early Bird Offer Discount:</span>
+                        <span className="font-mono font-bold">-₹{feeCalculation.standardTotal.toLocaleString('en-IN')} (100% Off)</span>
+                      </div>
+                    )}
+
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center font-bold text-sm text-slate-900 dark:text-white">
                       <span>Total Payable:</span>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-mono font-black text-base">₹{feeCalculation.total.toLocaleString('en-IN')}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-mono font-black text-base">
+                        {IS_EARLY_BIRD_FREE ? '₹0 (Free)' : `₹${feeCalculation.total.toLocaleString('en-IN')}`}
+                      </span>
                     </div>
                   </div>
                 </div>

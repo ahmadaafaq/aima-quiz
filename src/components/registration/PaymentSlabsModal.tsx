@@ -10,7 +10,7 @@ import {
   Sparkles,
   ArrowRight
 } from 'lucide-react';
-import { FEE_TIERS } from './RegistrationPage';
+import { FEE_TIERS } from '../../data/feeConfig';
 
 interface PaymentSlabsModalProps {
   isOpen: boolean;
