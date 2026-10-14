@@ -53,6 +53,15 @@
   }
 }
 
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -72,6 +81,10 @@
 
 .animate-pulse-glow {
   animation: pulseGlow 3s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 3.5s ease-in-out infinite;
 }
 
 .animate-shimmer {
@@ -109,4 +122,3 @@
     display: none !important;
   }
 }
-

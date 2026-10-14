@@ -433,11 +433,11 @@ export const RegistrationPage: React.FC = () => {
       prev.map((t) =>
         t.id === teamId
           ? {
-              ...t,
-              members: t.members.map((m) =>
-                m.id === memberId ? { ...m, [field]: value } : m
-              ),
-            }
+            ...t,
+            members: t.members.map((m) =>
+              m.id === memberId ? { ...m, [field]: value } : m
+            ),
+          }
           : t
       )
     );
@@ -922,12 +922,12 @@ export const RegistrationPage: React.FC = () => {
       setActiveCreatedRegistration((prev) =>
         prev
           ? {
-              ...prev,
-              paymentStatus: 'PAID',
-              paymentMethod: paymentMethod as any,
-              transactionId,
-              invoiceNumber: prev.invoiceNumber.replace('PINV-', 'INV-'),
-            }
+            ...prev,
+            paymentStatus: 'PAID',
+            paymentMethod: paymentMethod as any,
+            transactionId,
+            invoiceNumber: prev.invoiceNumber.replace('PINV-', 'INV-'),
+          }
           : null
       );
     }
@@ -958,21 +958,30 @@ export const RegistrationPage: React.FC = () => {
       {/* ============================================================== */}
       <PosterHero3D
         onScrollToForm={handleScrollToForm}
-        onOpenFeeModal={() => {}}
+        onOpenFeeModal={() => { }}
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-        
+
         {/* ============================================================== */}
         {/* FORM CONTAINER ANCHOR & STEP INDICATOR                         */}
         {/* ============================================================== */}
         <div ref={formSectionRef} className="pt-2 space-y-6">
           <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
             <div className="space-y-1.5 text-center md:text-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold tracking-wider uppercase">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>National Candidate Registration Portal</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold tracking-wider uppercase">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span>National Candidate Registration Portal</span>
+                </div>
+
+                {/* Early Bird Free Tag */}
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
+                  Early Bird Registration Free
+                </span>
               </div>
+
               <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
                 Register for India Case League 2026
               </h2>
@@ -981,80 +990,108 @@ export const RegistrationPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Participation Fee Badge */}
-            <div className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700/60 shrink-0">
+            {/* Participation Fee Badge (Keeping Participation Fee, ₹200 / person, Flat fee, all students) */}
+            <div className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-emerald-400/60 dark:border-emerald-500/60 shadow-xs shrink-0">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 text-slate-950 flex items-center justify-center font-black text-sm shadow-xs">
                 ₹
               </div>
               <div className="text-left">
-                <span className="block text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                  Registration Fee
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="block text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    Participation Fee
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded bg-emerald-500 text-slate-950 text-[9px] font-black uppercase">
+                    Early Bird Free
+                  </span>
+                </div>
                 <span className="block text-xs font-extrabold text-slate-900 dark:text-white">
-                  ₹200 per Participant
+                  ₹200 / person
+                </span>
+                <span className="block text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                  Flat fee, all students
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Stepper Navigation */}
-            <div className="pt-4 flex items-center justify-center max-w-lg mx-auto w-full px-2">
-              <div className="flex items-center w-full justify-between relative">
-                <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-slate-200 dark:bg-slate-800 -z-1" />
-
-                {/* Step 1 */}
-                <div className="flex flex-col items-center gap-1.5 z-10 bg-slate-50 dark:bg-slate-950 px-1 sm:px-2">
-                  <div
-                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${
-                      currentStep === 1
-                        ? 'bg-blue-600 text-white ring-4 ring-blue-500/20 shadow-blue-500/30'
-                        : currentStep > 1
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-                    }`}
-                  >
-                    {currentStep > 1 ? <Check className="w-4 h-4 stroke-[3]" /> : '1'}
-                  </div>
-                  <span className="text-[10px] sm:text-[11px] font-bold text-slate-700 dark:text-slate-300 text-center">
-                    Candidate Info
+          {/* Early Bird Highlighted Message Banner */}
+          <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-amber-500/15 border-2 border-emerald-400/80 dark:border-emerald-500/60 flex items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+              </span>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs sm:text-sm font-black uppercase tracking-wide text-emerald-950 dark:text-emerald-200">
+                    Early Bird Registration Free
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black text-[9px] sm:text-[10px] uppercase tracking-wider shadow-xs">
+                    100% Free • Limited Time Offer
                   </span>
                 </div>
-
-                {/* Step 2 */}
-                <div className="flex flex-col items-center gap-1.5 z-10 bg-slate-50 dark:bg-slate-950 px-1 sm:px-2">
-                  <div
-                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${
-                      currentStep === 2
-                        ? 'bg-blue-600 text-white ring-4 ring-blue-500/20 shadow-blue-500/30'
-                        : currentStep > 2
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-                    }`}
-                  >
-                    {currentStep > 2 ? <Check className="w-4 h-4 stroke-[3]" /> : '2'}
-                  </div>
-                  <span className="text-[10px] sm:text-[11px] font-bold text-slate-700 dark:text-slate-300 text-center">
-                    Review &amp; Fee
-                  </span>
-                </div>
-
-                {/* Step 3 & 4 */}
-                <div className="flex flex-col items-center gap-1.5 z-10 bg-slate-50 dark:bg-slate-950 px-1 sm:px-2">
-                  <div
-                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${
-                      currentStep >= 3
-                        ? 'bg-emerald-600 text-white ring-4 ring-emerald-500/20 shadow-emerald-500/30'
-                        : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-                    }`}
-                  >
-                    {currentStep === 4 ? <Check className="w-4 h-4 stroke-[3]" /> : '3'}
-                  </div>
-                  <span className="text-[10px] sm:text-[11px] font-bold text-slate-700 dark:text-slate-300 text-center">
-                    Payment &amp; Quiz
-                  </span>
-                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
+                  Participation Fee: <strong className="text-slate-800 dark:text-slate-200">₹200 / person</strong> (Flat fee, all students) - Early Bird participants receive 100% complimentary entry.
+                </p>
               </div>
             </div>
+          </div>
+
+          {/* Stepper Navigation */}
+          <div className="pt-4 flex items-center justify-center max-w-lg mx-auto w-full px-2">
+            <div className="flex items-center w-full justify-between relative">
+              <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-slate-200 dark:bg-slate-800 -z-1" />
+
+              {/* Step 1 */}
+              <div className="flex flex-col items-center gap-1.5 z-10 bg-slate-50 dark:bg-slate-950 px-1 sm:px-2">
+                <div
+                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${currentStep === 1
+                      ? 'bg-blue-600 text-white ring-4 ring-blue-500/20 shadow-blue-500/30'
+                      : currentStep > 1
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                    }`}
+                >
+                  {currentStep > 1 ? <Check className="w-4 h-4 stroke-[3]" /> : '1'}
+                </div>
+                <span className="text-[10px] sm:text-[11px] font-bold text-slate-700 dark:text-slate-300 text-center">
+                  Candidate Info
+                </span>
+              </div>
+
+              {/* Step 2 */}
+              <div className="flex flex-col items-center gap-1.5 z-10 bg-slate-50 dark:bg-slate-950 px-1 sm:px-2">
+                <div
+                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${currentStep === 2
+                      ? 'bg-blue-600 text-white ring-4 ring-blue-500/20 shadow-blue-500/30'
+                      : currentStep > 2
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                    }`}
+                >
+                  {currentStep > 2 ? <Check className="w-4 h-4 stroke-[3]" /> : '2'}
+                </div>
+                <span className="text-[10px] sm:text-[11px] font-bold text-slate-700 dark:text-slate-300 text-center">
+                  Review &amp; Fee
+                </span>
+              </div>
+
+              {/* Step 3 & 4 */}
+              <div className="flex flex-col items-center gap-1.5 z-10 bg-slate-50 dark:bg-slate-950 px-1 sm:px-2">
+                <div
+                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${currentStep >= 3
+                      ? 'bg-emerald-600 text-white ring-4 ring-emerald-500/20 shadow-emerald-500/30'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                    }`}
+                >
+                  {currentStep === 4 ? <Check className="w-4 h-4 stroke-[3]" /> : '3'}
+                </div>
+                <span className="text-[10px] sm:text-[11px] font-bold text-slate-700 dark:text-slate-300 text-center">
+                  Payment &amp; Quiz
+                </span>
+              </div>
+            </div>
+          </div>
 
           {/* ============================================================== */}
           {/* STEP 1: PARTICIPANT / INSTITUTE FORM                           */}
@@ -1070,11 +1107,10 @@ export const RegistrationPage: React.FC = () => {
                       setRegMode('individual');
                       setValidationError('');
                     }}
-                    className={`flex-1 py-3 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                      regMode === 'individual'
+                    className={`flex-1 py-3 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${regMode === 'individual'
                         ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25'
                         : 'text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
+                      }`}
                   >
                     <UserCheck className="w-4 h-4 shrink-0" />
                     <span>Individual Participant</span>
@@ -1085,11 +1121,10 @@ export const RegistrationPage: React.FC = () => {
                       setRegMode('institute');
                       setValidationError('');
                     }}
-                    className={`flex-1 py-3 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                      regMode === 'institute'
+                    className={`flex-1 py-3 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${regMode === 'institute'
                         ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25'
                         : 'text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
+                      }`}
                   >
                     <Building2 className="w-4 h-4 shrink-0" />
                     <span>Institute Registration</span>
@@ -1304,25 +1339,24 @@ export const RegistrationPage: React.FC = () => {
                             <div className="flex items-center gap-1.5 mt-2">
                               <div className="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden flex">
                                 <div
-                                  className={`h-full transition-all ${
-                                    passwordStrength <= 1
+                                  className={`h-full transition-all ${passwordStrength <= 1
                                       ? 'w-1/4 bg-red-500'
                                       : passwordStrength === 2
-                                      ? 'w-2/4 bg-amber-500'
-                                      : passwordStrength === 3
-                                      ? 'w-3/4 bg-blue-500'
-                                      : 'w-full bg-emerald-500'
-                                  }`}
+                                        ? 'w-2/4 bg-amber-500'
+                                        : passwordStrength === 3
+                                          ? 'w-3/4 bg-blue-500'
+                                          : 'w-full bg-emerald-500'
+                                    }`}
                                 />
                               </div>
                               <span className="text-[10px] text-slate-400 font-medium">
                                 {passwordStrength <= 1
                                   ? 'Weak'
                                   : passwordStrength === 2
-                                  ? 'Medium'
-                                  : passwordStrength === 3
-                                  ? 'Good'
-                                  : 'Strong'}
+                                    ? 'Medium'
+                                    : passwordStrength === 3
+                                      ? 'Good'
+                                      : 'Strong'}
                               </span>
                             </div>
                           )}
@@ -1346,11 +1380,10 @@ export const RegistrationPage: React.FC = () => {
                               value={confirmPassword}
                               onChange={(e) => setConfirmPassword(e.target.value)}
                               placeholder="Re-enter password"
-                              className={`w-full pr-10 px-3.5 py-2.5 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono ${
-                                confirmPassword.length > 0 && !passwordsMatch
+                              className={`w-full pr-10 px-3.5 py-2.5 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono ${confirmPassword.length > 0 && !passwordsMatch
                                   ? 'border-red-400 focus:ring-red-400'
                                   : 'border-slate-300 dark:border-slate-700'
-                              }`}
+                                }`}
                               required
                             />
                             <button
@@ -1758,11 +1791,10 @@ export const RegistrationPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setInstituteEntryTab('form')}
-                            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                              instituteEntryTab === 'form'
+                            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${instituteEntryTab === 'form'
                                 ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
                                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                            }`}
+                              }`}
                           >
                             <Users className="w-3.5 h-3.5" />
                             <span>Form Entry</span>
@@ -1770,11 +1802,10 @@ export const RegistrationPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setInstituteEntryTab('excel')}
-                            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                              instituteEntryTab === 'excel'
+                            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${instituteEntryTab === 'excel'
                                 ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
                                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                            }`}
+                              }`}
                           >
                             <FileSpreadsheet className="w-3.5 h-3.5" />
                             <span>Excel Import</span>
@@ -1839,11 +1870,10 @@ export const RegistrationPage: React.FC = () => {
                         {/* Excel Feedback */}
                         {excelUploadFeedback && (
                           <div
-                            className={`p-4 rounded-xl text-xs flex items-center gap-2.5 ${
-                              excelUploadFeedback.type === 'success'
+                            className={`p-4 rounded-xl text-xs flex items-center gap-2.5 ${excelUploadFeedback.type === 'success'
                                 ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
                                 : 'bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800'
-                            }`}
+                              }`}
                           >
                             {excelUploadFeedback.type === 'success' ? (
                               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -1887,11 +1917,10 @@ export const RegistrationPage: React.FC = () => {
                             <div className="flex items-center gap-2">
                               {/* Member count indicator */}
                               <span
-                                className={`px-3 py-1 rounded-xl text-xs font-bold border ${
-                                  team.members.length >= 4
+                                className={`px-3 py-1 rounded-xl text-xs font-bold border ${team.members.length >= 4
                                     ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
                                     : 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
-                                }`}
+                                  }`}
                               >
                                 {team.members.length} / 4 Members {team.members.length >= 4 && '(Max)'}
                               </span>
@@ -2324,11 +2353,10 @@ export const RegistrationPage: React.FC = () => {
                   <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-1">
                     <span className="text-slate-400 text-[11px] block">Payment Status</span>
                     <span
-                      className={`font-bold text-sm ${
-                        activeCreatedRegistration.paymentStatus === 'PAID'
+                      className={`font-bold text-sm ${activeCreatedRegistration.paymentStatus === 'PAID'
                           ? 'text-emerald-600 dark:text-emerald-400'
                           : 'text-amber-600 dark:text-amber-400'
-                      }`}
+                        }`}
                     >
                       {activeCreatedRegistration.paymentStatus === 'PAID' ? 'PAID & CLEARED' : 'PROFORMA / PENDING'}
                     </span>

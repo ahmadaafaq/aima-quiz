@@ -60,12 +60,12 @@ export const PublicHome: React.FC = () => {
 
   return (
     <div className="space-y-16 pb-24 animate-in fade-in duration-300">
-      
+
       {/* ------------------------------------------------------------- */}
       {/* 1. HERO SECTION WITH 3D CANVAS & SPOTLIGHT                    */}
       {/* ------------------------------------------------------------- */}
       <section className="relative overflow-hidden bg-slate-950 text-white pt-14 pb-20 border-b border-slate-800/80">
-        
+
         {/* Aceternity Spotlight Beams */}
         <AceternitySpotlight
           className="-top-40 left-0 md:left-40 md:-top-20"
@@ -126,7 +126,7 @@ export const PublicHome: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            
+
             {/* Left Column */}
             <div className="lg:col-span-7 space-y-6 text-center lg:text-left z-10">
 
@@ -148,7 +148,7 @@ export const PublicHome: React.FC = () => {
 
               {/* Verbatim Description from Documents */}
               <p className="text-slate-300 text-xs sm:text-sm leading-relaxed max-w-2xl mx-auto lg:mx-0">
-                AIMA–India Case Research Centre (ICRC) invites students from institutions across India to participate in the India Case League 2026, a national platform to test their ability to solve real business and policy challenges.
+                AIMA-India Case Research Centre (ICRC) invites students from institutions across India to participate in the India Case League 2026, a national platform to test their ability to solve real business and policy challenges.
               </p>
 
               {/* South Zone Regional Highlight Callout */}
@@ -186,10 +186,14 @@ export const PublicHome: React.FC = () => {
                   <div className="text-sm font-extrabold text-white">18–19 Dec 2026</div>
                   <div className="text-purple-400 text-[10px]">New Delhi</div>
                 </div>
-                <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-center">
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-0.5">Registration Fee</p>
-                  <div className="text-sm font-extrabold text-emerald-400">₹200</div>
-                  <div className="text-slate-400 text-[10px]">Per Student</div>
+                <div className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/50 text-center relative overflow-hidden">
+                  <div className="absolute top-0 right-0 bg-emerald-400 text-slate-950 text-[9px] font-black px-1.5 py-0.5 rounded-bl">FREE</div>
+                  <p className="text-emerald-300 text-[10px] font-bold uppercase tracking-wider mb-0.5">Registration Fee</p>
+                  <div className="text-sm font-extrabold text-emerald-400 flex items-center justify-center gap-1.5">
+                    <span className="line-through text-slate-400 text-xs font-normal">₹200</span>
+                    <span>₹0 (Free)</span>
+                  </div>
+                  <div className="text-emerald-200 text-[10px]">Early Bird Offer</div>
                 </div>
               </div>
 
@@ -229,8 +233,40 @@ export const PublicHome: React.FC = () => {
               <div className="absolute inset-0 bg-radial from-sky-500/15 via-indigo-500/10 to-transparent blur-3xl pointer-events-none scale-125" />
               <ThreeHeroCanvas className="w-full h-full" />
 
-              {/* Floating Verified Callouts */}
-              <div className="absolute top-3 right-3 p-3 rounded-2xl bg-slate-900/90 border border-amber-500/50 backdrop-blur-md shadow-lg hidden sm:block pointer-events-none z-10 text-left">
+              {/* 1. Highlighted & Floating Early Bird Badge (Separate & Distinct) */}
+              <div className="absolute -top-4 sm:-top-6 right-0 sm:right-2 z-20 animate-float">
+                <button
+                  type="button"
+                  onClick={() => setActiveView('registration')}
+                  className="group flex items-center gap-3 px-4 py-2 sm:px-4.5 sm:py-2.5 rounded-2xl bg-slate-900/95 hover:bg-slate-900 border-2 border-emerald-400 shadow-[0_0_30px_rgba(52,211,153,0.5),0_10px_25px_rgba(0,0,0,0.8)] backdrop-blur-xl hover:scale-105 hover:border-emerald-300 transition-all duration-300 cursor-pointer text-left"
+                  title="Click to Register - Early Bird Free Entry"
+                >
+                  <span className="relative flex h-3 w-3 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-400 shadow-[0_0_10px_#34d399]" />
+                  </span>
+
+                  <Sparkles className="w-4 h-4 text-amber-300 animate-pulse shrink-0" />
+
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-white drop-shadow-sm">
+                        Early Bird Registration Free
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-300 text-slate-950 font-black text-[10px] uppercase tracking-wider shadow-md">
+                        100% Free
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-emerald-300 font-medium mt-0.5 flex items-center gap-1">
+                      <span>Limited Period Offer • ₹0 Fee</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-emerald-300 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {/* 2. South Zone Hub Badge (Separate Callout) */}
+              <div className="absolute top-16 sm:top-20 right-0 sm:right-2 p-2.5 sm:p-3 rounded-2xl bg-slate-900/90 border border-amber-500/50 backdrop-blur-md shadow-lg pointer-events-none z-10 text-left">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                   <span className="text-[10px] font-bold text-amber-300 uppercase">South Zone Hub</span>
@@ -238,7 +274,8 @@ export const PublicHome: React.FC = () => {
                 <div className="text-xs font-bold text-white mt-0.5">29 October 2026 • Bengaluru</div>
               </div>
 
-              <div className="absolute bottom-3 left-3 p-3 rounded-2xl bg-slate-900/90 border border-slate-800/80 backdrop-blur-md shadow-lg hidden sm:block pointer-events-none z-10 text-left">
+              {/* 3. National Grand Finale Badge (Separate Callout) */}
+              <div className="absolute bottom-28 sm:bottom-36 left-2 sm:left-4 p-2.5 sm:p-3 rounded-2xl bg-slate-900/90 border border-slate-800/80 backdrop-blur-md shadow-lg pointer-events-none z-10 text-left">
                 <div className="flex items-center gap-1.5">
                   <Trophy className="w-3.5 h-3.5 text-blue-400" />
                   <span className="text-[10px] font-bold text-blue-300 uppercase">National Grand Finale</span>
@@ -323,7 +360,7 @@ export const PublicHome: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          
+
           {/* Round 01-02 Card */}
           <CardContainer className="w-full">
             <div className="w-full p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-blue-500/40 transition-all space-y-4">
