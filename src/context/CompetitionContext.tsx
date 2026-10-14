@@ -731,12 +731,18 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       document.documentElement.classList.remove('dark');
       setTheme('light');
     }
+    if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
   }, []);
 
   // Sync URL route with activeView & reset scroll to top of page
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
