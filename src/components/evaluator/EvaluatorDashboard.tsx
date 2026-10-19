@@ -167,9 +167,9 @@ export const EvaluatorDashboard: React.FC = () => {
   const filteredSubmissions = allSubs.filter(sub => {
     const isGraded = evaluations.some(e => e.submissionId === sub.id && e.evaluatorId === currentUser.id);
     const matchesSearch =
-      sub.anonymizedCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sub.caseTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sub.deckFileName.toLowerCase().includes(searchQuery.toLowerCase());
+      (sub.anonymizedCode || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (sub.caseTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (sub.deckFileName || '').toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchesSearch) return false;
 
