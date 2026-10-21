@@ -909,7 +909,7 @@ export const RegistrationPage: React.FC = () => {
         customerName: coordName || 'Candidate',
         customerEmail: coordEmail || 'candidate@aima.in',
         customerPhone: coordPhone || '',
-        purpose: 'CASE_LEAGUE_REGISTRATION',
+        purpose: 'REGISTRATION_FEE',
       });
       return;
     }
