@@ -12,6 +12,8 @@ import {
   saveRegistrationToSupabase,
   updateRegistrationPaymentInSupabase,
   createParticipantAccounts,
+  provisionUsersViaApi,
+  generateDefaultPassword,
 } from '../../lib/supabase';
 import {
   Building2,
@@ -893,6 +895,45 @@ export const RegistrationPage: React.FC = () => {
     }).catch((err) => {
       console.warn('Participant account creation failed (non-critical):', err);
     });
+
+    // Secure Supabase Auth User Provisioning (auth.users + public.profiles)
+    try {
+      const nomineeUsers = (result.registration.nominees || []).map((nom) => ({
+        email: nom.email,
+        password: nom.password || generateDefaultPassword(nom.name, nom.mobile || ''),
+        name: nom.name,
+        mobile: nom.mobile,
+        organizationName: result.registration.organizationName,
+        registrationNumber: result.registration.registrationNumber,
+        program: nom.program,
+        semester: nom.semester,
+        enrolmentNumber: nom.enrolmentNumber,
+        isTeamLeader: !!nom.isTeamLeader,
+        role: nom.isTeamLeader ? 'team_leader' : 'student',
+      }));
+
+      if (result.registration.track === 'institutional' && result.registration.coordinator?.email) {
+        nomineeUsers.push({
+          email: result.registration.coordinator.email,
+          password: generateDefaultPassword(result.registration.coordinator.name || 'Coordinator', result.registration.coordinator.mobile || '2026'),
+          name: result.registration.coordinator.name || 'Institute Coordinator',
+          mobile: result.registration.coordinator.mobile,
+          organizationName: result.registration.organizationName,
+          registrationNumber: result.registration.registrationNumber,
+          isTeamLeader: false,
+          role: 'institute_coordinator',
+        });
+      }
+
+      provisionUsersViaApi({
+        registrationNumber: result.registration.registrationNumber,
+        users: nomineeUsers,
+      }).catch((err) => {
+        console.warn('Supabase Auth user provisioning notice:', err);
+      });
+    } catch (provisionErr) {
+      console.warn('User provisioning initialization error:', provisionErr);
+    }
 
     // Directly finalize registration and navigate to Confirmation step
     if (isProforma) {

@@ -71,6 +71,15 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
   const [status, setStatus] = useState<QuizProgram['status']>('live');
   const [proctoringMode, setProctoringMode] = useState<string>('strict_lockdown');
   const [instructions, setInstructions] = useState<string>('Full-screen mode enforced. Tab switches will trigger disqualification warnings.');
+  const [category, setCategory] = useState<string>('Corporate Strategy & Management');
+  const [isCustomCategory, setIsCustomCategory] = useState<boolean>(false);
+  const [customCategory, setCustomCategory] = useState<string>('');
+  const [eligibility, setEligibility] = useState<string>('All registered management students');
+
+  // Manual override states for marks breakdown
+  const [useManualMarksOverride, setUseManualMarksOverride] = useState<boolean>(false);
+  const [manualMarksPerQuestion, setManualMarksPerQuestion] = useState<number>(4);
+  const [manualPassingMarks, setManualPassingMarks] = useState<number>(75);
 
   // Helper to normalize program status for filtering
   const getNormalizedStatus = (progStatus: string): 'active' | 'upcoming' | 'completed' | 'draft' => {
@@ -98,6 +107,13 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
     setStatus('live');
     setProctoringMode('strict_lockdown');
     setInstructions('Full-screen mode enforced. Tab switches will trigger disqualification warnings.');
+    setCategory('Corporate Strategy & Management');
+    setIsCustomCategory(false);
+    setCustomCategory('');
+    setEligibility('All registered management students');
+    setUseManualMarksOverride(false);
+    setManualMarksPerQuestion(Math.round(100 / Math.max(1, questions.length || 30)));
+    setManualPassingMarks(Math.round(100 * (75 / 100)));
     setShowCreateModal(true);
   };
 
@@ -129,6 +145,34 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
         ? prog.instructions.join('\n')
         : (prog.instructions || 'Full-screen mode enforced. Tab switches will trigger disqualification warnings.')
     );
+    const standardCategories = [
+      'Corporate Strategy & Management',
+      'Corporate Strategy & Business Awareness',
+      'Management Concepts & Case Analysis',
+      'Sustainability & AI',
+      'Economics & Policy',
+      'Finance & Marketing',
+      'Data Interpretation',
+    ];
+    if (prog.category && !standardCategories.includes(prog.category)) {
+      setIsCustomCategory(true);
+      setCustomCategory(prog.category);
+      setCategory('__custom__');
+    } else {
+      setIsCustomCategory(false);
+      setCustomCategory('');
+      setCategory(prog.category || 'Corporate Strategy & Management');
+    }
+    setEligibility(prog.eligibility || 'All registered management students');
+
+    const derivedMarks = Math.round(Number(prog.totalMarks || 100) / Math.max(1, Number(prog.totalQuestions || 30)));
+    const derivedPassing = Math.round(Number(prog.totalMarks || 100) * (Number(prog.cutoffScore ?? prog.passingPercentage ?? 65) / 100));
+    const hasCustomMarks = (prog.marksPerQuestion !== undefined && prog.marksPerQuestion !== derivedMarks) ||
+      (prog.passingMarks !== undefined && prog.passingMarks !== derivedPassing);
+    setUseManualMarksOverride(hasCustomMarks);
+    setManualMarksPerQuestion(prog.marksPerQuestion ?? derivedMarks);
+    setManualPassingMarks(prog.passingMarks ?? derivedPassing);
+
     setShowCreateModal(true);
   };
 
@@ -139,11 +183,21 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
       return;
     }
 
+    const finalCategory = isCustomCategory ? (customCategory.trim() || 'General Management') : category;
+    const finalEligibility = eligibility.trim() || 'All registered management students';
+    const autoPassingMarks = Math.round(Number(totalMarks) * (Number(cutoffScore) / 100));
+    const autoMarksPerQuestion = Math.round(Number(totalMarks) / Math.max(1, Number(totalQuestions)));
+
+    const computedPassingMarks = useManualMarksOverride ? Number(manualPassingMarks) : autoPassingMarks;
+    const computedMarksPerQuestion = useManualMarksOverride ? Number(manualMarksPerQuestion) : autoMarksPerQuestion;
+
     const payload: Partial<QuizProgram> = {
       title,
       code,
       description,
       stage: stage as any,
+      category: finalCategory,
+      eligibility: finalEligibility,
       fee: Number(fee),
       intakeCapacity: Number(intakeCapacity),
       maxIntake: Number(intakeCapacity),
@@ -152,6 +206,8 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
       totalMarks: Number(totalMarks),
       cutoffScore: Number(cutoffScore),
       passingPercentage: Number(cutoffScore),
+      passingMarks: computedPassingMarks,
+      marksPerQuestion: computedMarksPerQuestion,
       negativeMarking: Number(negativeMarkingPerWrong) > 0,
       negativeMarkingPerWrong: Number(negativeMarkingPerWrong),
       negativeMarksPerQuestion: Number(negativeMarkingPerWrong),
@@ -171,10 +227,6 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
       addQuizProgram({
         ...payload,
         tagline: description || title,
-        category: 'Corporate Strategy & Management',
-        passingMarks: Math.round(Number(totalMarks) * (Number(cutoffScore) / 100)),
-        marksPerQuestion: Math.round(Number(totalMarks) / Math.max(1, Number(totalQuestions))),
-        eligibility: 'All registered management students',
         tags: ['Online Assessment', 'Proctored'],
       } as any);
     }
@@ -228,14 +280,6 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => onNavigateToQuestions?.() || setAdminActiveTab('quiz_bank')}
-            className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-          >
-            <HelpCircle className="w-4 h-4 text-slate-500" />
-            <span>Question Bank ({questions?.length || 0})</span>
-          </button>
-          
           <button
             onClick={() => onNavigateToResults?.() || setAdminActiveTab('quiz_results')}
             className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
@@ -334,11 +378,10 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
               <button
                 key={st}
                 onClick={() => setFilterStatus(st)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition whitespace-nowrap cursor-pointer ${
-                  filterStatus === st
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition whitespace-nowrap cursor-pointer ${filterStatus === st
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
               >
                 {st} ({count})
               </button>
@@ -389,21 +432,25 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                         {prog.code || 'AIMA-QZ'}
                       </span>
                       <span
-                        className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${
-                          normStatus === 'active'
-                            ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                            : normStatus === 'upcoming'
+                        className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${normStatus === 'active'
+                          ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                          : normStatus === 'upcoming'
                             ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20'
                             : normStatus === 'completed'
-                            ? 'bg-purple-500/10 text-purple-600 border border-purple-500/20'
-                            : 'bg-slate-500/10 text-slate-500 border border-slate-500/20'
-                        }`}
+                              ? 'bg-purple-500/10 text-purple-600 border border-purple-500/20'
+                              : 'bg-slate-500/10 text-slate-500 border border-slate-500/20'
+                          }`}
                       >
                         {normStatus.toUpperCase()}
                       </span>
                       <span className="text-[10px] font-bold text-slate-400 uppercase">
                         {(prog.stage || 'round_1').replace('_', ' ')}
                       </span>
+                      {prog.category && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                          {prog.category}
+                        </span>
+                      )}
                       <DocRequirementInfo
                         specKey="student_quiz_engine"
                         variant="icon"
@@ -454,6 +501,9 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                     <span className="text-[10px] text-slate-400 font-semibold block">Duration & Marks</span>
                     <span className="font-bold text-slate-900 dark:text-white mt-0.5 block">
                       {prog.durationMinutes || 45}m • {prog.totalMarks || 100} pts
+                      <span className="text-[10px] text-slate-500 font-normal ml-1">
+                        ({prog.marksPerQuestion ?? Math.round(Number(prog.totalMarks || 100) / Math.max(1, Number(prog.totalQuestions || 25)))}m/q)
+                      </span>
                     </span>
                   </div>
                   <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60">
@@ -466,6 +516,9 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                     <span className="text-[10px] text-slate-400 font-semibold block">Cutoff Score</span>
                     <span className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 block">
                       {cutoff}% pass
+                      <span className="text-[10px] text-slate-500 font-normal ml-1">
+                        ({prog.passingMarks ?? Math.round(Number(prog.totalMarks || 100) * (cutoff / 100))} pts)
+                      </span>
                     </span>
                   </div>
                 </div>
@@ -501,11 +554,10 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                         const newStatus = isLive ? 'draft' : 'live';
                         updateQuizProgram(prog.id, { status: newStatus as any });
                       }}
-                      className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                        isLive
-                          ? 'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20'
-                          : 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20'
-                      }`}
+                      className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition cursor-pointer ${isLive
+                        ? 'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20'
+                        : 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20'
+                        }`}
                     >
                       {isLive ? (
                         <>
@@ -600,6 +652,74 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                 />
               </div>
 
+              {/* Dynamic Assessment Category & Eligibility Criteria */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Assessment Category *
+                  </label>
+                  <select
+                    value={isCustomCategory ? '__custom__' : category}
+                    onChange={e => {
+                      if (e.target.value === '__custom__') {
+                        setIsCustomCategory(true);
+                      } else {
+                        setIsCustomCategory(false);
+                        setCategory(e.target.value);
+                      }
+                    }}
+                    className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                  >
+                    <option value="Corporate Strategy & Management">Corporate Strategy & Management</option>
+                    <option value="Corporate Strategy & Business Awareness">Corporate Strategy & Business Awareness</option>
+                    <option value="Management Concepts & Case Analysis">Management Concepts & Case Analysis</option>
+                    <option value="Sustainability & AI">Sustainability & AI</option>
+                    <option value="Economics & Policy">Economics & Policy</option>
+                    <option value="Finance & Marketing">Finance & Marketing</option>
+                    <option value="Data Interpretation">Data Interpretation</option>
+                    <option value="__custom__">Custom / Other Category...</option>
+                  </select>
+                  {isCustomCategory && (
+                    <input
+                      type="text"
+                      required
+                      placeholder="Type custom category name..."
+                      value={customCategory}
+                      onChange={e => setCustomCategory(e.target.value)}
+                      className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white mt-1"
+                    />
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Candidate Eligibility Criteria
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. All registered management students"
+                    value={eligibility}
+                    onChange={e => setEligibility(e.target.value)}
+                    className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                  />
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {['All registered management students', 'Round 1 Qualifiers only', 'Regional Hub Finalists', 'Corporate Track nominees'].map(pill => (
+                      <button
+                        key={pill}
+                        type="button"
+                        onClick={() => setEligibility(pill)}
+                        className={`text-[10px] px-2 py-0.5 rounded-md border transition-colors cursor-pointer ${eligibility === pill
+                          ? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 font-semibold'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+                          }`}
+                      >
+                        + {pill}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
@@ -624,7 +744,7 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                   <input
                     type="number"
                     min="0"
-                    step="50"
+                    step="1"
                     value={fee}
                     onChange={e => setFee(Number(e.target.value))}
                     className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
@@ -637,8 +757,8 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                   </label>
                   <input
                     type="number"
-                    min="10"
-                    step="100"
+                    min="1"
+                    step="1"
                     value={intakeCapacity}
                     onChange={e => setIntakeCapacity(Number(e.target.value))}
                     className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
@@ -715,6 +835,92 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                     className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                   />
                 </div>
+              </div>
+
+              {/* Live Derived Marks & Cutoff Preview Banner with Manual Override Toggle */}
+              <div className="space-y-3">
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                    <span className="font-bold text-red-600 dark:text-red-400 flex items-center gap-1">
+                      ⚡ Scoring Model:
+                    </span>
+                    <span>
+                      Each question = <strong className="text-slate-900 dark:text-white">
+                        {useManualMarksOverride
+                          ? manualMarksPerQuestion
+                          : Math.round(Number(totalMarks) / Math.max(1, Number(totalQuestions)))} marks
+                      </strong>
+                    </span>
+                    <span className="text-slate-400">•</span>
+                    <span>
+                      Passing threshold = <strong className="text-slate-900 dark:text-white">
+                        {useManualMarksOverride
+                          ? manualPassingMarks
+                          : Math.round(Number(totalMarks) * (Number(cutoffScore) / 100))} marks
+                      </strong> ({cutoffScore}%)
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!useManualMarksOverride) {
+                        setManualMarksPerQuestion(Math.round(Number(totalMarks) / Math.max(1, Number(totalQuestions))));
+                        setManualPassingMarks(Math.round(Number(totalMarks) * (Number(cutoffScore) / 100)));
+                      }
+                      setUseManualMarksOverride(!useManualMarksOverride);
+                    }}
+                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer ${useManualMarksOverride
+                      ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 font-bold'
+                      : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:border-slate-400'
+                      }`}
+                  >
+                    <Sparkles className="w-3 h-3 text-amber-500" />
+                    {useManualMarksOverride ? 'Manual Override Active (Click to reset)' : 'Customize Marks Breakdown'}
+                  </button>
+                </div>
+
+                {useManualMarksOverride && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-800/60 animate-in fade-in duration-150">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                          Marks per Question (Custom)
+                        </label>
+                        <span className="text-[10px] text-amber-700 dark:text-amber-400">
+                          Auto: {Math.round(Number(totalMarks) / Math.max(1, Number(totalQuestions)))}
+                        </span>
+                      </div>
+                      <input
+                        type="number"
+                        min="0.5"
+                        step="0.5"
+                        value={manualMarksPerQuestion}
+                        onChange={e => setManualMarksPerQuestion(Number(e.target.value))}
+                        className="w-full text-xs p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 text-slate-900 dark:text-white"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                          Passing Marks Threshold (Custom)
+                        </label>
+                        <span className="text-[10px] text-amber-700 dark:text-amber-400">
+                          Auto: {Math.round(Number(totalMarks) * (Number(cutoffScore) / 100))} ({cutoffScore}%)
+                        </span>
+                      </div>
+                      <input
+                        type="number"
+                        min="1"
+                        max={totalMarks}
+                        step="1"
+                        value={manualPassingMarks}
+                        onChange={e => setManualPassingMarks(Number(e.target.value))}
+                        className="w-full text-xs p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

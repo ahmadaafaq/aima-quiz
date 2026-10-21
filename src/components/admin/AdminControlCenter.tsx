@@ -17,6 +17,7 @@ import { InstitutionsAdminPanel } from './InstitutionsAdminPanel';
 import { AdminLoginGate, checkIsAdminAuthenticated, clearAdminAuth } from './AdminLoginGate';
 import { DocRequirementInfo } from '../common/DocRequirementInfo';
 import { ErrorBoundary } from '../common/ErrorBoundary';
+import { formatPhaseName, removeUnderscores } from '../../lib/formatters';
 import {
   Activity,
   AlertCircle,
@@ -290,6 +291,14 @@ export const AdminControlCenter: React.FC = () => {
       window.location.hostname.endsWith('.research.aima.in')) &&
     !new URLSearchParams(window.location.search).get('demo');
 
+  const stageBadgeMap: Record<string, string> = {
+    round_1: 'Live R1',
+    round_2: 'Live R2',
+    round_3: 'Live R3',
+    round_4: 'Live R4',
+  };
+  const activeStageBadge = stageBadgeMap[config.activeStage || 'round_2'] || 'Live R2';
+
   const menuGroups: MenuGroup[] = [
     {
       id: 'command_broadcast',
@@ -297,13 +306,13 @@ export const AdminControlCenter: React.FC = () => {
       items: [
         ...(!isLiveProduction
           ? [
-              {
-                id: 'overview',
-                label: 'Executive Command',
-                icon: LayoutDashboard,
-                roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
-              },
-            ]
+            {
+              id: 'overview',
+              label: 'Executive Command',
+              icon: LayoutDashboard,
+              roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
+            },
+          ]
           : []),
         {
           id: 'dynamic_registrations',
@@ -314,157 +323,167 @@ export const AdminControlCenter: React.FC = () => {
         },
         ...(!isLiveProduction
           ? [
-              {
-                id: 'announcements',
-                label: 'Official Bulletins',
-                icon: Radio,
-                badge: `${announcements.length}`,
-                roles: ['admin', 'all'],
-              },
-              {
-                id: 'stages',
-                label: 'Phase Progression Gates',
-                icon: Sliders,
-                badge: 'Live R2' as string | undefined,
-                roles: ['admin', 'all'],
-              },
-            ]
+            /* PHASE 2: Official Bulletins
+            {
+              id: 'announcements',
+              label: 'Official Bulletins',
+              icon: Radio,
+              badge: `${announcements.length}`,
+              roles: ['admin', 'all'],
+            },
+            */
+            {
+              id: 'stages',
+              label: 'Phase Progression Gates',
+              icon: Sliders,
+              badge: activeStageBadge,
+              roles: ['admin', 'all'],
+            },
+          ]
           : []),
       ],
     },
     // The following menu groups are only visible on localhost / aima-quiz.vercel.app (non-production)
     ...(!isLiveProduction
       ? [
-          {
-            id: 'round1_quiz',
-            title: 'Round 1: Screening Quiz',
-            items: [
-              {
-                id: 'quiz_programs',
-                label: 'Quiz Programs & Events',
-                icon: Trophy,
-                badge: `${quizPrograms.length}`,
-                roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
-              },
-              {
-                id: 'quiz_bank',
-                label: 'Quiz Question Bank',
-                icon: BookOpen,
-                badge: `${questions.length}`,
-                roles: ['admin', 'all', 'evaluator'],
-              },
-              {
-                id: 'quiz_results',
-                label: 'Quiz Results & Rankings',
-                icon: BarChart3,
-                badge: 'Live' as string | undefined,
-                roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
-              },
-            ],
-          },
-          {
-            id: 'round2_case',
-            title: 'Round 2: Case Deck & AI',
-            items: [
-              {
-                id: 'case_decks',
-                label: 'Case Decks & AI Review',
-                icon: FileCheck,
-                badge: `${allSubmissions.length}`,
-                roles: ['admin', 'evaluator', 'all'],
-              },
-              {
-                id: 'case_deadlines',
-                label: 'Deadlines & Extensions',
-                icon: Clock,
-                badge: teams.filter(t => t.extensionRequest?.status === 'PENDING').length > 0
-                  ? `${teams.filter(t => t.extensionRequest?.status === 'PENDING').length} Pending`
-                  : undefined,
-                roles: ['admin', 'all'],
-              },
-              {
-                id: 'evaluations',
-                label: 'Jury Bench & Rubric',
-                icon: Scale,
-                badge: `${evaluations.length}`,
-                roles: ['admin', 'evaluator', 'all'],
-              },
-            ],
-          },
-          {
-            id: 'round34_offline',
-            title: 'Rounds 3 & 4: Offline Finals',
-            items: [
-              {
-                id: 'offline_rounds',
-                label: 'Offline Rounds Results',
-                icon: Award,
-                badge: offlineRoundResults.length > 0 ? `${offlineRoundResults.length}` : 'New',
-                roles: ['admin', 'all', 'regional_hub'],
-              },
-              {
-                id: 'hubs',
-                label: 'Regional Hubs & Zones',
-                icon: MapPin,
-                badge: `${hubs.length}`,
-                roles: ['admin', 'regional_hub', 'all'],
-              },
-            ],
-          },
-          {
-            id: 'ecosystem_partners',
-            title: 'Ecosystem & Partners',
-            items: [
-              {
-                id: 'sponsors',
-                label: 'Corporate Partners & Sponsors',
-                icon: Briefcase,
-                badge: `${sponsors.length}`,
-                roles: ['admin', 'corporate_partner', 'all'],
-              },
-              {
-                id: 'institutions',
-                label: 'Accredited B-Schools',
-                icon: Building2,
-                badge: `${institutions.length}`,
-                roles: ['admin', 'institute_coordinator', 'all'],
-              },
-              {
-                id: 'participants',
-                label: 'Candidate Master Roster',
-                icon: Users,
-                badge: `${users.length}`,
-                roles: ['admin', 'institute_coordinator', 'all'],
-              },
-            ],
-          },
-          {
-            id: 'finance_governance',
-            title: 'Finance & Governance',
-            items: [
-              {
-                id: 'finances',
-                label: 'Financial & GST Ledger',
-                icon: Coins,
-                badge: `₹${(grossRevenue / 1000).toFixed(0)}k`,
-                roles: ['admin', 'all'],
-              },
-              {
-                id: 'audit_logs',
-                label: 'ISO 27001 Audit Trail',
-                icon: ShieldAlert,
-                badge: `${auditLogs.length}`,
-                roles: ['admin', 'all'],
-              },
-              {
-                id: 'system_settings',
-                label: 'System Governance',
-                icon: Shield,
-                roles: ['admin', 'all'],
-              },
-            ],
-          },
-        ]
+        {
+          id: 'round1_quiz',
+          title: 'Round 1: Screening Quiz',
+          items: [
+            {
+              id: 'quiz_programs',
+              label: 'Quiz Programs & Events',
+              icon: Trophy,
+              badge: `${quizPrograms.length}`,
+              roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
+            },
+            {
+              id: 'quiz_bank',
+              label: 'Quiz Question Bank',
+              icon: BookOpen,
+              badge: `${questions.length}`,
+              roles: ['admin', 'all', 'evaluator'],
+            },
+            {
+              id: 'quiz_results',
+              label: 'Quiz Results & Rankings',
+              icon: BarChart3,
+              badge: 'Live' as string | undefined,
+              roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
+            },
+          ],
+        },
+        {
+          id: 'round2_case',
+          title: 'Round 2: Case Deck & AI',
+          items: [
+            {
+              id: 'case_decks',
+              label: 'Case Decks & AI Review',
+              icon: FileCheck,
+              badge: `${allSubmissions.length}`,
+              roles: ['admin', 'evaluator', 'all'],
+            },
+            /* PHASE 2: Deadlines & Extensions
+            {
+              id: 'case_deadlines',
+              label: 'Deadlines & Extensions',
+              icon: Clock,
+              badge: teams.filter(t => t.extensionRequest?.status === 'PENDING').length > 0
+                ? `${teams.filter(t => t.extensionRequest?.status === 'PENDING').length} Pending`
+                : undefined,
+              roles: ['admin', 'all'],
+            },
+            */
+            {
+              id: 'evaluations',
+              label: 'Jury Bench & Rubric',
+              icon: Scale,
+              badge: `${evaluations.length}`,
+              roles: ['admin', 'evaluator', 'all'],
+            },
+          ],
+        },
+        /* =========================================================================
+         * PHASE 1 ROLLOUT: The following sections (Rounds 3 & 4, Ecosystem, Finance)
+         * are temporarily hidden for Phase 1 client delivery.
+         * Uncomment for Phase 2 & 3 rollouts.
+         * =========================================================================
+        {
+          id: 'round34_offline',
+          title: 'Rounds 3 & 4: Offline Finals',
+          items: [
+            {
+              id: 'offline_rounds',
+              label: 'Offline Rounds Results',
+              icon: Award,
+              badge: offlineRoundResults.length > 0 ? `${offlineRoundResults.length}` : 'New',
+              roles: ['admin', 'all', 'regional_hub'],
+            },
+            {
+              id: 'hubs',
+              label: 'Regional Hubs & Zones',
+              icon: MapPin,
+              badge: `${hubs.length}`,
+              roles: ['admin', 'regional_hub', 'all'],
+            },
+          ],
+        },
+        {
+          id: 'ecosystem_partners',
+          title: 'Ecosystem & Partners',
+          items: [
+            {
+              id: 'sponsors',
+              label: 'Corporate Partners & Sponsors',
+              icon: Briefcase,
+              badge: `${sponsors.length}`,
+              roles: ['admin', 'corporate_partner', 'all'],
+            },
+            {
+              id: 'institutions',
+              label: 'Accredited B-Schools',
+              icon: Building2,
+              badge: `${institutions.length}`,
+              roles: ['admin', 'institute_coordinator', 'all'],
+            },
+            {
+              id: 'participants',
+              label: 'Candidate Master Roster',
+              icon: Users,
+              badge: `${users.length}`,
+              roles: ['admin', 'institute_coordinator', 'all'],
+            },
+          ],
+        },
+        {
+          id: 'finance_governance',
+          title: 'Finance & Governance',
+          items: [
+            {
+              id: 'finances',
+              label: 'Financial & GST Ledger',
+              icon: Coins,
+              badge: `₹${(grossRevenue / 1000).toFixed(0)}k`,
+              roles: ['admin', 'all'],
+            },
+            {
+              id: 'audit_logs',
+              label: 'ISO 27001 Audit Trail',
+              icon: ShieldAlert,
+              badge: `${auditLogs.length}`,
+              roles: ['admin', 'all'],
+            },
+            {
+              id: 'system_settings',
+              label: 'System Governance',
+              icon: Shield,
+              roles: ['admin', 'all'],
+            },
+          ],
+        },
+        ========================================================================= */
+      ]
       : []),
   ];
 
@@ -474,7 +493,7 @@ export const AdminControlCenter: React.FC = () => {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex flex-col lg:flex-row bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-      
+
       {/* Mobile Sidebar Toggle Header */}
       <div className="lg:hidden p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-xs">
         <div className="flex items-center gap-2">
@@ -501,11 +520,9 @@ export const AdminControlCenter: React.FC = () => {
 
       {/* Admin Sidebar Navigation: Independently scrollable */}
       <aside
-        className={`fixed inset-y-0 left-0 z-30 lg:sticky lg:top-[93px] lg:h-[calc(100vh-93px)] lg:self-start flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-xl lg:shadow-none shrink-0 overflow-hidden ${
-          sidebarCollapsed ? 'lg:w-20' : 'lg:w-72'
-        } ${
-          mobileSidebarOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0'
-        }`}
+        className={`fixed inset-y-0 left-0 z-30 lg:sticky lg:top-[93px] lg:h-[calc(100vh-93px)] lg:self-start flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 shadow-xl lg:shadow-none shrink-0 overflow-hidden ${sidebarCollapsed ? 'lg:w-20' : 'lg:w-72'
+          } ${mobileSidebarOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0'
+          }`}
       >
         {/* When collapsed on desktop: show expand button */}
         {sidebarCollapsed && (
@@ -594,11 +611,10 @@ export const AdminControlCenter: React.FC = () => {
                         setActiveTab(item.id as any);
                         setMobileSidebarOpen(false);
                       }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                        isActive
-                          ? 'bg-red-600 text-white font-bold shadow-md shadow-red-500/20'
-                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
-                      } ${sidebarCollapsed ? 'lg:justify-center' : ''}`}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${isActive
+                        ? 'bg-red-600 text-white font-bold shadow-md shadow-red-500/20'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
+                        } ${sidebarCollapsed ? 'lg:justify-center' : ''}`}
                       title={item.label}
                     >
                       <div className="flex items-center gap-2.5">
@@ -610,11 +626,10 @@ export const AdminControlCenter: React.FC = () => {
 
                       {item.badge && !sidebarCollapsed && (
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            isActive
-                              ? 'bg-white/20 text-white'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                          }`}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive
+                            ? 'bg-white/20 text-white'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                            }`}
                         >
                           {item.badge}
                         </span>
@@ -644,7 +659,7 @@ export const AdminControlCenter: React.FC = () => {
 
       {/* Main Workspace Content Area */}
       <main ref={mainRef} className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto min-w-0">
-        
+
 
 
         {/* -------------------- TAB: OVERVIEW & TELEMETRY -------------------- */}
@@ -1147,7 +1162,7 @@ export const AdminControlCenter: React.FC = () => {
                 </div>
 
                 <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-red-500 text-white self-start sm:self-auto shadow-xs">
-                  Active Phase: {config.activeStage.toUpperCase()}
+                  Active Phase: {formatPhaseName(config.activeStage)}
                 </span>
               </div>
 
@@ -1163,11 +1178,10 @@ export const AdminControlCenter: React.FC = () => {
                     <button
                       key={item.stage}
                       onClick={() => updateConfig({ activeStage: item.stage as StageId })}
-                      className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-                        isActive
-                          ? 'border-red-500 bg-red-50/70 dark:bg-red-950/30 shadow-md ring-2 ring-red-500/50'
-                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40'
-                      }`}
+                      className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${isActive
+                        ? 'border-red-500 bg-red-50/70 dark:bg-red-950/30 shadow-md ring-2 ring-red-500/50'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40'
+                        }`}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <span className={`w-3 h-3 rounded-full ${isActive ? 'bg-red-600' : 'bg-slate-300'}`} />
@@ -1386,7 +1400,7 @@ export const AdminControlCenter: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
                 <div className="space-y-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
                   <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">Stage 1: Business Quiz Rules</h4>
-                  
+
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span>Qualifying Cutoff Percentage:</span>
@@ -1405,7 +1419,7 @@ export const AdminControlCenter: React.FC = () => {
 
                 <div className="space-y-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
                   <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">Stage 2: Case Deck Parameters</h4>
-                  
+
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span>Slide Ceiling:</span>
@@ -1498,7 +1512,7 @@ export const AdminControlCenter: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 my-auto">
             <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Add Question to Quiz Bank</h3>
-            
+
             <form onSubmit={handleCreateQuestion} className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-2">
                 <div>

@@ -66,18 +66,18 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack }) => {
     return () => clearInterval(interval);
   }, [isCompleted, answers, markedForReview]);
 
-  const handleAutoSubmit = () => {
-    const attempt = submitQuiz(answers, markedForReview, totalDurationSeconds - secondsRemaining, tabSwitchCount);
+  const handleAutoSubmit = async () => {
+    const attempt = await submitQuiz(answers, markedForReview, totalDurationSeconds - secondsRemaining, tabSwitchCount);
     setFinalAttempt(attempt);
     setIsCompleted(true);
     confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
   };
 
-  const handleManualSubmit = () => {
+  const handleManualSubmit = async () => {
     const answeredCount = Object.keys(answers).length;
     const confirmMsg = `You have answered ${answeredCount} of ${questions.length} questions. Are you sure you want to submit your Round 1 Quiz?`;
     if (window.confirm(confirmMsg)) {
-      const attempt = submitQuiz(answers, markedForReview, totalDurationSeconds - secondsRemaining, tabSwitchCount);
+      const attempt = await submitQuiz(answers, markedForReview, totalDurationSeconds - secondsRemaining, tabSwitchCount);
       setFinalAttempt(attempt);
       setIsCompleted(true);
       if (attempt.score >= config.r1CutoffScore) {

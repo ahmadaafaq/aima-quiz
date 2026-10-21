@@ -12,6 +12,7 @@ import {
   Building2,
   CheckCircle2
 } from 'lucide-react';
+import { signInWithEmailPassword } from '../../lib/supabase';
 
 interface AdminLoginGateProps {
   onAuthenticated: () => void;
@@ -46,7 +47,7 @@ export const AdminLoginGate: React.FC<AdminLoginGateProps> = ({ onAuthenticated 
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
@@ -54,23 +55,30 @@ export const AdminLoginGate: React.FC<AdminLoginGateProps> = ({ onAuthenticated 
     const cleanUser = username.trim().toLowerCase();
     const cleanPass = password.trim();
 
-    setTimeout(() => {
-      if (cleanUser === 'admin@aima.in' && cleanPass === 'case-aima@123#league') {
+    try {
+      const result = await signInWithEmailPassword(cleanUser, cleanPass);
+      if (result.success && result.profile?.role === 'admin') {
         const authData = {
-          user: 'admin@aima.in',
+          user: cleanUser,
           role: 'super_admin',
-          token: 'aima_sec_' + Date.now().toString(36),
+          token: (result as any).session?.access_token || 'aima_sec_' + Date.now().toString(36),
           loginTime: new Date().toISOString(),
         };
         sessionStorage.setItem(ADMIN_AUTH_KEY, JSON.stringify(authData));
         localStorage.setItem(ADMIN_AUTH_KEY, JSON.stringify(authData));
         setIsLoading(false);
         onAuthenticated();
+      } else if (result.success && result.profile?.role !== 'admin') {
+        setIsLoading(false);
+        setError('Access Denied: This account is authenticated but does not possess Super Administrator privileges.');
       } else {
         setIsLoading(false);
-        setError('Invalid administrator credentials. Authorized AIMA Secretariat access only.');
+        setError(result.error || 'Invalid administrator credentials. Authorized AIMA Secretariat access only.');
       }
-    }, 400);
+    } catch (err: any) {
+      setIsLoading(false);
+      setError(err?.message || 'Authentication error occurred.');
+    }
   };
 
   return (

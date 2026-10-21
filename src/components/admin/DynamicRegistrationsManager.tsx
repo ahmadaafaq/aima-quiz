@@ -7,10 +7,12 @@ import {
 import {
   fetchRegistrationsFromSupabase,
   updateRegistrationPaymentInSupabase,
+  generateDefaultPassword,
   SUPABASE_URL,
   SUPABASE_SQL_SETUP_SCRIPT
 } from '../../lib/supabase';
 import { AimaInvoiceModal } from '../registration/AimaInvoiceModal';
+import { useCompetition } from '../../context/CompetitionContext';
 import {
   Database,
   Search,
@@ -24,6 +26,7 @@ import {
   Copy,
   Receipt,
   Eye,
+  EyeOff,
   Building2,
   ShieldCheck,
   AlertCircle,
@@ -86,6 +89,7 @@ export const getCandidatePhone = (reg?: any): string => {
 export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerProps> = ({
   initialRegistrations = [],
 }) => {
+  const { addAuditLog } = useCompetition();
   const [registrations, setRegistrations] = useState<CSRBootcampRegistration[]>(initialRegistrations);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [lastRefreshed, setLastRefreshed] = useState<string>(new Date().toLocaleTimeString());
@@ -103,6 +107,8 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
   const [activeInvoiceReg, setActiveInvoiceReg] = useState<CSRBootcampRegistration | null>(null);
   const [showSqlModal, setShowSqlModal] = useState<boolean>(false);
   const [copiedLogins, setCopiedLogins] = useState<boolean>(false);
+  const [showPasswords, setShowPasswords] = useState<boolean>(true);
+  const [copiedNomineeId, setCopiedNomineeId] = useState<string | null>(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -115,6 +121,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
   const [editMethod, setEditMethod] = useState<string>('NEFT/RTGS Bank Transfer');
   const [editTxnId, setEditTxnId] = useState<string>('');
   const [isSavingPayment, setIsSavingPayment] = useState<boolean>(false);
+  const [paymentError, setPaymentError] = useState<string>('');
 
   // Load from Supabase on mount
   const loadSupabaseData = async () => {
@@ -152,6 +159,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
     return registrations.filter((reg) => {
       const candName = getCandidateName(reg).toLowerCase();
       const candEmail = getCandidateEmail(reg).toLowerCase();
+      const candPhone = getCandidatePhone(reg).toLowerCase();
 
       const matchesSearch =
         !query ||
@@ -159,10 +167,18 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
         (reg.organizationName && reg.organizationName.toLowerCase().includes(query)) ||
         candName.includes(query) ||
         candEmail.includes(query) ||
+        candPhone.includes(query) ||
         (reg.teamName && reg.teamName.toLowerCase().includes(query)) ||
-        reg.nominees?.some((n) => (n.name && n.name.toLowerCase().includes(query)) || (n.email && n.email.toLowerCase().includes(query)));
+        (reg.invoiceNumber && reg.invoiceNumber.toLowerCase().includes(query)) ||
+        reg.nominees?.some(
+          (n) =>
+            (n.name && n.name.toLowerCase().includes(query)) ||
+            (n.email && n.email.toLowerCase().includes(query)) ||
+            (n.mobile && n.mobile.toLowerCase().includes(query)) ||
+            (n.enrolmentNumber && n.enrolmentNumber.toLowerCase().includes(query))
+        );
 
-      const isInst = reg.track === 'institutional' || reg.organizationType === 'Academic Institution';
+      const isInst = reg.track === 'institutional' || (reg as any).registration_mode === 'institute';
       const matchesMode =
         modeFilter === 'all' ||
         (modeFilter === 'institute' && isInst) ||
@@ -206,12 +222,14 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
   // Aggregate stats
   const stats = useMemo(() => {
     const totalRegs = registrations.length;
+    const instRegsCount = registrations.filter((r) => r.track === 'institutional' || (r as any).registration_mode === 'institute').length;
+    const indivRegsCount = totalRegs - instRegsCount;
     const paidRegs = registrations.filter((r) => r.paymentStatus === 'PAID').length;
     const pendingRegs = registrations.filter((r) => r.paymentStatus !== 'PAID').length;
     const totalCandidates = registrations.reduce((acc, r) => acc + (r.participantCount || r.nominees?.length || 1), 0);
-    const totalRevenue = registrations.reduce((acc, r) => acc + (r.paymentStatus === 'PAID' ? r.totalPayable : 0), 0);
+    const totalRevenue = registrations.reduce((acc, r) => acc + (r.paymentStatus === 'PAID' ? (r.totalPayable ?? 0) : 0), 0);
 
-    return { totalRegs, paidRegs, pendingRegs, totalCandidates, totalRevenue };
+    return { totalRegs, instRegsCount, indivRegsCount, paidRegs, pendingRegs, totalCandidates, totalRevenue };
   }, [registrations]);
 
   // Open Edit Payment Modal
@@ -220,14 +238,18 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
     setEditStatus(reg.paymentStatus === 'PAID' ? 'PAID' : 'PENDING_INVOICE');
     setEditMethod(reg.paymentMethod || 'NEFT/RTGS Bank Transfer');
     setEditTxnId(reg.transactionId || '');
+    setPaymentError('');
   };
 
-  // Save Payment Status & Sync Supabase
+  // Save Payment Status & Sync Supabase with Rollback & Audit Logging
   const handleSavePaymentEdit = async () => {
     if (!activeEditPaymentReg) return;
     setIsSavingPayment(true);
+    setPaymentError('');
 
     const regNum = activeEditPaymentReg.registrationNumber;
+    const previousRegistrations = [...registrations];
+    const previousStatus = activeEditPaymentReg.paymentStatus;
     const finalTxn = editStatus === 'PAID' ? (editTxnId.trim() || 'MANUAL-AIMA-' + Date.now().toString(36).toUpperCase()) : undefined;
     const finalInvoice = editStatus === 'PAID'
       ? (activeEditPaymentReg.invoiceNumber ? activeEditPaymentReg.invoiceNumber.replace('PINV-', 'INV-') : `INV-${regNum}`)
@@ -249,12 +271,33 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
     );
 
     try {
-      await updateRegistrationPaymentInSupabase(regNum, editStatus, editMethod, finalTxn);
-    } catch (err) {
-      console.warn('Supabase payment sync notice:', err);
+      const result = await updateRegistrationPaymentInSupabase(regNum, editStatus, editMethod, finalTxn);
+      if (!result.success) {
+        // Rollback on failure
+        setRegistrations(previousRegistrations);
+        setPaymentError(result.error || 'Failed to update payment status in Supabase. Changes rolled back.');
+        return;
+      }
+
+      // Audit Log on success
+      addAuditLog(
+        'Update Payment Status',
+        'Payment',
+        `Updated payment status for ${regNum} (${activeEditPaymentReg.organizationName}) to ${editStatus} via ${editMethod}. Txn: ${finalTxn || 'N/A'}`,
+        {
+          oldValue: previousStatus,
+          newValue: editStatus,
+          reason: `Admin updated payment method to ${editMethod}`,
+        }
+      );
+
+      setActiveEditPaymentReg(null);
+    } catch (err: any) {
+      // Rollback on error
+      setRegistrations(previousRegistrations);
+      setPaymentError(err?.message || 'Network error updating payment in Supabase. Changes rolled back.');
     } finally {
       setIsSavingPayment(false);
-      setActiveEditPaymentReg(null);
     }
   };
 
@@ -283,7 +326,11 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
   // Export to Excel
   const handleExportExcel = () => {
     const rows = registrations.flatMap((reg) => {
-      const isInst = reg.track === 'institutional' || reg.organizationType === 'Academic Institution';
+      const isInst = reg.track === 'institutional' || (reg as any).registration_mode === 'institute';
+      const coordName = reg.coordinator?.name || (reg as any).coordinator_name || 'N/A';
+      const coordEmail = reg.coordinator?.email || (reg as any).coordinator_email || 'N/A';
+      const coordPhone = reg.coordinator?.mobile || (reg as any).coordinator_phone || 'N/A';
+
       if (!reg.nominees || reg.nominees.length === 0) {
         return [
           {
@@ -291,13 +338,27 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
             'Registration Mode': isInst ? 'Institute' : 'Individual',
             'Institute Name': reg.organizationName,
             'Team Name': reg.teamName || 'N/A',
+            'Participant #': 1,
             'Participant Name': getCandidateName(reg),
+            'Role': 'Team Leader',
             'Participant Email': getCandidateEmail(reg),
             'Mobile': getCandidatePhone(reg),
+            'DOB': 'N/A',
+            'Gender': 'N/A',
+            'Program / Course': 'N/A',
+            'Semester / Year': 'N/A',
             'Enrolment No': 'N/A',
-            'Quiz Password': 'AimaQuiz@2026',
+            'Quiz Login Password': reg.participantPassword || generateDefaultPassword(getCandidateName(reg), getCandidatePhone(reg)),
+            'Invoice No.': reg.invoiceNumber || 'N/A',
             'Payment Status': reg.paymentStatus,
+            'Payment Method': reg.paymentMethod || 'N/A',
+            'Transaction / UTR ID': reg.transactionId || 'N/A',
+            'Subtotal (INR)': reg.subtotalExclGst ?? reg.totalPayable,
+            'GST (INR)': reg.gstAmount ?? 0,
             'Total Fee (INR)': reg.totalPayable,
+            'Coordinator Name': coordName,
+            'Coordinator Email': coordEmail,
+            'Coordinator Phone': coordPhone,
             'Date Created': new Date(reg.createdAt).toLocaleDateString('en-IN'),
           },
         ];
@@ -312,20 +373,41 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
         'Participant Name': nom.name,
         'Role': nom.isTeamLeader ? 'Team Leader' : 'Nominee',
         'Participant Email': nom.email,
-        'Mobile': nom.mobile,
+        'Mobile': nom.mobile || 'N/A',
         'DOB': nom.dob || 'N/A',
         'Gender': nom.gender || 'N/A',
         'Program / Course': nom.program || 'N/A',
         'Semester / Year': nom.semester || 'N/A',
         'Enrolment No': nom.enrolmentNumber || 'N/A',
-        'Quiz Login Password': nom.password || 'AimaQuiz@2026',
+        'Quiz Login Password': nom.password || generateDefaultPassword(nom.name, nom.mobile || ''),
+        'Invoice No.': reg.invoiceNumber || 'N/A',
         'Payment Status': reg.paymentStatus,
+        'Payment Method': reg.paymentMethod || 'N/A',
+        'Transaction / UTR ID': reg.transactionId || 'N/A',
+        'Subtotal (INR)': reg.subtotalExclGst ?? reg.totalPayable,
+        'GST (INR)': reg.gstAmount ?? 0,
         'Total Fee (INR)': reg.totalPayable,
+        'Coordinator Name': coordName,
+        'Coordinator Email': coordEmail,
+        'Coordinator Phone': coordPhone,
         'Date Created': new Date(reg.createdAt).toLocaleDateString('en-IN'),
       }));
     });
 
     const ws = XLSX.utils.json_to_sheet(rows);
+
+    // Auto-calculate optimal column widths based on content length
+    if (rows.length > 0) {
+      const colKeys = Object.keys(rows[0]);
+      ws['!cols'] = colKeys.map((key) => {
+        const maxLen = rows.reduce((max, row: any) => {
+          const val = row[key] !== undefined && row[key] !== null ? String(row[key]) : '';
+          return Math.max(max, val.length);
+        }, key.length);
+        return { wch: Math.min(Math.max(maxLen + 3, 12), 48) };
+      });
+    }
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Supabase_Registrations');
     XLSX.writeFile(wb, `AIMA_CaseLeague_Registrations_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -336,7 +418,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
     const text = (reg.nominees || [])
       .map(
         (n, i) =>
-          `[${i + 1}] ${n.name}\nEmail/Login: ${n.email}\nEnrolment: ${n.enrolmentNumber || 'N/A'}\nQuiz Password: ${n.password || 'AimaQuiz@2026'}\n`
+          `[${i + 1}] ${n.name}\nEmail/Login: ${n.email}\nEnrolment: ${n.enrolmentNumber || 'N/A'}\nQuiz Password: ${n.password || generateDefaultPassword(n.name, n.mobile || '')}\n`
       )
       .join('\n');
     navigator.clipboard.writeText(text);
@@ -410,7 +492,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
               {stats.totalRegs}
             </span>
             <span className="text-[10px] text-blue-600 font-bold">
-              {registrations.filter((r) => r.track === 'institutional').length} Inst
+              {stats.instRegsCount} Inst
             </span>
           </div>
         </div>
@@ -447,7 +529,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
           </span>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-              ₹{(stats.totalRevenue / 1000).toFixed(0)}k
+              ₹{stats.totalRevenue.toLocaleString('en-IN')}
             </span>
             <span className="text-[10px] text-slate-500">Incl. GST</span>
           </div>
@@ -473,35 +555,44 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
           <button
             type="button"
             onClick={() => setModeFilter('all')}
-            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               modeFilter === 'all'
                 ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400'
             }`}
           >
-            All Tracks
+            <span>All Tracks</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold">
+              {stats.totalRegs}
+            </span>
           </button>
           <button
             type="button"
             onClick={() => setModeFilter('individual')}
-            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               modeFilter === 'individual'
                 ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400'
             }`}
           >
-            Individual
+            <span>Individual</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold">
+              {stats.indivRegsCount}
+            </span>
           </button>
           <button
             type="button"
             onClick={() => setModeFilter('institute')}
-            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               modeFilter === 'institute'
                 ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400'
             }`}
           >
-            Institutes
+            <span>Institutes</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold">
+              {stats.instRegsCount}
+            </span>
           </button>
         </div>
 
@@ -510,35 +601,44 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
           <button
             type="button"
             onClick={() => setStatusFilter('all')}
-            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               statusFilter === 'all'
                 ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400'
             }`}
           >
-            All Status
+            <span>All Status</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold">
+              {stats.totalRegs}
+            </span>
           </button>
           <button
             type="button"
             onClick={() => setStatusFilter('PAID')}
-            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               statusFilter === 'PAID'
                 ? 'bg-emerald-500 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400'
             }`}
           >
-            Paid
+            <span>Paid</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${statusFilter === 'PAID' ? 'bg-emerald-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+              {stats.paidRegs}
+            </span>
           </button>
           <button
             type="button"
             onClick={() => setStatusFilter('PENDING_INVOICE')}
-            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               statusFilter === 'PENDING_INVOICE'
                 ? 'bg-amber-500 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400'
             }`}
           >
-            Pending
+            <span>Pending</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${statusFilter === 'PENDING_INVOICE' ? 'bg-amber-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+              {stats.pendingRegs}
+            </span>
           </button>
         </div>
       </div>
@@ -569,7 +669,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                 </tr>
               ) : (
                 paginatedRegistrations.map((reg) => {
-                  const isInst = reg.track === 'institutional' || reg.organizationType === 'Academic Institution';
+                  const isInst = reg.track === 'institutional' || (reg as any).registration_mode === 'institute';
                   const isPaid = reg.paymentStatus === 'PAID';
 
                   return (
@@ -603,7 +703,10 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                           {isInst ? 'Institutional' : reg.teamName ? 'Team Delegation' : 'Solo Candidate'}
                         </span>
                         {reg.teamName && (
-                          <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate max-w-[140px] mt-0.5">
+                          <div
+                            className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate max-w-[140px] mt-0.5 cursor-help"
+                            title={reg.teamName}
+                          >
                             {reg.teamName}
                           </div>
                         )}
@@ -640,7 +743,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                       {/* Fee */}
                       <td className="py-3.5 px-4 text-right">
                         <div className="font-mono font-black text-slate-900 dark:text-white">
-                          ₹{reg.totalPayable.toLocaleString('en-IN')}
+                          ₹{(reg.totalPayable ?? 0).toLocaleString('en-IN')}
                         </div>
                         <div className="text-[10px] text-slate-400">
                           {reg.tierLabel || reg.tierName || `${reg.participantCount || reg.nominees?.length || 1} × ₹200`}
@@ -816,14 +919,25 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                 <span className="font-bold text-slate-700 dark:text-slate-300">
                   {activeNomineesModal.nominees?.length || 1} Nominee(s) Registered
                 </span>
-                <button
-                  type="button"
-                  onClick={() => handleCopyNomineeLogins(activeNomineesModal)}
-                  className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 font-bold flex items-center gap-1.5 cursor-pointer"
-                >
-                  {copiedLogins ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedLogins ? 'Copied' : 'Copy All Logins'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswords(!showPasswords)}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold flex items-center gap-1.5 cursor-pointer transition-colors text-xs"
+                    title={showPasswords ? 'Mask passwords' : 'Show passwords'}
+                  >
+                    {showPasswords ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5 text-blue-500" />}
+                    <span>{showPasswords ? 'Mask' : 'Reveal'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyNomineeLogins(activeNomineesModal)}
+                    className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 font-bold flex items-center gap-1.5 cursor-pointer text-xs"
+                  >
+                    {copiedLogins ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedLogins ? 'Copied' : 'Copy All Logins'}</span>
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-3">
@@ -835,41 +949,66 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                         name: getCandidateName(activeNomineesModal),
                         email: getCandidateEmail(activeNomineesModal),
                         mobile: getCandidatePhone(activeNomineesModal),
-                        password: activeNomineesModal.participantPassword || 'AimaQuiz@2026',
+                        password: activeNomineesModal.participantPassword || generateDefaultPassword(getCandidateName(activeNomineesModal), getCandidatePhone(activeNomineesModal)),
                         isTeamLeader: true,
                       },
                     ]
-                ).map((nom, idx) => (
-                  <div
-                    key={nom.id || idx}
-                    className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900 dark:text-white">
-                        {idx + 1}. {nom.name}
-                      </span>
-                      {nom.isTeamLeader && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                          Leader
+                ).map((nom, idx) => {
+                  const pwd = nom.password || generateDefaultPassword(nom.name, nom.mobile || '');
+                  const nomKey = nom.id || `nom_${idx}`;
+                  const isCopied = copiedNomineeId === nomKey;
+
+                  return (
+                    <div
+                      key={nomKey}
+                      className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-900 dark:text-white">
+                          {idx + 1}. {nom.name}
                         </span>
-                      )}
+                        <div className="flex items-center gap-2">
+                          {nom.isTeamLeader && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                              Leader
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const singleText = `Name: ${nom.name}\nEmail/Login: ${nom.email}\nQuiz Password: ${pwd}\nEnrolment: ${nom.enrolmentNumber || 'N/A'}`;
+                              navigator.clipboard.writeText(singleText);
+                              setCopiedNomineeId(nomKey);
+                              setTimeout(() => setCopiedNomineeId(null), 2000);
+                            }}
+                            className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                            title="Copy this participant's login credentials"
+                          >
+                            {isCopied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                            <span>{isCopied ? 'Copied' : 'Copy'}</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+                        <div>
+                          Email (Login): <strong className="font-mono text-slate-900 dark:text-white">{nom.email}</strong>
+                        </div>
+                        <div>
+                          Quiz Password:{' '}
+                          <strong className="font-mono text-amber-600 dark:text-amber-400">
+                            {showPasswords ? pwd : '••••••••'}
+                          </strong>
+                        </div>
+                        <div>
+                          Mobile: <strong>{nom.mobile || 'N/A'}</strong>
+                        </div>
+                        <div>
+                          Enrolment: <strong className="font-mono">{nom.enrolmentNumber || 'N/A'}</strong>
+                        </div>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300">
-                      <div>
-                        Email (Login): <strong className="font-mono text-slate-900 dark:text-white">{nom.email}</strong>
-                      </div>
-                      <div>
-                        Quiz Password: <strong className="font-mono text-amber-600 dark:text-amber-400">{nom.password || 'AimaQuiz@2026'}</strong>
-                      </div>
-                      <div>
-                        Mobile: <strong>{nom.mobile || 'N/A'}</strong>
-                      </div>
-                      <div>
-                        Enrolment: <strong className="font-mono">{nom.enrolmentNumber || 'N/A'}</strong>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -918,6 +1057,13 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
               </button>
             </div>
 
+            {paymentError && (
+              <div className="p-3 mx-6 mt-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
+                <span className="font-semibold">{paymentError}</span>
+              </div>
+            )}
+
             <div className="p-6 space-y-4 text-xs">
               {/* Registration & Amount Summary */}
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between">
@@ -932,7 +1078,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                 <div className="text-right">
                   <div className="text-[10px] text-slate-400">Payable</div>
                   <div className="text-sm font-black font-mono text-slate-900 dark:text-white">
-                    ₹{activeEditPaymentReg.totalPayable.toLocaleString('en-IN')}
+                    ₹{(activeEditPaymentReg.totalPayable ?? 0).toLocaleString('en-IN')}
                   </div>
                 </div>
               </div>

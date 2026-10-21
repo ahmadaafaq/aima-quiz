@@ -26,6 +26,7 @@ import {
   CSREmailLog,
 } from '../types';
 import {
+  supabase,
   saveRegistrationToSupabase,
   fetchRegistrationsFromSupabase,
   updateRegistrationPaymentInSupabase,
@@ -33,6 +34,19 @@ import {
   fetchRegistrationByNumber,
   fetchParticipantsByRegistration,
   getLocalRegistrationsCache,
+  getLocalConfigCache,
+  saveLocalConfigCache,
+  fetchCompetitionConfigFromSupabase,
+  updateCompetitionConfigViaServer,
+  mapSupabaseRowToAppConfig,
+  fetchQuizPrograms,
+  upsertQuizProgram,
+  deleteQuizProgramFromDb,
+  fetchQuizQuestionsPublic,
+  upsertQuizQuestion,
+  upsertQuizQuestionsBulk,
+  deleteQuizQuestionFromDb,
+  fetchLeaderboard,
 } from '../lib/supabase';
 import {
   INITIAL_CONFIG,
@@ -105,7 +119,7 @@ interface CompetitionContextType {
   questions: QuizQuestion[];
   quizAttempts: QuizAttempt[];
   saveQuizProgress: (attemptId: string, answers: Record<string, number>, marked: string[], tabSwitches: number) => void;
-  submitQuiz: (answers: Record<string, number>, marked: string[], timeTaken: number, tabSwitches: number) => QuizAttempt;
+  submitQuiz: (answers: Record<string, number>, marked: string[], timeTaken: number, tabSwitches: number) => Promise<QuizAttempt>;
   addQuestion: (q: Omit<QuizQuestion, 'id'>) => void;
   addQuestionsBulk: (newQuestions: Omit<QuizQuestion, 'id'>[]) => number;
   updateQuestion: (id: string, q: Partial<QuizQuestion>) => void;
@@ -334,7 +348,7 @@ const getInitialActiveView = (): string => {
 export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [activeView, setActiveView] = useState<string>(getInitialActiveView);
-  const [config, setConfig] = useState<CompetitionConfig>(INITIAL_CONFIG);
+  const [config, setConfig] = useState<CompetitionConfig>(() => getLocalConfigCache() || INITIAL_CONFIG);
   
   // Participant session helpers & storage keys
   const PARTICIPANT_SESSION_KEY = 'AIMA_PARTICIPANT_SESSION_V1';
@@ -518,9 +532,9 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return MOCK_TEAMS;
   });
 
-  const [quizPrograms, setQuizPrograms] = useState<QuizProgram[]>(MOCK_QUIZ_PROGRAMS);
-  const [questions, setQuestions] = useState<QuizQuestion[]>(QUIZ_QUESTIONS);
-  const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>(INITIAL_QUIZ_ATTEMPTS);
+  const [quizPrograms, setQuizPrograms] = useState<QuizProgram[]>([]);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
   const [aiEvaluations, setAiEvaluations] = useState<Record<string, any>>({});
   const [hubs, setHubs] = useState<RegionalHub[]>(REGIONAL_HUBS);
   const [institutions, setInstitutions] = useState<InstitutionalProfile[]>(MOCK_INSTITUTIONS);
@@ -611,6 +625,48 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       syncParticipantData(participantUser);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Round 1 Quiz Sub-system: Dynamic Mount Fetch Hooks with Mock Fallback ──
+  useEffect(() => {
+    fetchQuizPrograms()
+      .then((data) => {
+        if (data && data.length > 0) {
+          setQuizPrograms(data);
+        } else {
+          setQuizPrograms(MOCK_QUIZ_PROGRAMS);
+        }
+      })
+      .catch((err) => {
+        console.warn('Fallback to mock quiz programs:', err);
+        setQuizPrograms(MOCK_QUIZ_PROGRAMS);
+      });
+
+    fetchQuizQuestionsPublic()
+      .then((data) => {
+        if (data && data.length > 0) {
+          setQuestions(data);
+        } else {
+          setQuestions(QUIZ_QUESTIONS);
+        }
+      })
+      .catch((err) => {
+        console.warn('Fallback to mock questions:', err);
+        setQuestions(QUIZ_QUESTIONS);
+      });
+
+    fetchLeaderboard()
+      .then((attempts) => {
+        if (attempts && attempts.length > 0) {
+          setQuizAttempts(attempts);
+        } else {
+          setQuizAttempts(INITIAL_QUIZ_ATTEMPTS);
+        }
+      })
+      .catch((err) => {
+        console.warn('Fallback to initial attempts:', err);
+        setQuizAttempts(INITIAL_QUIZ_ATTEMPTS);
+      });
   }, []);
 
   const loginParticipantSession = (participant: SupabaseParticipantRow) => {
@@ -734,6 +790,48 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
       window.history.scrollRestoration = 'manual';
     }
+  }, []);
+
+  // Live Competition Configuration Fetch & Realtime Synchronizer
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadLiveConfig() {
+      try {
+        const live = await fetchCompetitionConfigFromSupabase();
+        if (live && isMounted) {
+          setConfig(prev => ({ ...prev, ...live }));
+        }
+      } catch (err) {
+        console.warn('Initial competition config fetch notice:', err);
+      }
+    }
+
+    loadLiveConfig();
+
+    // Subscribe to Supabase Realtime changes on public:competition_config
+    const channel = supabase
+      .channel('competition_config_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'competition_config' },
+        (payload: any) => {
+          if (payload?.new && isMounted) {
+            const mapped = mapSupabaseRowToAppConfig(payload.new);
+            setConfig(prev => {
+              const updated = { ...prev, ...mapped };
+              saveLocalConfigCache(updated);
+              return updated;
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Sync URL route with activeView & reset scroll to top of page
@@ -962,12 +1060,46 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     addAuditLog('Role Switched', 'System', `Switched active persona to ${role}`);
   };
 
-  const updateConfig = (newConfig: Partial<CompetitionConfig>) => {
+  const updateConfig = async (newConfig: Partial<CompetitionConfig>) => {
+    const prevConfig = { ...config };
+
+    // 1. Optimistic Local Update & Cache
     setConfig(prev => {
       const updated = { ...prev, ...newConfig };
-      addAuditLog('Competition Configuration Updated', 'System', `Updated keys: ${Object.keys(newConfig).join(', ')}`);
+      saveLocalConfigCache(updated);
       return updated;
     });
+
+    // 2. Synchronize via Secure Server API with Bounded Retries & Rollback
+    try {
+      const res = await updateCompetitionConfigViaServer(newConfig, 2);
+      if (res.success) {
+        if (res.audit) {
+          addAuditLog(
+            res.audit.action,
+            'System',
+            res.audit.details,
+            { oldValue: JSON.stringify(res.changedFields || {}) }
+          );
+        }
+        if (res.config) {
+          const mapped = mapSupabaseRowToAppConfig(res.config);
+          setConfig(prev => ({ ...prev, ...mapped }));
+          saveLocalConfigCache({ ...config, ...mapped });
+        }
+      } else {
+        console.error('Server rejected stage gate override, rolling back:', res.error);
+        // Rollback state & cache
+        setConfig(prevConfig);
+        saveLocalConfigCache(prevConfig);
+        alert(`Stage Gate Update Failed: ${res.error || 'Server rejected changes. Ensure you are signed in as an administrator.'}`);
+      }
+    } catch (err: any) {
+      console.error('Network exception updating competition config, rolling back:', err);
+      setConfig(prevConfig);
+      saveLocalConfigCache(prevConfig);
+      alert('Network Error: Unable to synchronize phase changes with server. Reverting to previous state.');
+    }
   };
 
   const userTeam = teams.find(t => t.id === currentUser.teamId || t.members.some(m => m.studentId === currentUser.id));
@@ -1295,39 +1427,72 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
   };
 
-  const submitQuiz = (answers: Record<string, number>, marked: string[], timeTaken: number, tabSwitches: number): QuizAttempt => {
-    let totalScore = 0;
-    let analyticalScore = 0;
+  const submitQuiz = async (answers: Record<string, number>, marked: string[], timeTaken: number, tabSwitches: number): Promise<QuizAttempt> => {
+    let resultScore = 0;
+    let resultAnalytical = 0;
+    let isQualified = false;
+    let attemptId = 'att_' + currentUser.id;
+    let submittedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
 
-    questions.forEach(q => {
-      const selected = answers[q.id];
-      if (selected !== undefined) {
-        if (selected === q.correctAnswerIndex) {
-          totalScore += q.marks;
-          if (q.category === 'Data Interpretation' || q.category === 'Logical Reasoning') {
-            analyticalScore += q.marks;
-          }
-        } else if (config.r1NegativeMarking) {
-          totalScore -= q.negativeMarks;
-        }
+    try {
+      const res = await fetch('/api/quiz/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          answers,
+          markedForReview: marked,
+          timeTaken,
+          tabSwitches,
+          studentId: currentUser.id,
+          teamId: currentUser.teamId,
+          participantEmail: currentUser.email,
+          programId: quizPrograms[0]?.id || 'qp_r1_national_2026',
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        resultScore = data.score ?? 0;
+        resultAnalytical = data.analyticalScore ?? 0;
+        isQualified = Boolean(data.isQualified);
+        if (data.attemptId) attemptId = data.attemptId;
+        if (data.submittedAt) submittedAt = data.submittedAt;
+      } else {
+        throw new Error('Server evaluation returned HTTP ' + res.status);
       }
-    });
+    } catch (err: any) {
+      console.warn('Server-side scoring fallback to local:', err?.message);
+      let totalScore = 0;
+      let analyticalScore = 0;
+      questions.forEach(q => {
+        const selected = answers[q.id];
+        if (selected !== undefined) {
+          if (selected === q.correctAnswerIndex) {
+            totalScore += q.marks;
+            if (q.category === 'Data Interpretation' || q.category === 'Logical Reasoning') {
+              analyticalScore += q.marks;
+            }
+          } else if (config.r1NegativeMarking) {
+            totalScore -= q.negativeMarks;
+          }
+        }
+      });
+      resultScore = Math.max(0, Math.round(totalScore * (100 / (Math.max(1, questions.length) * 4))));
+      resultAnalytical = analyticalScore;
+      isQualified = resultScore >= config.r1CutoffScore;
+    }
 
-    const scaledScore = Math.max(0, Math.round(totalScore * (100 / (questions.length * 4))));
-    const isQualified = scaledScore >= config.r1CutoffScore;
-
-    const attemptId = 'att_' + currentUser.id;
     const completedAttempt: QuizAttempt = {
       attemptId,
       studentId: currentUser.id,
       userId: currentUser.id,
       teamId: currentUser.teamId,
       startTime: new Date(Date.now() - timeTaken * 1000).toISOString(),
-      submittedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      submittedAt,
       answers,
       markedForReview: marked,
-      score: scaledScore,
-      analyticalScore,
+      score: resultScore,
+      analyticalScore: resultAnalytical,
       timeTakenSeconds: timeTaken,
       tabSwitchCount: tabSwitches,
       isCompleted: true,
@@ -1336,7 +1501,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setQuizAttempts(prev => [completedAttempt, ...prev.filter(q => q.studentId !== currentUser.id && q.userId !== currentUser.id)]);
 
     updateUserProfile({
-      quizScore: scaledScore,
+      quizScore: resultScore,
       quizCompleted: true,
       qualificationStatus: {
         ...(currentUser.qualificationStatus || { r2Qualified: false, r3Qualified: false, r4Finalist: false }),
@@ -1350,7 +1515,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         if (t.id === userTeam.id) {
           return {
             ...t,
-            r1AvgScore: scaledScore,
+            r1AvgScore: resultScore,
             r1Qualified: isQualified,
             r1CompletedMembersCount: 1,
           };
@@ -1360,7 +1525,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setTeams(updatedTeams);
     }
 
-    addAuditLog('Quiz Submitted', 'Quiz', `Completed Round 1 Business Quiz with score ${scaledScore}/100 (Tab switches: ${tabSwitches})`);
+    addAuditLog('Quiz Submitted', 'Quiz', `Completed Round 1 Business Quiz with score ${resultScore}/100 (Tab switches: ${tabSwitches})`);
     return completedAttempt;
   };
 
@@ -1370,6 +1535,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       ...q,
     };
     setQuestions(prev => [newQ, ...prev]);
+    upsertQuizQuestion(newQ).catch(console.error);
     addAuditLog('Question Added', 'Quiz', `Added new question: "${q.questionText.slice(0, 40)}..."`);
   };
 
@@ -1380,17 +1546,26 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       ...q,
     }));
     setQuestions(prev => [...formatted, ...prev]);
+    upsertQuizQuestionsBulk(formatted).catch(console.error);
     addAuditLog('Bulk Questions Imported', 'Quiz', `Successfully imported ${formatted.length} questions into Question Bank via spreadsheet.`);
     return formatted.length;
   };
 
   const updateQuestion = (id: string, q: Partial<QuizQuestion>) => {
-    setQuestions(prev => prev.map(item => (item.id === id ? { ...item, ...q } : item)));
+    setQuestions(prev => {
+      const updated = prev.map(item => (item.id === id ? { ...item, ...q } : item));
+      const target = updated.find(item => item.id === id);
+      if (target) {
+        upsertQuizQuestion(target).catch(console.error);
+      }
+      return updated;
+    });
     addAuditLog('Question Updated', 'Quiz', `Updated question ID ${id}`);
   };
 
   const deleteQuestion = (id: string) => {
     setQuestions(prev => prev.filter(item => item.id !== id));
+    deleteQuizQuestionFromDb(id).catch(console.error);
     addAuditLog('Question Deleted', 'Quiz', `Removed question ID ${id}`);
   };
 
@@ -1938,17 +2113,26 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       ...program,
     };
     setQuizPrograms(prev => [newProgram, ...prev]);
+    upsertQuizProgram(newProgram).catch(console.error);
     addAuditLog('Quiz Program Created', 'Quiz', `Created quiz program: "${program.title}" (Code: ${program.code})`);
     return newProgram;
   };
 
   const updateQuizProgram = (id: string, program: Partial<QuizProgram>) => {
-    setQuizPrograms(prev => prev.map(p => (p.id === id ? { ...p, ...program } : p)));
+    setQuizPrograms(prev => {
+      const updated = prev.map(p => (p.id === id ? { ...p, ...program } : p));
+      const target = updated.find(p => p.id === id);
+      if (target) {
+        upsertQuizProgram(target).catch(console.error);
+      }
+      return updated;
+    });
     addAuditLog('Quiz Program Updated', 'Quiz', `Updated quiz program ID ${id}`);
   };
 
   const deleteQuizProgram = (id: string) => {
     setQuizPrograms(prev => prev.filter(p => p.id !== id));
+    deleteQuizProgramFromDb(id).catch(console.error);
     addAuditLog('Quiz Program Deleted', 'Quiz', `Deleted quiz program ID ${id}`);
   };
 
