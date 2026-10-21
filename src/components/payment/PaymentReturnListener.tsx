@@ -11,6 +11,7 @@ interface ReturnDetails {
   amount: string;
   authCode: string;
   gateway: string;
+  reason?: string;
 }
 
 export const PaymentReturnListener: React.FC = () => {
@@ -27,7 +28,8 @@ export const PaymentReturnListener: React.FC = () => {
     const reference = params.get('reference') || '';
     const amount = params.get('amount') || '200';
     const authCode = params.get('authCode') || 'AUTH_' + Math.floor(100000 + Math.random() * 900000);
-    const gateway = params.get('gateway') || 'HDFC / CCAvenue';
+    const gateway = params.get('gateway') || 'HDFC Bank Collect Now';
+    const reason = params.get('reason') || 'Transaction was declined or cancelled';
 
     if (orderId && status === 'SUCCESS') {
       const details: ReturnDetails = {
@@ -73,70 +75,119 @@ export const PaymentReturnListener: React.FC = () => {
       // Clean address bar so page refresh doesn't re-trigger
       const cleanUrl = window.location.pathname;
       window.history.replaceState({}, document.title, cleanUrl);
+    } else if (status === 'FAILED' || status === 'CANCELLED') {
+      const details: ReturnDetails = {
+        orderId: orderId || 'N/A',
+        reference,
+        status,
+        amount,
+        authCode: 'N/A',
+        gateway,
+        reason,
+      };
+
+      setReturnDetails(details);
+      setIsOpen(true);
+
+      // Clean address bar so page refresh doesn't re-trigger
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
     }
   }, []);
 
   if (!isOpen || !returnDetails) return null;
 
+  const isSuccess = returnDetails.status === 'SUCCESS';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl border border-emerald-500/40 shadow-2xl overflow-hidden p-6 sm:p-8 space-y-6 text-center">
-        {/* Success Icon */}
-        <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center shadow-lg shadow-emerald-500/20">
-          <CheckCircle2 className="w-10 h-10" />
+      <div className={`relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl border ${isSuccess ? 'border-emerald-500/40' : 'border-rose-500/40'} shadow-2xl overflow-hidden p-6 sm:p-8 space-y-6 text-center`}>
+        {/* Status Icon */}
+        <div className={`w-16 h-16 rounded-full ${isSuccess ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 shadow-emerald-500/20' : 'bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 shadow-rose-500/20'} mx-auto flex items-center justify-center shadow-lg`}>
+          {isSuccess ? <CheckCircle2 className="w-10 h-10" /> : <X className="w-10 h-10" />}
         </div>
 
         {/* Title */}
         <div className="space-y-1.5">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold uppercase tracking-wider">
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${isSuccess ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'} border text-xs font-bold uppercase tracking-wider`}>
             <ShieldCheck className="w-4 h-4" />
-            <span>Centralized Payment Hub Verified</span>
+            <span>Centralized Payment Hub {isSuccess ? 'Verified' : 'Notice'}</span>
           </div>
           <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-            Payment Cleared Successfully!
+            {isSuccess ? 'Payment Cleared Successfully!' : 'Payment Was Not Completed'}
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-            Your registration payment has been verified by the AIMA Centralized Payment Hub and recorded in the national ledger.
+            {isSuccess
+              ? 'Your registration payment has been verified by the AIMA Centralized Payment Hub and recorded in the national ledger.'
+              : (returnDetails.reason || 'The transaction was cancelled or declined by the payment gateway.')}
           </p>
         </div>
 
         {/* Transaction Summary Card */}
         <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-xs space-y-2.5 text-left font-mono">
+          {returnDetails.orderId !== 'N/A' && (
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 font-sans">Payment Order ID:</span>
+              <span className="font-bold text-slate-900 dark:text-slate-100">{returnDetails.orderId}</span>
+            </div>
+          )}
+          {returnDetails.reference && (
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 font-sans">Candidate / Reg Ref:</span>
+              <span className="font-bold text-blue-600 dark:text-blue-400">{returnDetails.reference}</span>
+            </div>
+          )}
           <div className="flex justify-between items-center">
-            <span className="text-slate-500 font-sans">Payment Order ID:</span>
-            <span className="font-bold text-slate-900 dark:text-slate-100">{returnDetails.orderId}</span>
+            <span className="text-slate-500 font-sans">Gateway Status:</span>
+            <span className={`font-bold font-sans ${isSuccess ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+              {returnDetails.status}
+            </span>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-slate-500 font-sans">Candidate / Reg Ref:</span>
-            <span className="font-bold text-blue-600 dark:text-blue-400">{returnDetails.reference || 'AIMA-REG-CONFIRMED'}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-slate-500 font-sans">Amount Paid:</span>
-            <span className="font-bold text-emerald-600 dark:text-emerald-400 font-sans text-sm">₹{returnDetails.amount} INR</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-slate-500 font-sans">Processed Gateway:</span>
-            <span className="font-bold text-slate-700 dark:text-slate-300 font-sans">{returnDetails.gateway}</span>
-          </div>
-          <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-700">
-            <span className="text-slate-500 font-sans">Bank Auth Code:</span>
-            <span className="font-bold text-slate-900 dark:text-slate-100">{returnDetails.authCode}</span>
-          </div>
+          {isSuccess && (
+            <>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 font-sans">Amount Paid:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 font-sans text-sm">₹{returnDetails.amount} INR</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 font-sans">Processed Gateway:</span>
+                <span className="font-bold text-slate-700 dark:text-slate-300 font-sans">{returnDetails.gateway}</span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-700">
+                <span className="text-slate-500 font-sans">Bank Auth Code:</span>
+                <span className="font-bold text-slate-900 dark:text-slate-100">{returnDetails.authCode}</span>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row items-center gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(false);
-              setActiveView('registration');
-            }}
-            className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
-          >
-            <span>View Registration Confirmation</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          {isSuccess ? (
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                setActiveView('registration');
+              }}
+              className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+            >
+              <span>View Registration Confirmation</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                setActiveView('registration');
+              }}
+              className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+            >
+              <span>Retry Registration / Payment</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setIsOpen(false)}
