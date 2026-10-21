@@ -25,6 +25,7 @@ import {
   FileCheck2,
   Clock
 } from 'lucide-react';
+import { isPaymentHubEnabled, initiatePaymentRedirect } from '../../config/paymentConfig';
 
 interface UnifiedRegistrationModalProps {
   isOpen: boolean;
@@ -134,6 +135,39 @@ export const UnifiedRegistrationModal: React.FC<UnifiedRegistrationModalProps> =
   };
 
   const handleSimulatePayment = async () => {
+    // If not a 100% discount voucher and Payment Hub is enabled, redirect to Centralized Hub
+    if (!discountApplied && isPaymentHubEnabled()) {
+      setIsProcessingPayment(true);
+      setProcessingStage('Connecting to AIMA Centralized Payment Hub...');
+
+      const refNo = `ICRC-${Date.now().toString().slice(-6)}`;
+      const pendingData = {
+        track,
+        reference: refNo,
+        amount: track === 'team' ? totalPayable : instTotal,
+        paymentStatus: 'PENDING_PAYMENT',
+        teamName: track === 'team' ? teamName : undefined,
+        leaderName: track === 'team' ? leaderName : coordName,
+        leaderEmail: track === 'team' ? leaderEmail : coordEmail,
+        instituteName: track === 'team' ? instituteName : instName,
+      };
+      try {
+        localStorage.setItem('pending_csr_registration', JSON.stringify(pendingData));
+      } catch {}
+
+      await new Promise((r) => setTimeout(r, 400));
+
+      initiatePaymentRedirect({
+        reference: refNo,
+        amount: track === 'team' ? totalPayable : instTotal,
+        customerName: track === 'team' ? leaderName : coordName,
+        customerEmail: track === 'team' ? leaderEmail : coordEmail,
+        customerPhone: track === 'team' ? leaderMobile : coordMobile,
+        purpose: 'REGISTRATION_FEE',
+      });
+      return;
+    }
+
     setIsProcessingPayment(true);
     setProcessingStage('Connecting to AIMA-ICRC Encrypted Payment Gateway...');
 

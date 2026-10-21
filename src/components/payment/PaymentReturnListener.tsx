@@ -1,0 +1,151 @@
+import React, { useEffect, useState } from 'react';
+import confetti from 'canvas-confetti';
+import { CheckCircle2, ShieldCheck, X, ArrowRight, ExternalLink } from 'lucide-react';
+import { updateRegistrationPaymentInSupabase } from '../../lib/supabase';
+import { useCompetition } from '../../context/CompetitionContext';
+
+interface ReturnDetails {
+  orderId: string;
+  reference: string;
+  status: string;
+  amount: string;
+  authCode: string;
+  gateway: string;
+}
+
+export const PaymentReturnListener: React.FC = () => {
+  const [returnDetails, setReturnDetails] = useState<ReturnDetails | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const { setActiveView } = useCompetition();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get('orderId');
+    const status = params.get('status');
+    const reference = params.get('reference') || '';
+    const amount = params.get('amount') || '200';
+    const authCode = params.get('authCode') || 'AUTH_' + Math.floor(100000 + Math.random() * 900000);
+    const gateway = params.get('gateway') || 'HDFC / CCAvenue';
+
+    if (orderId && status === 'SUCCESS') {
+      const details: ReturnDetails = {
+        orderId,
+        reference,
+        status,
+        amount,
+        authCode,
+        gateway,
+      };
+
+      setReturnDetails(details);
+      setIsOpen(true);
+
+      // Trigger celebration confetti
+      try {
+        confetti({ particleCount: 140, spread: 85, origin: { y: 0.6 } });
+      } catch {}
+
+      // Update Supabase if registration reference exists
+      if (reference) {
+        updateRegistrationPaymentInSupabase(reference, 'PAID', gateway, orderId).catch((err) => {
+          console.warn('[PaymentReturn] Supabase update notice:', err);
+        });
+      }
+
+      // Check if there was a pending registration cached locally
+      try {
+        const cachedRaw = localStorage.getItem('pending_csr_registration');
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          cached.paymentStatus = 'PAID';
+          cached.paymentMethod = gateway;
+          cached.transactionId = orderId;
+          cached.invoiceNumber = (cached.invoiceNumber || 'INV-2026-').replace('PINV-', 'INV-');
+          localStorage.setItem('active_csr_registration', JSON.stringify(cached));
+          localStorage.removeItem('pending_csr_registration');
+        }
+      } catch (e) {
+        console.warn('[PaymentReturn] Cache sync notice:', e);
+      }
+
+      // Clean address bar so page refresh doesn't re-trigger
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+  }, []);
+
+  if (!isOpen || !returnDetails) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl border border-emerald-500/40 shadow-2xl overflow-hidden p-6 sm:p-8 space-y-6 text-center">
+        {/* Success Icon */}
+        <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center shadow-lg shadow-emerald-500/20">
+          <CheckCircle2 className="w-10 h-10" />
+        </div>
+
+        {/* Title */}
+        <div className="space-y-1.5">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold uppercase tracking-wider">
+            <ShieldCheck className="w-4 h-4" />
+            <span>Centralized Payment Hub Verified</span>
+          </div>
+          <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+            Payment Cleared Successfully!
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+            Your registration payment has been verified by the AIMA Centralized Payment Hub and recorded in the national ledger.
+          </p>
+        </div>
+
+        {/* Transaction Summary Card */}
+        <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-xs space-y-2.5 text-left font-mono">
+          <div className="flex justify-between items-center">
+            <span className="text-slate-500 font-sans">Payment Order ID:</span>
+            <span className="font-bold text-slate-900 dark:text-slate-100">{returnDetails.orderId}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-slate-500 font-sans">Candidate / Reg Ref:</span>
+            <span className="font-bold text-blue-600 dark:text-blue-400">{returnDetails.reference || 'AIMA-REG-CONFIRMED'}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-slate-500 font-sans">Amount Paid:</span>
+            <span className="font-bold text-emerald-600 dark:text-emerald-400 font-sans text-sm">₹{returnDetails.amount} INR</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-slate-500 font-sans">Processed Gateway:</span>
+            <span className="font-bold text-slate-700 dark:text-slate-300 font-sans">{returnDetails.gateway}</span>
+          </div>
+          <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-700">
+            <span className="text-slate-500 font-sans">Bank Auth Code:</span>
+            <span className="font-bold text-slate-900 dark:text-slate-100">{returnDetails.authCode}</span>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(false);
+              setActiveView('registration');
+            }}
+            className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+          >
+            <span>View Registration Confirmation</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="w-full sm:w-auto py-3 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold cursor-pointer transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

@@ -23,6 +23,7 @@ import { DisclaimerPage } from './components/legal/DisclaimerPage';
 import { PrivacyPolicyPage } from './components/legal/PrivacyPolicyPage';
 import { ContactUsPage } from './components/legal/ContactUsPage';
 import { PolicyConsentModal } from './components/legal/PolicyConsentModal';
+import { PaymentReturnListener } from './components/payment/PaymentReturnListener';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 const AppContent: React.FC = () => {
@@ -149,6 +150,7 @@ const AppContent: React.FC = () => {
       <CertificateVerifier />
       <SupportModal />
       <PolicyConsentModal />
+      <PaymentReturnListener />
       {/* {!isRegistrationPage && <ChatAssistant />} */}
 
       {/* Bottom Footer */}
