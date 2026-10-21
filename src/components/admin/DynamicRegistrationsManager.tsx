@@ -298,7 +298,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
             'Quiz Password': 'AimaQuiz@2026',
             'Payment Status': reg.paymentStatus,
             'Total Fee (INR)': reg.totalPayable,
-            'Date Created': new Date(reg.createdAt).toLocaleDateString('en-IN'),
+            'Date Created': `${new Date(reg.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} ${new Date(reg.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`,
           },
         ];
       }
@@ -321,7 +321,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
         'Quiz Login Password': nom.password || 'AimaQuiz@2026',
         'Payment Status': reg.paymentStatus,
         'Total Fee (INR)': reg.totalPayable,
-        'Date Created': new Date(reg.createdAt).toLocaleDateString('en-IN'),
+        'Date Created': `${new Date(reg.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} ${new Date(reg.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`,
       }));
     });
 
@@ -582,12 +582,22 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                         <div className="font-mono font-black text-blue-600 dark:text-blue-400">
                           {reg.registrationNumber}
                         </div>
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          {new Date(reg.createdAt).toLocaleDateString('en-IN', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
+                          <span>
+                            {new Date(reg.createdAt).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                            })}
+                          </span>
+                          <span className="text-slate-300 dark:text-slate-600">•</span>
+                          <span className="text-slate-600 dark:text-slate-300 font-semibold">
+                            {new Date(reg.createdAt).toLocaleTimeString('en-IN', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: true,
+                            })}
+                          </span>
                         </div>
                       </td>
 
