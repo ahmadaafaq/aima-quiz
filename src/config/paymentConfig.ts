@@ -64,9 +64,9 @@ export function getPaymentHubUrl(): string {
       return `http://${host}:3002`;
     }
 
-    // In production on research.aima.in:
-    // Rewrites in vercel.json route /pay, /checkout/:token, and /api/* directly to aima-payments-hub
-    return window.location.origin;
+    // In production / deployed cloud:
+    // Route directly to the centralized payments hub service
+    return 'https://aima-payments-hub.vercel.app';
   }
 
   // Deployed cloud fallback URL
