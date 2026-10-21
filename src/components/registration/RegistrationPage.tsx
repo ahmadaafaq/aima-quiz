@@ -58,6 +58,7 @@ import {
   EARLY_BIRD_FEE_PER_PERSON,
   FEE_TIERS,
 } from '../../data/feeConfig';
+import { initiatePaymentRedirect } from '../../config/paymentConfig';
 export { IS_EARLY_BIRD_FREE, PARTICIPATION_FEE_PER_PERSON, EARLY_BIRD_FEE_PER_PERSON, FEE_TIERS };
 
 interface TeamMemberInput {
@@ -894,7 +895,26 @@ export const RegistrationPage: React.FC = () => {
       console.warn('Participant account creation failed (non-critical):', err);
     });
 
-    // Directly finalize registration and navigate to Confirmation step
+    // If payment is required (> ₹0) and not proforma invoice: Redirect to AIMA Centralized Payment Hub
+    if (!IS_EARLY_BIRD_FREE && feeCalculation.total > 0 && !isProforma) {
+      try {
+        localStorage.setItem('pending_csr_registration', JSON.stringify(result.registration));
+      } catch (e) {
+        console.warn('Could not cache pending registration:', e);
+      }
+
+      initiatePaymentRedirect({
+        reference: result.registration.registrationNumber,
+        amount: feeCalculation.total,
+        customerName: coordName || 'Candidate',
+        customerEmail: coordEmail || 'candidate@aima.in',
+        customerPhone: coordPhone || '',
+        purpose: 'CASE_LEAGUE_REGISTRATION',
+      });
+      return;
+    }
+
+    // Directly finalize registration and navigate to Confirmation step (Early Bird ₹0 or Proforma)
     if (isProforma) {
       setCurrentStep(4);
       setShowInvoiceModal(true);
@@ -2347,14 +2367,18 @@ export const RegistrationPage: React.FC = () => {
                 {/* Dual Payment Options / Action Buttons */}
                 <div className="pt-2 space-y-4">
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-                    {/* Primary: Direct Registration Submission */}
+                    {/* Primary: Direct Registration Submission / Payment Hub */}
                     <button
                       type="button"
                       onClick={() => handleInitiateSubmission('direct')}
                       className="flex-1 py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-700/25 hover:scale-[1.01]"
                     >
-                      <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
-                      <span>Submit Registration</span>
+                      <CreditCard className="w-5 h-5 stroke-[2.5]" />
+                      <span>
+                        {IS_EARLY_BIRD_FREE || feeCalculation.total <= 0
+                          ? 'Submit Registration'
+                          : `Proceed to Payment (₹${feeCalculation.total.toLocaleString('en-IN')})`}
+                      </span>
                     </button>
 
                     {/* Secondary: Proforma Invoice for Institutional Approval (Commented Out as requested) */}
