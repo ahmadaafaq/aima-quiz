@@ -2,7 +2,7 @@
 // OFFICIAL PARTICIPATION FEE & EARLY BIRD PROMOTIONAL OFFER CONFIGURATION
 // Set IS_EARLY_BIRD_FREE = false to seamlessly revert to standard ₹200 fee.
 // ============================================================================
-export const IS_EARLY_BIRD_FREE = true;
+export const IS_EARLY_BIRD_FREE = false;
 export const PARTICIPATION_FEE_PER_PERSON = 200;
 export const EARLY_BIRD_FEE_PER_PERSON = 0;
 

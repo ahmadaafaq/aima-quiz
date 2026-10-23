@@ -22,26 +22,18 @@ export interface PaymentInitiationParams {
 export function isLiveProduction(): boolean {
   if (typeof window === 'undefined') return false;
   const host = window.location.hostname;
-  return (
-    (host === 'research.aima.in' || host.endsWith('.research.aima.in')) &&
-    !new URLSearchParams(window.location.search).get('demo')
-  );
+  return host === 'research.aima.in' || host.endsWith('.research.aima.in');
 }
 
 /**
- * Payment Hub is active for testing on aima-quiz.vercel.app, localhost, and preview branches.
- * Strictly disabled on research.aima.in to ensure production continuity.
+ * Payment Hub is active across all environments including research.aima.in.
  */
 export function isPaymentHubEnabled(): boolean {
-  if (isLiveProduction()) {
-    return false;
-  }
   return true;
 }
 
 /**
  * Resolves the AIMA Centralized Payment Hub URL.
- * Defaults to http://localhost:3000 during local testing, or https://payments.aima.in in staging/cloud.
  */
 export function getPaymentHubUrl(): string {
   const envUrl = (import.meta as any).env?.VITE_PAYMENT_HUB_URL;
@@ -64,8 +56,12 @@ export function getPaymentHubUrl(): string {
       return `http://${host}:3002`;
     }
 
-    // In production / deployed cloud:
-    // Route directly to the centralized payments hub service
+    // On research.aima.in, route through the official /payments reverse proxy
+    if (host === 'research.aima.in' || host.endsWith('.research.aima.in')) {
+      return 'https://research.aima.in/payments';
+    }
+
+    // Staging / preview cloud fallback URL
     return 'https://aima-payments-hub.vercel.app';
   }
 

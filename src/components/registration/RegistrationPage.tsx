@@ -998,10 +998,12 @@ export const RegistrationPage: React.FC = () => {
                 </div>
 
                 {/* Early Bird Free Tag */}
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
-                  Early Bird Registration Free
-                </span>
+                {IS_EARLY_BIRD_FREE && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
+                    Early Bird Registration Free
+                  </span>
+                )}
               </div>
 
               <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
@@ -1013,7 +1015,7 @@ export const RegistrationPage: React.FC = () => {
             </div>
 
             {/* Participation Fee Badge (Keeping Participation Fee, ₹200 / person, Flat fee, all students) */}
-            <div className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-emerald-400/60 dark:border-emerald-500/60 shadow-xs shrink-0">
+            <div className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-blue-400/60 dark:border-blue-500/60 shadow-xs shrink-0">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 text-slate-950 flex items-center justify-center font-black text-sm shadow-xs">
                 ₹
               </div>
@@ -1022,9 +1024,15 @@ export const RegistrationPage: React.FC = () => {
                   <span className="block text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
                     Participation Fee
                   </span>
-                  <span className="px-1.5 py-0.2 rounded bg-emerald-500 text-slate-950 text-[9px] font-black uppercase">
-                    Early Bird Free
-                  </span>
+                  {IS_EARLY_BIRD_FREE ? (
+                    <span className="px-1.5 py-0.2 rounded bg-emerald-500 text-slate-950 text-[9px] font-black uppercase">
+                      Early Bird Free
+                    </span>
+                  ) : (
+                    <span className="px-1.5 py-0.2 rounded bg-blue-500 text-white text-[9px] font-black uppercase">
+                      Standard
+                    </span>
+                  )}
                 </div>
                 <span className="block text-xs font-extrabold text-slate-900 dark:text-white">
                   ₹200 / person
@@ -1037,27 +1045,29 @@ export const RegistrationPage: React.FC = () => {
           </div>
 
           {/* Early Bird Highlighted Message Banner */}
-          <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-amber-500/15 border-2 border-emerald-400/80 dark:border-emerald-500/60 flex items-center justify-between gap-3 shadow-xs">
-            <div className="flex items-center gap-3">
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_8px_#10b981]" />
-              </span>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs sm:text-sm font-black uppercase tracking-wide text-emerald-950 dark:text-emerald-200">
-                    Early Bird Registration Free
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black text-[9px] sm:text-[10px] uppercase tracking-wider shadow-xs">
-                    100% Free • Limited Time Offer
-                  </span>
+          {IS_EARLY_BIRD_FREE && (
+            <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-amber-500/15 border-2 border-emerald-400/80 dark:border-emerald-500/60 flex items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3">
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+                </span>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs sm:text-sm font-black uppercase tracking-wide text-emerald-950 dark:text-emerald-200">
+                      Early Bird Registration Free
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black text-[9px] sm:text-[10px] uppercase tracking-wider shadow-xs">
+                      100% Free • Limited Time Offer
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
+                    Participation Fee: <strong className="text-slate-800 dark:text-slate-200">₹200 / person</strong> (Flat fee, all students) - Early Bird participants receive 100% complimentary entry.
+                  </p>
                 </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
-                  Participation Fee: <strong className="text-slate-800 dark:text-slate-200">₹200 / person</strong> (Flat fee, all students) - Early Bird participants receive 100% complimentary entry.
-                </p>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Stepper Navigation */}
           <div className="pt-4 flex items-center justify-center max-w-lg mx-auto w-full px-2">
