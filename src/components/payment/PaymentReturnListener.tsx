@@ -26,12 +26,17 @@ export const PaymentReturnListener: React.FC = () => {
     const orderId = params.get('orderId');
     const status = params.get('status');
     const reference = params.get('reference') || '';
-    const amount = params.get('amount') || '200';
+    const rawAmount = params.get('amount');
+    const amount = rawAmount ? String(parseFloat(rawAmount)) : '200';
     const authCode = params.get('authCode') || 'AUTH_' + Math.floor(100000 + Math.random() * 900000);
     const gateway = params.get('gateway') || 'HDFC Bank Collect Now';
     const reason = params.get('reason') || 'Transaction was declined or cancelled';
 
-    if (orderId && status === 'SUCCESS') {
+    // Verify amount is not tampered (minimum fee per participant is ₹200)
+    const paidNum = parseFloat(amount);
+    const isAmountValid = !isNaN(paidNum) && paidNum >= 200 && paidNum % 200 === 0;
+
+    if (orderId && status === 'SUCCESS' && isAmountValid) {
       const details: ReturnDetails = {
         orderId,
         reference,
@@ -73,6 +78,22 @@ export const PaymentReturnListener: React.FC = () => {
       }
 
       // Clean address bar so page refresh doesn't re-trigger
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    } else if (status === 'SUCCESS' && !isAmountValid) {
+      const details: ReturnDetails = {
+        orderId: orderId || 'N/A',
+        reference,
+        status: 'FAILED',
+        amount,
+        authCode: 'N/A',
+        gateway,
+        reason: `Security Discrepancy: Amount received (₹${amount}) does not match the authoritative registration fee tier (₹200 per participant). Transaction flagged for administrative review.`,
+      };
+
+      setReturnDetails(details);
+      setIsOpen(true);
+
       const cleanUrl = window.location.pathname;
       window.history.replaceState({}, document.title, cleanUrl);
     } else if (status === 'FAILED' || status === 'CANCELLED') {
