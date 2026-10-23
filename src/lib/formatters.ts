@@ -74,3 +74,86 @@ export function formatLabel(str: string | null | undefined): string {
   if (!str) return '';
   return toTitleCase(str);
 }
+
+/**
+ * Parses any date/time string stored in DB as Indian Standard Time (IST, UTC+05:30).
+ * Prevents UTC browser shifts (e.g. 10:00 AM stored in DB shifting to 03:30 PM).
+ */
+export function parseISTTimestamp(val?: string | null): number {
+  if (!val) return NaN;
+  // Match YYYY-MM-DD HH:mm:ss or YYYY-MM-DDTHH:mm:ss
+  const match = val.match(/(\d{4})[-/](\d{2})[-/](\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (match) {
+    const sec = match[6] || '00';
+    return new Date(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${sec}+05:30`).getTime();
+  }
+  return new Date(val).getTime();
+}
+
+/**
+ * Formats a raw date string (ISO, YYYY-MM-DD HH:mm, or timestamp) into a clean, human-readable date & time.
+ * e.g. "2026-10-01T09:00:00+00:00" -> "01 Oct 2026, 09:00 AM"
+ * e.g. "2026-10-15 23:59" -> "15 Oct 2026, 11:59 PM"
+ */
+export function formatQuizScheduleDate(dStr?: string | null): string {
+  if (!dStr) return 'TBD';
+
+  // Direct regex extraction to preserve the exact scheduled time without timezone shifts
+  const match = dStr.match(/(\d{4})[-/](\d{2})[-/](\d{2})[T\s](\d{2}):(\d{2})/);
+  if (match) {
+    const y = match[1];
+    const m = parseInt(match[2], 10) - 1;
+    const d = match[3];
+    const hh = parseInt(match[4], 10);
+    const mm = match[5];
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    const h12 = hh % 12 || 12;
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${d} ${monthNames[m]} ${y}, ${String(h12).padStart(2, '0')}:${mm} ${ampm}`;
+  }
+
+  // Fallback to Date parser with explicit Asia/Kolkata (IST) timezone
+  const parsed = new Date(dStr);
+  if (!isNaN(parsed.getTime())) {
+    return new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).format(parsed);
+  }
+
+  return dStr;
+}
+
+export function formatQuizDateRange(startStr?: string | null, endStr?: string | null): {
+  startFormatted: string;
+  endFormatted: string;
+} {
+  return {
+    startFormatted: formatQuizScheduleDate(startStr),
+    endFormatted: formatQuizScheduleDate(endStr),
+  };
+}
+
+/**
+ * Universal date/time formatter that strictly outputs in Indian Standard Time (IST, UTC+05:30).
+ */
+export function formatISTDateTime(val?: string | number | Date | null): string {
+  if (!val) return '—';
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return String(val);
+  return new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(d);
+}
+

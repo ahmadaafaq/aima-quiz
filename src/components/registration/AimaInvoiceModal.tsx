@@ -181,7 +181,7 @@ export const AimaInvoiceModal: React.FC<AimaInvoiceModalProps> = ({
                 {registration.invoiceNumber}
               </div>
               <div className="text-slate-500 text-[11px]">
-                Date: {new Date(registration.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                Date: {new Date(registration.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}
               </div>
               <div className="text-slate-500 text-[11px]">
                 Reg Ref: <strong className="font-mono">{registration.registrationNumber}</strong>

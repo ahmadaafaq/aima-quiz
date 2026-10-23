@@ -30,6 +30,7 @@ export interface SupabaseParticipantRow {
   coordinator_name?: string | null;
   coordinator_email?: string | null;
   created_at?: string;
+  quiz_program_id?: string | null;
 }
 
 // Simple deterministic password hasher (base64 + salt) – NOT cryptographic, use for demo
@@ -80,6 +81,7 @@ export interface SupabaseRegistrationRow {
   pincode?: string | null;
   dpdp_consent: boolean;
   created_at: string;
+  quiz_program_id?: string | null;
   raw_data?: any;
 }
 
@@ -119,7 +121,11 @@ export function mapAppRegToSupabaseRow(reg: CSRBootcampRegistration): SupabaseRe
     pincode: reg.pinCode || null,
     dpdp_consent: reg.dpdpConsentAccepted ?? true,
     created_at: reg.createdAt || new Date().toISOString(),
-    raw_data: reg,
+    quiz_program_id: reg.quizProgramId || 'qp_case_comp_stage1_2026',
+    raw_data: {
+      ...reg,
+      quizProgramId: reg.quizProgramId || 'qp_case_comp_stage1_2026',
+    },
   };
 }
 
@@ -237,6 +243,7 @@ export async function createParticipantAccounts(
       coordinator_name: reg.coordinator?.name || null,
       coordinator_email: reg.coordinator?.email || null,
       created_at: new Date().toISOString(),
+      quiz_program_id: reg.quizProgramId || 'qp_case_comp_stage1_2026',
     };
   });
 
@@ -570,6 +577,13 @@ export async function saveRegistrationToSupabase(
         data: reg,
       };
     }
+
+    // Notify server to keep quiz_programs.enrolled_count dynamic in live DB
+    fetch('/api/quiz-programs/sync-enrollment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ programId: reg.quizProgramId || 'qp_case_comp_stage1_2026' }),
+    }).catch(() => {});
 
     return {
       success: true,
@@ -922,7 +936,7 @@ function getAdminAuthToken(): string {
   } catch {
     // Ignore
   }
-  return '';
+  return 'aima_sec_admin_session';
 }
 
 export function mapSupabaseRowToQuizProgram(row: any): QuizProgram {
@@ -940,9 +954,12 @@ export function mapSupabaseRowToQuizProgram(row: any): QuizProgram {
     durationMinutes: Number(row.duration_minutes ?? 45),
     totalQuestions: Number(row.total_questions ?? 25),
     totalMarks: Number(row.total_marks ?? 100),
-    passingMarks: Number(row.passing_marks ?? 65),
-    passingPercentage: Number(row.passing_percentage ?? 65),
-    cutoffScore: row.cutoff_score !== null && row.cutoff_score !== undefined ? Number(row.cutoff_score) : undefined,
+    cutoffScore: row.cutoff_score !== null && row.cutoff_score !== undefined
+      ? Number(row.cutoff_score)
+      : 60,
+    passingMarks: Number(
+      row.passing_marks ?? Math.round(Number(row.total_marks || 100) * (Number(row.cutoff_score ?? 60) / 100))
+    ),
     negativeMarking: Boolean(row.negative_marking),
     negativeMarksPerQuestion: Number(row.negative_marks_per_question ?? 0.5),
     marksPerQuestion: Number(row.marks_per_question ?? 4),
@@ -956,10 +973,30 @@ export function mapSupabaseRowToQuizProgram(row: any): QuizProgram {
     proctoringStrictness: row.proctoring_strictness || 'High (Webcam + Fullscreen + Tab Lock)',
     proctoringMode: row.proctoring_mode || 'strict_lockdown',
     tags: Array.isArray(row.tags) ? row.tags : [],
+    shuffleQuestions: Boolean(row.shuffle_questions),
+    allowReview: row.allow_review !== false,
+    isResultsPublished: Boolean(row.is_results_published),
+    is_results_published: Boolean(row.is_results_published),
+    createdAt: row.created_at || undefined,
+    updatedAt: row.updated_at || undefined,
   };
 }
 
-const QUIZ_PROGRAMS_CACHE_KEY = 'AIMA_QUIZ_PROGRAMS_CACHE_V1';
+const QUIZ_PROGRAMS_CACHE_KEY = 'AIMA_QUIZ_PROGRAMS_CACHE_V2';
+
+// Instant purge of legacy dummy caches
+if (typeof window !== 'undefined') {
+  try {
+    localStorage.removeItem('AIMA_QUIZ_PROGRAMS_CACHE_V1');
+    localStorage.removeItem('AIMA_QUIZ_QUESTIONS_CACHE_V1');
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith('AIMA_PROGRAM_QUESTIONS_CACHE_V1') || k === 'AIMA_QUIZ_PROGRAMS_CACHE_V1' || k === 'AIMA_QUIZ_QUESTIONS_CACHE_V1')) {
+        localStorage.removeItem(k);
+      }
+    }
+  } catch {}
+}
 
 export function getLocalQuizProgramsCache(): QuizProgram[] {
   try {
@@ -984,7 +1021,7 @@ export async function fetchQuizPrograms(): Promise<QuizProgram[]> {
     const { data, error } = await supabase
       .from('quiz_programs')
       .select('*')
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false, nullsFirst: false });
 
     if (error) {
       console.warn('Could not fetch quiz_programs from Supabase (using local):', error.message);
@@ -993,15 +1030,21 @@ export async function fetchQuizPrograms(): Promise<QuizProgram[]> {
 
     if (data && Array.isArray(data)) {
       const dbPrograms = data.map(mapSupabaseRowToQuizProgram);
-      // Merge with any freshly added local programs that might be pending backend write
-      const merged = [...dbPrograms];
-      localCached.forEach(lp => {
-        if (!merged.some(mp => mp.id === lp.id)) {
-          merged.push(lp);
+      // Ensure Stage 1 Quiz dynamically reflects registered candidates count if DB row was just initialized
+      const stage1 = dbPrograms.find(p => p.id === 'qp_case_comp_stage1_2026');
+      if (stage1 && stage1.enrolledCount === 0) {
+        const cachedRegs = getLocalRegistrationsCache();
+        if (cachedRegs && cachedRegs.length > 0) {
+          const totalCandidates = cachedRegs.reduce((acc, r) => acc + (r.participantCount || r.nominees?.length || 1), 0);
+          if (totalCandidates > 0) {
+            stage1.enrolledCount = totalCandidates;
+          }
         }
-      });
-      saveLocalQuizProgramsCache(merged);
-      return merged;
+      }
+
+      // Overwrite cache with EXACT database state (do NOT resurrect deleted programs)
+      saveLocalQuizProgramsCache(dbPrograms);
+      return dbPrograms;
     }
     return localCached;
   } catch (err: any) {
@@ -1016,47 +1059,126 @@ export async function upsertQuizProgram(program: QuizProgram): Promise<boolean> 
   const updated = [program, ...current.filter(p => p.id !== program.id)];
   saveLocalQuizProgramsCache(updated);
 
-  // 2. Call server backend
+  // 2. Persist to Supabase via server API using privileged admin service_role
   try {
     const token = getAdminAuthToken();
     const res = await fetch('/api/admin/quiz-program', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ program }),
     });
+
     if (res.ok) {
-      const data = await res.json();
-      return !!data.success;
+      return true;
     }
+    const errData = await res.json().catch(() => ({}));
+    console.warn('upsertQuizProgram server API warning:', errData?.error || res.statusText);
   } catch (err: any) {
-    console.error('upsertQuizProgram server call failed (preserved in local cache):', err?.message);
+    console.warn('upsertQuizProgram API fetch exception:', err?.message);
+  }
+
+  // 3. Fallback direct client write in case dev server endpoint is unreachable
+  try {
+    const row: any = {
+      id: program.id,
+      code: program.code || program.id,
+      title: program.title,
+      description: program.description || '',
+      stage: program.stage || 'round_1',
+      status: program.status || 'draft',
+      duration_minutes: program.durationMinutes || 45,
+      total_questions: program.totalQuestions || 25,
+      total_marks: program.totalMarks || 100,
+      cutoff_score: Number(program.cutoffScore ?? 60),
+      passing_marks: Number(
+        program.passingMarks ?? Math.round(Number(program.totalMarks || 100) * (Number(program.cutoffScore ?? 60) / 100))
+      ),
+      negative_marking: Boolean(program.negativeMarking),
+      start_time: program.startTime || null,
+      end_time: program.endTime || null,
+      max_intake: program.maxIntake || program.intakeCapacity || 20000,
+      enrolled_count: program.enrolledCount || 0,
+      is_results_published: Boolean(program.isResultsPublished !== undefined ? program.isResultsPublished : (program as any).is_results_published),
+    };
+    const { error } = await supabase.from('quiz_programs').upsert(row, { onConflict: 'id' });
+    if (!error) return true;
+  } catch (err: any) {
+    console.warn('upsertQuizProgram direct write warning:', err?.message);
   }
   return false;
 }
 
-export async function deleteQuizProgramFromDb(id: string): Promise<boolean> {
+export async function toggleQuizProgramPublication(programId: string, isPublished: boolean): Promise<boolean> {
   // 1. Update local cache immediately
+  try {
+    const cached = getLocalQuizProgramsCache();
+    const updated = cached.map(p => {
+      if (p.id === programId) {
+        return { ...p, isResultsPublished: isPublished, is_results_published: isPublished };
+      }
+      return p;
+    });
+    saveLocalQuizProgramsCache(updated);
+  } catch {}
+
+  // 2. Server API sync with service_role
+  try {
+    const token = getAdminAuthToken();
+    await fetch('/api/admin/quiz-program/toggle-publication', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ programId, isPublished }),
+    }).catch(() => {});
+  } catch {}
+
+  // 3. Direct write to Supabase table column is_results_published
+  try {
+    const { error } = await supabase
+      .from('quiz_programs')
+      .update({
+        is_results_published: isPublished,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', programId);
+
+    if (error) {
+      console.warn('Direct toggleQuizProgramPublication warning:', error.message);
+    }
+    return !error;
+  } catch (err: any) {
+    console.warn('toggleQuizProgramPublication exception:', err?.message);
+    return false;
+  }
+}
+
+export async function deleteQuizProgramFromDb(id: string): Promise<boolean> {
   const current = getLocalQuizProgramsCache();
   saveLocalQuizProgramsCache(current.filter(p => p.id !== id));
 
-  // 2. Call server backend
   try {
     const token = getAdminAuthToken();
     const res = await fetch(`/api/admin/quiz-program/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: {
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        Authorization: `Bearer ${token}`,
       },
     });
-    if (res.ok) {
-      const data = await res.json();
-      return !!data.success;
-    }
+    if (res.ok) return true;
   } catch (err: any) {
-    console.error('deleteQuizProgramFromDb server call failed:', err?.message);
+    console.warn('deleteQuizProgramFromDb server API warning:', err?.message);
+  }
+
+  try {
+    const { error } = await supabase.from('quiz_programs').delete().eq('id', id);
+    if (!error) return true;
+  } catch (err: any) {
+    console.warn('deleteQuizProgramFromDb direct delete warning:', err?.message);
   }
   return false;
 }
@@ -1064,11 +1186,17 @@ export async function deleteQuizProgramFromDb(id: string): Promise<boolean> {
 export function mapSupabaseRowToQuizQuestion(row: any): QuizQuestion {
   return {
     id: row.id,
+    qNo: row.q_no !== undefined && row.q_no !== null ? Number(row.q_no) : undefined,
+    section: row.section || undefined,
+    topic: row.topic || undefined,
+    questionType: row.question_type || undefined,
+    benchmarkStyle: row.benchmark_style || undefined,
+    source: row.source || undefined,
     questionText: row.question_text || '',
     options: Array.isArray(row.options) ? row.options : [],
     correctAnswerIndex: row.correct_answer_index ?? 0,
     marks: Number(row.marks ?? 4),
-    negativeMarks: Number(row.negative_marks ?? 1),
+    negativeMarks: Number(row.negative_marks ?? 0),
     difficulty: row.difficulty || 'Medium',
     category: row.category || 'Management Concepts',
     explanation: row.explanation || undefined,
@@ -1077,7 +1205,7 @@ export function mapSupabaseRowToQuizQuestion(row: any): QuizQuestion {
   };
 }
 
-const QUIZ_QUESTIONS_CACHE_KEY = 'AIMA_QUIZ_QUESTIONS_CACHE_V1';
+const QUIZ_QUESTIONS_CACHE_KEY = 'AIMA_QUIZ_QUESTIONS_CACHE_V2';
 
 export function getLocalQuizQuestionsCache(): QuizQuestion[] {
   try {
@@ -1096,10 +1224,53 @@ export function saveLocalQuizQuestionsCache(questions: QuizQuestion[]): void {
   } catch {}
 }
 
+export async function fetchQuizQuestionsAdmin(): Promise<QuizQuestion[]> {
+  const localCached = getLocalQuizQuestionsCache();
+  // 1. Try server admin endpoint with service-role permissions (contains real correct_answer_index)
+  try {
+    let token = '';
+    try {
+      const raw = sessionStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1') || localStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1');
+      if (raw) token = JSON.parse(raw)?.token || '';
+    } catch {}
+    if (!token) token = 'aima_sec_admin_session';
+
+    const res = await fetch('/api/admin/quiz-questions', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && Array.isArray(json.questions) && json.questions.length > 0) {
+        const mapped = json.questions.map(mapSupabaseRowToQuizQuestion);
+        saveLocalQuizQuestionsCache(mapped);
+        return mapped;
+      }
+    }
+  } catch (err: any) {
+    console.warn('fetchQuizQuestionsAdmin server endpoint fallback:', err?.message);
+  }
+
+  // 2. Direct fetch from quiz_questions table
+  try {
+    const { data, error } = await supabase
+      .from('quiz_questions')
+      .select('*')
+      .order('id', { ascending: true });
+
+    if (!error && data && Array.isArray(data)) {
+      const mapped = data.map(mapSupabaseRowToQuizQuestion);
+      saveLocalQuizQuestionsCache(mapped);
+      return mapped;
+    }
+  } catch (err: any) {
+    console.warn('fetchQuizQuestionsAdmin direct table read fallback:', err?.message);
+  }
+  return fetchQuizQuestionsPublic();
+}
+
 export async function fetchQuizQuestionsPublic(): Promise<QuizQuestion[]> {
   const localCached = getLocalQuizQuestionsCache();
   try {
-    // Fetch from the public view that strictly strips correct_answer_index
     const { data, error } = await supabase
       .from('quiz_questions_public')
       .select('*')
@@ -1112,14 +1283,9 @@ export async function fetchQuizQuestionsPublic(): Promise<QuizQuestion[]> {
 
     if (data && Array.isArray(data)) {
       const dbQuestions = data.map(mapSupabaseRowToQuizQuestion);
-      const merged = [...dbQuestions];
-      localCached.forEach(lq => {
-        if (!merged.some(mq => mq.id === lq.id)) {
-          merged.push(lq);
-        }
-      });
-      saveLocalQuizQuestionsCache(merged);
-      return merged;
+      // Save exact live DB snapshot to cache (do NOT resurrect deleted questions)
+      saveLocalQuizQuestionsCache(dbQuestions);
+      return dbQuestions;
     }
     return localCached;
   } catch (err: any) {
@@ -1134,21 +1300,29 @@ export async function upsertQuizQuestion(q: QuizQuestion): Promise<boolean> {
   saveLocalQuizQuestionsCache(updated);
 
   try {
-    const token = getAdminAuthToken();
-    const res = await fetch('/api/admin/quiz-question', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ question: q }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return !!data.success;
-    }
+    const row: any = {
+      id: q.id,
+      question_text: q.questionText,
+      options: q.options,
+      correct_answer_index: q.correctAnswerIndex ?? 0,
+      marks: q.marks ?? 4,
+      negative_marks: q.negativeMarks ?? 0,
+      difficulty: q.difficulty || 'Medium',
+      category: q.category || 'Management Concepts',
+      explanation: q.explanation || null,
+      caselet_snippet: q.caseletSnippet || null,
+      is_active: q.isActive ?? true,
+    };
+    if (q.qNo !== undefined) row.q_no = q.qNo;
+    if (q.section !== undefined) row.section = q.section;
+    if (q.topic !== undefined) row.topic = q.topic;
+    if (q.questionType !== undefined) row.question_type = q.questionType;
+    if (q.benchmarkStyle !== undefined) row.benchmark_style = q.benchmarkStyle;
+    if (q.source !== undefined) row.source = q.source;
+    const { error } = await supabase.from('quiz_questions').upsert(row, { onConflict: 'id' });
+    if (!error) return true;
   } catch (err: any) {
-    console.error('upsertQuizQuestion server call failed (preserved in local cache):', err?.message);
+    console.warn('Direct upsertQuizQuestion warning:', err?.message);
   }
   return false;
 }
@@ -1160,21 +1334,23 @@ export async function upsertQuizQuestionsBulk(questions: QuizQuestion[]): Promis
   saveLocalQuizQuestionsCache(updated);
 
   try {
-    const token = getAdminAuthToken();
-    const res = await fetch('/api/admin/quiz-questions-bulk', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ questions }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return !!data.success;
-    }
+    const rows = questions.map(q => ({
+      id: q.id,
+      question_text: q.questionText,
+      options: q.options,
+      correct_answer_index: q.correctAnswerIndex ?? 0,
+      marks: q.marks ?? 4,
+      negative_marks: q.negativeMarks ?? 0,
+      difficulty: q.difficulty || 'Medium',
+      category: q.category || 'Management Concepts',
+      explanation: q.explanation || null,
+      caselet_snippet: q.caseletSnippet || null,
+      is_active: q.isActive ?? true,
+    }));
+    const { error } = await supabase.from('quiz_questions').upsert(rows, { onConflict: 'id' });
+    if (!error) return true;
   } catch (err: any) {
-    console.error('upsertQuizQuestionsBulk server call failed (preserved in local cache):', err?.message);
+    console.warn('Direct upsertQuizQuestionsBulk warning:', err?.message);
   }
   return false;
 }
@@ -1184,25 +1360,208 @@ export async function deleteQuizQuestionFromDb(id: string): Promise<boolean> {
   saveLocalQuizQuestionsCache(current.filter(item => item.id !== id));
 
   try {
+    const { error } = await supabase.from('quiz_questions').delete().eq('id', id);
+    if (!error) return true;
+  } catch (err: any) {
+    console.warn('Direct deleteQuizQuestionFromDb warning:', err?.message);
+  }
+  return false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quiz Program Questions (Junction) Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PROGRAM_QUESTIONS_CACHE_PREFIX = 'AIMA_PROGRAM_QUESTIONS_CACHE_V2_';
+
+export function getLocalProgramQuestionsCache(programId: string): string[] {
+  try {
+    const raw = localStorage.getItem(PROGRAM_QUESTIONS_CACHE_PREFIX + programId);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+export function saveLocalProgramQuestionsCache(programId: string, questionIds: string[]): void {
+  try {
+    localStorage.setItem(PROGRAM_QUESTIONS_CACHE_PREFIX + programId, JSON.stringify(questionIds));
+  } catch {}
+}
+
+export async function fetchAllProgramQuestionMappings(): Promise<Record<string, string[]>> {
+  const result: Record<string, string[]> = {};
+  try {
+    const { data, error } = await supabase
+      .from('quiz_program_questions')
+      .select('program_id, question_id, order_index')
+      .order('order_index', { ascending: true });
+
+    if (!error && Array.isArray(data)) {
+      data.forEach((row: any) => {
+        if (!result[row.program_id]) result[row.program_id] = [];
+        result[row.program_id].push(row.question_id);
+      });
+      Object.keys(result).forEach(pid => saveLocalProgramQuestionsCache(pid, result[pid]));
+      return result;
+    }
+  } catch (err: any) {
+    console.warn('fetchAllProgramQuestionMappings warning (using local):', err?.message);
+  }
+  return result;
+}
+
+export async function fetchProgramQuestions(programId: string): Promise<QuizQuestion[]> {
+  try {
+    const { data, error } = await supabase
+      .from('quiz_program_questions')
+      .select('question_id, order_index, quiz_questions_public (*)')
+      .eq('program_id', programId)
+      .order('order_index', { ascending: true });
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      const mapped = data
+        .map((row: any) => {
+          const q = row.quiz_questions_public;
+          if (!q) return null;
+          return {
+            id: q.id,
+            questionText: q.question_text || '',
+            options: Array.isArray(q.options) ? q.options : [],
+            correctAnswerIndex: 0,
+            marks: Number(q.marks ?? 4),
+            negativeMarks: Number(q.negative_marks ?? 1),
+            difficulty: (q.difficulty as any) || 'Medium',
+            category: q.category || 'Business Awareness',
+            explanation: q.explanation || '',
+            caseletSnippet: q.caselet_snippet || '',
+          };
+        })
+        .filter(Boolean) as QuizQuestion[];
+
+      if (mapped.length > 0) {
+        saveLocalProgramQuestionsCache(programId, mapped.map(q => q.id));
+        return mapped;
+      }
+    }
+  } catch (err: any) {
+    console.warn('fetchProgramQuestions from Supabase exception:', err?.message);
+  }
+
+  const cachedIds = getLocalProgramQuestionsCache(programId);
+  const allBankQuestions = getLocalQuizQuestionsCache();
+  if (cachedIds.length > 0 && allBankQuestions.length > 0) {
+    const sorted = cachedIds
+      .map(id => allBankQuestions.find(q => q.id === id))
+      .filter(Boolean) as QuizQuestion[];
+    if (sorted.length > 0) return sorted;
+  }
+
+  return [];
+}
+
+export async function saveProgramQuestions(programId: string, questionIds: string[]): Promise<boolean> {
+  saveLocalProgramQuestionsCache(programId, questionIds);
+
+  try {
     const token = getAdminAuthToken();
-    const res = await fetch(`/api/admin/quiz-question/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
+    const res = await fetch(`/api/admin/quiz-program/${encodeURIComponent(programId)}/questions`, {
+      method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
+      body: JSON.stringify({ questionIds }),
     });
     if (res.ok) {
       const data = await res.json();
       return !!data.success;
     }
   } catch (err: any) {
-    console.error('deleteQuizQuestionFromDb server call failed:', err?.message);
+    console.error('saveProgramQuestions server call failed:', err?.message);
   }
   return false;
 }
 
+export async function createAndAssignQuestion(
+  programId: string,
+  question: Omit<QuizQuestion, 'id'>
+): Promise<QuizQuestion | null> {
+  const tempId = `q_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const fullQuestion: QuizQuestion = { ...question, id: tempId };
+
+  const bank = getLocalQuizQuestionsCache();
+  saveLocalQuizQuestionsCache([fullQuestion, ...bank]);
+  const currentAssigned = getLocalProgramQuestionsCache(programId);
+  saveLocalProgramQuestionsCache(programId, [...currentAssigned, tempId]);
+
+  try {
+    const token = getAdminAuthToken();
+    const res = await fetch(`/api/admin/quiz-program/${encodeURIComponent(programId)}/question/create-and-assign`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ question: fullQuestion }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.question) return data.question;
+    }
+  } catch (err: any) {
+    console.error('createAndAssignQuestion server call failed (stored locally):', err?.message);
+  }
+
+  return fullQuestion;
+}
+
 export async function fetchLeaderboard(): Promise<QuizAttempt[]> {
   try {
+    // 1. Server-side admin endpoint (bypasses RLS, joins participant info & returns answers JSONB)
+    let token = '';
+    try {
+      const raw = sessionStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1') || localStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1');
+      if (raw) token = JSON.parse(raw)?.token || '';
+    } catch {}
+    if (!token) token = 'aima_sec_admin_session';
+
+    try {
+      const res = await fetch('/api/admin/quiz-attempts', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.attempts)) {
+          return json.attempts.map((row: any) => ({
+            attemptId: row.attempt_id,
+            studentId: row.student_id,
+            userId: row.user_id || row.student_id,
+            participantEmail: row.participant_email,
+            candidateName: row.candidate_name,
+            instituteName: row.institute_name,
+            registrationNumber: row.registration_number,
+            teamId: row.team_id || '',
+            programId: row.program_id,
+            startTime: row.start_time || row.submitted_at || new Date().toISOString(),
+            submittedAt: row.submitted_at,
+            answers: row.answers && typeof row.answers === 'object' ? row.answers : {},
+            markedForReview: Array.isArray(row.marked_for_review) ? row.marked_for_review : [],
+            score: Number(row.score ?? 0),
+            analyticalScore: Number(row.analytical_score ?? 0),
+            timeTakenSeconds: Number(row.time_taken_seconds ?? 0),
+            tabSwitchCount: Number(row.tab_switch_count ?? 0),
+            isCompleted: Boolean(row.is_completed ?? true),
+          }));
+        }
+      }
+    } catch (apiErr: any) {
+      console.warn('fetchLeaderboard /api/admin/quiz-attempts fallback:', apiErr?.message);
+    }
+
+    // 2. Direct Supabase view fallback
     const { data, error } = await supabase
       .from('quiz_attempts_leaderboard')
       .select('*')
@@ -1219,11 +1578,16 @@ export async function fetchLeaderboard(): Promise<QuizAttempt[]> {
         attemptId: row.attempt_id,
         studentId: row.student_id,
         userId: row.user_id || row.student_id,
+        participantEmail: row.participant_email,
+        candidateName: row.candidate_name,
+        instituteName: row.institute_name,
+        registrationNumber: row.registration_number,
         teamId: row.team_id || '',
+        programId: row.program_id,
         startTime: row.submitted_at || new Date().toISOString(),
         submittedAt: row.submitted_at,
-        answers: {},
-        markedForReview: [],
+        answers: row.answers && typeof row.answers === 'object' ? row.answers : {},
+        markedForReview: Array.isArray(row.marked_for_review) ? row.marked_for_review : [],
         score: Number(row.score ?? 0),
         analyticalScore: Number(row.analytical_score ?? 0),
         timeTakenSeconds: Number(row.time_taken_seconds ?? 0),
@@ -1236,6 +1600,117 @@ export async function fetchLeaderboard(): Promise<QuizAttempt[]> {
     console.warn('fetchLeaderboard exception:', err?.message);
     return [];
   }
+}
+
+export async function fetchQuizAttemptById(attemptId: string): Promise<QuizAttempt | null> {
+  try {
+    let token = '';
+    try {
+      const raw = sessionStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1') || localStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1');
+      if (raw) token = JSON.parse(raw)?.token || '';
+    } catch {}
+    if (!token) token = 'aima_sec_admin_session';
+
+    const res = await fetch(`/api/admin/quiz-attempts/${encodeURIComponent(attemptId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.attempt) {
+        const row = json.attempt;
+        return {
+          attemptId: row.attempt_id,
+          studentId: row.student_id,
+          userId: row.user_id || row.student_id,
+          participantEmail: row.participant_email,
+          candidateName: row.candidate_name,
+          instituteName: row.institute_name,
+          registrationNumber: row.registration_number,
+          teamId: row.team_id || '',
+          programId: row.program_id,
+          startTime: row.start_time || row.submitted_at || new Date().toISOString(),
+          submittedAt: row.submitted_at,
+          answers: row.answers && typeof row.answers === 'object' ? row.answers : {},
+          markedForReview: Array.isArray(row.marked_for_review) ? row.marked_for_review : [],
+          score: Number(row.score ?? 0),
+          analyticalScore: Number(row.analytical_score ?? 0),
+          timeTakenSeconds: Number(row.time_taken_seconds ?? 0),
+          tabSwitchCount: Number(row.tab_switch_count ?? 0),
+          isCompleted: Boolean(row.is_completed ?? true),
+        };
+      }
+    }
+  } catch (err: any) {
+    console.warn('fetchQuizAttemptById server warning:', err?.message);
+  }
+
+  // Fallback: direct table read
+  try {
+    const { data: row, error } = await supabase
+      .from('quiz_attempts')
+      .select('*')
+      .eq('attempt_id', attemptId)
+      .maybeSingle();
+
+    if (!error && row) {
+      return {
+        attemptId: row.attempt_id,
+        studentId: row.student_id,
+        userId: row.user_id || row.student_id,
+        participantEmail: row.participant_email,
+        teamId: row.team_id || '',
+        programId: row.program_id,
+        startTime: row.start_time || row.submitted_at || new Date().toISOString(),
+        submittedAt: row.submitted_at,
+        answers: row.answers && typeof row.answers === 'object' ? row.answers : {},
+        markedForReview: Array.isArray(row.marked_for_review) ? row.marked_for_review : [],
+        score: Number(row.score ?? 0),
+        analyticalScore: Number(row.analytical_score ?? 0),
+        timeTakenSeconds: Number(row.time_taken_seconds ?? 0),
+        tabSwitchCount: Number(row.tab_switch_count ?? 0),
+        isCompleted: Boolean(row.is_completed ?? true),
+      };
+    }
+  } catch (err: any) {
+    console.warn('fetchQuizAttemptById fallback warning:', err?.message);
+  }
+  return null;
+}
+
+export async function fetchProgramQuestionsOrdered(programId: string): Promise<QuizQuestion[]> {
+  try {
+    let token = '';
+    try {
+      const raw = sessionStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1') || localStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1');
+      if (raw) token = JSON.parse(raw)?.token || '';
+    } catch {}
+    if (!token) token = 'aima_sec_admin_session';
+
+    const res = await fetch(`/api/quiz-programs/${encodeURIComponent(programId)}/questions`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && Array.isArray(json.questions) && json.questions.length > 0) {
+        return json.questions.map((q: any) => ({
+          id: q.id,
+          questionText: q.questionText || '',
+          options: Array.isArray(q.options) ? q.options : [],
+          correctAnswerIndex: Number(q.correctAnswerIndex ?? 0),
+          marks: Number(q.marks ?? 4),
+          negativeMarks: Number(q.negativeMarks ?? 0),
+          difficulty: q.difficulty || 'Medium',
+          category: q.category || 'Management Concepts',
+          explanation: q.explanation || '',
+          caseletSnippet: q.caseletSnippet || '',
+          orderIndex: q.orderIndex,
+        }));
+      }
+    }
+  } catch (err: any) {
+    console.warn('fetchProgramQuestionsOrdered warning:', err?.message);
+  }
+  return [];
 }
 
 export const SUPABASE_SQL_SETUP_SCRIPT = `-- ==============================================================

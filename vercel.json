@@ -1,5 +1,33 @@
 {
+  "redirects": [
+    {
+      "source": "/checkout/:token*",
+      "destination": "https://aima-payments-hub.vercel.app/checkout/:token*",
+      "permanent": false
+    },
+    {
+      "source": "/pay",
+      "destination": "https://aima-payments-hub.vercel.app/pay",
+      "permanent": false
+    }
+  ],
   "rewrites": [
+    {
+      "source": "/payments",
+      "destination": "https://aima-payments-hub.vercel.app/payments"
+    },
+    {
+      "source": "/payments/:path*",
+      "destination": "https://aima-payments-hub.vercel.app/payments/:path*"
+    },
+    {
+      "source": "/api/payments/:path*",
+      "destination": "https://aima-payments-hub.vercel.app/api/payments/:path*"
+    },
+    {
+      "source": "/api/v1/:path*",
+      "destination": "https://aima-payments-hub.vercel.app/api/v1/:path*"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"

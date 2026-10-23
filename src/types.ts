@@ -53,6 +53,7 @@ export interface UserProfile {
   
   // Competition State
   teamId?: string;
+  registrationNumber?: string;
   isTeamLeader?: boolean;
   hasPaidR1R2?: boolean;
   hasPaidR3?: boolean;
@@ -210,7 +211,8 @@ export interface QuizProgram {
   totalQuestions: number;
   totalMarks: number;
   passingMarks: number;
-  passingPercentage: number;
+  /** @deprecated Use cutoffScore instead */
+  passingPercentage?: number;
   cutoffScore?: number;
   negativeMarking: boolean;
   negativeMarksPerQuestion: number;
@@ -227,10 +229,32 @@ export interface QuizProgram {
   proctoringStrictness: 'High (Webcam + Fullscreen + Tab Lock)' | 'Standard' | 'Relaxed';
   proctoringMode?: string;
   tags: string[];
+  shuffleQuestions?: boolean;
+  allowReview?: boolean;
+  isResultsPublished?: boolean;
+  is_results_published?: boolean;
+  assignedQuestionsCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface QuizProgramQuestion {
+  id: string;
+  programId: string;
+  questionId: string;
+  orderIndex: number;
+  customMarks?: number;
+  createdAt?: string;
 }
 
 export interface QuizQuestion {
   id: string;
+  qNo?: number;
+  section?: string;
+  topic?: string;
+  questionType?: 'Main' | 'Reserve' | string;
+  benchmarkStyle?: string;
+  source?: string;
   questionText: string;
   options: string[];
   correctAnswerIndex: number;
@@ -255,7 +279,12 @@ export interface QuizAttempt {
   attemptId: string;
   studentId: string;
   userId?: string;
+  participantEmail?: string;
+  candidateName?: string;
+  instituteName?: string;
+  registrationNumber?: string;
   teamId?: string;
+  programId?: string;
   startTime: string;
   endTime?: string;
   answers: Record<string, number>; // questionId -> optionIndex
@@ -613,6 +642,7 @@ export interface CSRBootcampRegistration {
   secretariatEmailSent: boolean;
   registrantEmailSent: boolean;
   emailDispatchedAt: string;
+  quizProgramId?: string;
 }
 
 export interface CSREmailLog {

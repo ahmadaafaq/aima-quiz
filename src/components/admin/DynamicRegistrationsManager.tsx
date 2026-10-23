@@ -260,12 +260,12 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
       prev.map((r) =>
         r.id === activeEditPaymentReg.id || r.registrationNumber === regNum
           ? {
-              ...r,
-              paymentStatus: editStatus,
-              paymentMethod: editMethod as any,
-              transactionId: finalTxn,
-              invoiceNumber: finalInvoice,
-            }
+            ...r,
+            paymentStatus: editStatus,
+            paymentMethod: editMethod as any,
+            transactionId: finalTxn,
+            invoiceNumber: finalInvoice,
+          }
           : r
       )
     );
@@ -311,11 +311,11 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
       prev.map((r) =>
         r.id === reg.id || r.registrationNumber === reg.registrationNumber
           ? {
-              ...r,
-              paymentStatus: nextStatus,
-              transactionId: txnId,
-              invoiceNumber: nextStatus === 'PAID' ? (r.invoiceNumber ? r.invoiceNumber.replace('PINV-', 'INV-') : `INV-${r.registrationNumber}`) : (r.invoiceNumber || `PINV-${r.registrationNumber}`),
-            }
+            ...r,
+            paymentStatus: nextStatus,
+            transactionId: txnId,
+            invoiceNumber: nextStatus === 'PAID' ? (r.invoiceNumber ? r.invoiceNumber.replace('PINV-', 'INV-') : `INV-${r.registrationNumber}`) : (r.invoiceNumber || `PINV-${r.registrationNumber}`),
+          }
           : r
       )
     );
@@ -356,10 +356,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
             'Subtotal (INR)': reg.subtotalExclGst ?? reg.totalPayable,
             'GST (INR)': reg.gstAmount ?? 0,
             'Total Fee (INR)': reg.totalPayable,
-            'Coordinator Name': coordName,
-            'Coordinator Email': coordEmail,
-            'Coordinator Phone': coordPhone,
-            'Date Created': new Date(reg.createdAt).toLocaleDateString('en-IN'),
+            'Date Created': `${new Date(reg.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })} ${new Date(reg.createdAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}`,
           },
         ];
       }
@@ -387,10 +384,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
         'Subtotal (INR)': reg.subtotalExclGst ?? reg.totalPayable,
         'GST (INR)': reg.gstAmount ?? 0,
         'Total Fee (INR)': reg.totalPayable,
-        'Coordinator Name': coordName,
-        'Coordinator Email': coordEmail,
-        'Coordinator Phone': coordPhone,
-        'Date Created': new Date(reg.createdAt).toLocaleDateString('en-IN'),
+        'Date Created': `${new Date(reg.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })} ${new Date(reg.createdAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}`,
       }));
     });
 
@@ -434,7 +428,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
 
   return (
     <div className="space-y-6">
-      
+
       {/* Top Header Card (Single Clean Card) */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
@@ -555,11 +549,10 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
           <button
             type="button"
             onClick={() => setModeFilter('all')}
-            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              modeFilter === 'all'
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${modeFilter === 'all'
                 ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400'
-            }`}
+              }`}
           >
             <span>All Tracks</span>
             <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold">
@@ -569,11 +562,10 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
           <button
             type="button"
             onClick={() => setModeFilter('individual')}
-            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              modeFilter === 'individual'
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${modeFilter === 'individual'
                 ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400'
-            }`}
+              }`}
           >
             <span>Individual</span>
             <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold">
@@ -583,11 +575,10 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
           <button
             type="button"
             onClick={() => setModeFilter('institute')}
-            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              modeFilter === 'institute'
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${modeFilter === 'institute'
                 ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400'
-            }`}
+              }`}
           >
             <span>Institutes</span>
             <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold">
@@ -601,11 +592,10 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
           <button
             type="button"
             onClick={() => setStatusFilter('all')}
-            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              statusFilter === 'all'
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${statusFilter === 'all'
                 ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400'
-            }`}
+              }`}
           >
             <span>All Status</span>
             <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold">
@@ -615,11 +605,10 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
           <button
             type="button"
             onClick={() => setStatusFilter('PAID')}
-            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              statusFilter === 'PAID'
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${statusFilter === 'PAID'
                 ? 'bg-emerald-500 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400'
-            }`}
+              }`}
           >
             <span>Paid</span>
             <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${statusFilter === 'PAID' ? 'bg-emerald-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
@@ -629,11 +618,10 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
           <button
             type="button"
             onClick={() => setStatusFilter('PENDING_INVOICE')}
-            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              statusFilter === 'PENDING_INVOICE'
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${statusFilter === 'PENDING_INVOICE'
                 ? 'bg-amber-500 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400'
-            }`}
+              }`}
           >
             <span>Pending</span>
             <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${statusFilter === 'PENDING_INVOICE' ? 'bg-amber-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
@@ -682,23 +670,34 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                         <div className="font-mono font-black text-blue-600 dark:text-blue-400">
                           {reg.registrationNumber}
                         </div>
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          {new Date(reg.createdAt).toLocaleDateString('en-IN', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
+                          <span>
+                            {new Date(reg.createdAt).toLocaleDateString('en-IN', {
+                              timeZone: 'Asia/Kolkata',
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                            })}
+                          </span>
+                          <span className="text-slate-300 dark:text-slate-600">•</span>
+                          <span className="text-slate-600 dark:text-slate-300 font-semibold">
+                            {new Date(reg.createdAt).toLocaleTimeString('en-IN', {
+                              timeZone: 'Asia/Kolkata',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: true,
+                            })}
+                          </span>
                         </div>
                       </td>
 
                       {/* Mode / Squad */}
                       <td className="py-3.5 px-4">
                         <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            isInst
+                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${isInst
                               ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20'
                               : 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20'
-                          }`}
+                            }`}
                         >
                           {isInst ? 'Institutional' : reg.teamName ? 'Team Delegation' : 'Solo Candidate'}
                         </span>
@@ -755,11 +754,10 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                         <button
                           type="button"
                           onClick={() => handleOpenEditPayment(reg)}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition-all ${
-                            isPaid
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition-all ${isPaid
                               ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
                               : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25'
-                          }`}
+                            }`}
                           title="Click to edit payment status & details"
                         >
                           {isPaid ? <CheckCircle2 className="w-3 h-3 text-emerald-500" /> : <Clock className="w-3 h-3 text-amber-500" />}
@@ -822,11 +820,10 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                   <button
                     key={size}
                     onClick={() => { setItemsPerPage(size); setCurrentPage(1); }}
-                    className={`px-2 py-0.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
-                      itemsPerPage === size
+                    className={`px-2 py-0.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${itemsPerPage === size
                         ? 'bg-blue-600 text-white shadow-sm'
                         : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800'
-                    }`}
+                      }`}
                   >
                     {size}
                   </button>
@@ -860,11 +857,10 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                   <button
                     key={page}
                     onClick={() => setCurrentPage(page)}
-                    className={`min-w-[32px] h-8 rounded-lg text-xs font-bold cursor-pointer transition-all ${
-                      currentPage === page
+                    className={`min-w-[32px] h-8 rounded-lg text-xs font-bold cursor-pointer transition-all ${currentPage === page
                         ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
                         : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800'
-                    }`}
+                      }`}
                   >
                     {page}
                   </button>
@@ -944,15 +940,15 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                 {(activeNomineesModal.nominees && activeNomineesModal.nominees.length > 0
                   ? activeNomineesModal.nominees
                   : [
-                      {
-                        id: 'lead',
-                        name: getCandidateName(activeNomineesModal),
-                        email: getCandidateEmail(activeNomineesModal),
-                        mobile: getCandidatePhone(activeNomineesModal),
-                        password: activeNomineesModal.participantPassword || generateDefaultPassword(getCandidateName(activeNomineesModal), getCandidatePhone(activeNomineesModal)),
-                        isTeamLeader: true,
-                      },
-                    ]
+                    {
+                      id: 'lead',
+                      name: getCandidateName(activeNomineesModal),
+                      email: getCandidateEmail(activeNomineesModal),
+                      mobile: getCandidatePhone(activeNomineesModal),
+                      password: activeNomineesModal.participantPassword || generateDefaultPassword(getCandidateName(activeNomineesModal), getCandidatePhone(activeNomineesModal)),
+                      isTeamLeader: true,
+                    },
+                  ]
                 ).map((nom, idx) => {
                   const pwd = nom.password || generateDefaultPassword(nom.name, nom.mobile || '');
                   const nomKey = nom.id || `nom_${idx}`;
@@ -1092,11 +1088,10 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                   <button
                     type="button"
                     onClick={() => setEditStatus('PAID')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                      editStatus === 'PAID'
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${editStatus === 'PAID'
                         ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm'
                         : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
-                    }`}
+                      }`}
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     <span>PAID / CLEARED</span>
@@ -1104,11 +1099,10 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                   <button
                     type="button"
                     onClick={() => setEditStatus('PENDING_INVOICE')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                      editStatus === 'PENDING_INVOICE'
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${editStatus === 'PENDING_INVOICE'
                         ? 'bg-amber-500 text-white border-amber-600 shadow-sm'
                         : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
-                    }`}
+                      }`}
                   >
                     <Clock className="w-4 h-4" />
                     <span>PENDING</span>

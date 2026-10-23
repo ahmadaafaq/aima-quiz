@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useCompetition } from '../../context/CompetitionContext';
 import { QuizProgram } from '../../types';
-import { DocRequirementInfo } from '../common/DocRequirementInfo';
+import { toTitleCase, formatQuizDateRange, parseISTTimestamp } from '../../lib/formatters';
 import {
   BookOpen,
   Plus,
@@ -26,17 +26,22 @@ import {
   HelpCircle,
   ShieldCheck,
   Check,
+  ListOrdered,
+  Loader2,
 } from 'lucide-react';
+import { ProgramQuestionsEditorModal } from './ProgramQuestionsEditorModal';
 
 interface QuizProgramManagerProps {
   onNavigateToResults?: (programId?: string) => void;
   onNavigateToQuestions?: () => void;
+  onNavigateToCurator?: (programId?: string) => void;
   autoOpenCreate?: boolean;
 }
 
 export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
   onNavigateToResults,
   onNavigateToQuestions,
+  onNavigateToCurator,
   autoOpenCreate = false,
 }) => {
   const {
@@ -44,12 +49,31 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
     addQuizProgram,
     updateQuizProgram,
     deleteQuizProgram,
+    refreshQuizPrograms,
     questions,
     quizAttempts,
     setAdminActiveTab,
+    programQuestionMappings,
+    csrRegistrations,
+    config,
   } = useCompetition();
 
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'upcoming' | 'completed' | 'draft'>('all');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  React.useEffect(() => {
+    refreshQuizPrograms?.();
+  }, []);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshQuizPrograms?.();
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
+
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'upcoming' | 'completed' | 'draft' | 'paused'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProgram, setEditingProgram] = useState<QuizProgram | null>(null);
@@ -81,16 +105,34 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
   const [manualMarksPerQuestion, setManualMarksPerQuestion] = useState<number>(4);
   const [manualPassingMarks, setManualPassingMarks] = useState<number>(75);
 
-  // Helper to normalize program status for filtering
-  const getNormalizedStatus = (progStatus: string): 'active' | 'upcoming' | 'completed' | 'draft' => {
+  // Program Questions Editor Modal state
+  const [activeProgramForQuestions, setActiveProgramForQuestions] = useState<QuizProgram | null>(null);
+  const [showQuestionsEditorModal, setShowQuestionsEditorModal] = useState<boolean>(false);
+  const [shuffleQuestions, setShuffleQuestions] = useState<boolean>(false);
+  const [allowReview, setAllowReview] = useState<boolean>(true);
+  const [isSavingProgram, setIsSavingProgram] = useState<boolean>(false);
+
+  // Helper to normalize program status strictly depending on schedule window
+  const getNormalizedStatus = (progStatus: string, startDate?: string, endDate?: string): 'active' | 'upcoming' | 'completed' | 'draft' | 'paused' => {
+    if (progStatus === 'draft') return 'draft';
+
+    const now = Date.now();
+    const s = parseISTTimestamp(startDate);
+    const e = parseISTTimestamp(endDate);
+
+    if (!isNaN(e) && now > e) return 'completed';
+    if (!isNaN(s) && now < s) return 'upcoming';
+    if (!isNaN(s) && !isNaN(e) && now >= s && now <= e) return 'active';
+    if (!isNaN(s) && now >= s) return 'active';
+
     if (progStatus === 'live' || progStatus === 'active') return 'active';
-    if (progStatus === 'scheduled' || progStatus === 'upcoming') return 'upcoming';
     if (progStatus === 'completed') return 'completed';
-    return 'draft';
+    return 'upcoming';
   };
 
   const openCreateModal = () => {
     setEditingProgram(null);
+    setIsSavingProgram(false);
     setTitle('');
     setCode(`AIMA-Q-${Math.floor(100 + Math.random() * 900)}`);
     setDescription('');
@@ -107,13 +149,15 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
     setStatus('live');
     setProctoringMode('strict_lockdown');
     setInstructions('Full-screen mode enforced. Tab switches will trigger disqualification warnings.');
-    setCategory('Corporate Strategy & Management');
+    setCategory('');
     setIsCustomCategory(false);
     setCustomCategory('');
-    setEligibility('All registered management students');
+    setEligibility('');
     setUseManualMarksOverride(false);
     setManualMarksPerQuestion(Math.round(100 / Math.max(1, questions.length || 30)));
     setManualPassingMarks(Math.round(100 * (75 / 100)));
+    setShuffleQuestions(false);
+    setAllowReview(true);
     setShowCreateModal(true);
   };
 
@@ -125,6 +169,7 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
 
   const openEditModal = (prog: QuizProgram) => {
     setEditingProgram(prog);
+    setIsSavingProgram(false);
     setTitle(prog.title || '');
     setCode(prog.code || '');
     setDescription(prog.description || '');
@@ -134,7 +179,7 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
     setDurationMinutes(prog.durationMinutes || 45);
     setTotalQuestions(prog.totalQuestions || 30);
     setTotalMarks(prog.totalMarks || 100);
-    setCutoffScore(prog.cutoffScore ?? prog.passingPercentage ?? 65);
+    setCutoffScore(prog.cutoffScore ?? 65);
     setNegativeMarkingPerWrong(prog.negativeMarkingPerWrong ?? prog.negativeMarksPerQuestion ?? 0.5);
     setStartDate(prog.startDate || prog.startTime || '2026-09-10 10:00');
     setEndDate(prog.endDate || prog.endTime || '2026-09-15 22:00');
@@ -154,90 +199,132 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
       'Finance & Marketing',
       'Data Interpretation',
     ];
-    if (prog.category && !standardCategories.includes(prog.category)) {
-      setIsCustomCategory(true);
-      setCustomCategory(prog.category);
-      setCategory('__custom__');
-    } else {
-      setIsCustomCategory(false);
-      setCustomCategory('');
-      setCategory(prog.category || 'Corporate Strategy & Management');
-    }
-    setEligibility(prog.eligibility || 'All registered management students');
+    setCategory(prog.category || '');
+    setIsCustomCategory(false);
+    setCustomCategory('');
+    setEligibility(prog.eligibility || '');
 
     const derivedMarks = Math.round(Number(prog.totalMarks || 100) / Math.max(1, Number(prog.totalQuestions || 30)));
-    const derivedPassing = Math.round(Number(prog.totalMarks || 100) * (Number(prog.cutoffScore ?? prog.passingPercentage ?? 65) / 100));
+    const derivedPassing = Math.round(Number(prog.totalMarks || 100) * (Number(prog.cutoffScore ?? 65) / 100));
     const hasCustomMarks = (prog.marksPerQuestion !== undefined && prog.marksPerQuestion !== derivedMarks) ||
       (prog.passingMarks !== undefined && prog.passingMarks !== derivedPassing);
     setUseManualMarksOverride(hasCustomMarks);
     setManualMarksPerQuestion(prog.marksPerQuestion ?? derivedMarks);
     setManualPassingMarks(prog.passingMarks ?? derivedPassing);
+    setShuffleQuestions(Boolean(prog.shuffleQuestions));
+    setAllowReview(prog.allowReview !== false);
 
     setShowCreateModal(true);
   };
 
-  const handleSaveProgram = (e: React.FormEvent) => {
+  const handleSaveProgram = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !code.trim()) {
       alert('Please enter a valid title and code.');
       return;
     }
 
-    const finalCategory = isCustomCategory ? (customCategory.trim() || 'General Management') : category;
-    const finalEligibility = eligibility.trim() || 'All registered management students';
-    const autoPassingMarks = Math.round(Number(totalMarks) * (Number(cutoffScore) / 100));
-    const autoMarksPerQuestion = Math.round(Number(totalMarks) / Math.max(1, Number(totalQuestions)));
+    setIsSavingProgram(true);
+    try {
+      const finalCategory = editingProgram ? (editingProgram.category || '') : (category || '');
+      const finalEligibility = editingProgram ? (editingProgram.eligibility || '') : (eligibility || '');
+      const autoPassingMarks = Math.round(Number(totalMarks) * (Number(cutoffScore) / 100));
+      const autoMarksPerQuestion = Math.round(Number(totalMarks) / Math.max(1, Number(totalQuestions)));
 
-    const computedPassingMarks = useManualMarksOverride ? Number(manualPassingMarks) : autoPassingMarks;
-    const computedMarksPerQuestion = useManualMarksOverride ? Number(manualMarksPerQuestion) : autoMarksPerQuestion;
+      const computedPassingMarks = useManualMarksOverride ? Number(manualPassingMarks) : autoPassingMarks;
+      const computedMarksPerQuestion = useManualMarksOverride ? Number(manualMarksPerQuestion) : autoMarksPerQuestion;
 
-    const payload: Partial<QuizProgram> = {
-      title,
-      code,
-      description,
-      stage: stage as any,
-      category: finalCategory,
-      eligibility: finalEligibility,
-      fee: Number(fee),
-      intakeCapacity: Number(intakeCapacity),
-      maxIntake: Number(intakeCapacity),
-      durationMinutes: Number(durationMinutes),
-      totalQuestions: Number(totalQuestions),
-      totalMarks: Number(totalMarks),
-      cutoffScore: Number(cutoffScore),
-      passingPercentage: Number(cutoffScore),
-      passingMarks: computedPassingMarks,
-      marksPerQuestion: computedMarksPerQuestion,
-      negativeMarking: Number(negativeMarkingPerWrong) > 0,
-      negativeMarkingPerWrong: Number(negativeMarkingPerWrong),
-      negativeMarksPerQuestion: Number(negativeMarkingPerWrong),
-      startDate,
-      endDate,
-      startTime: startDate,
-      endTime: endDate,
-      status: status as any,
-      proctoringMode,
-      proctoringStrictness: proctoringMode === 'strict_lockdown' ? 'High (Webcam + Fullscreen + Tab Lock)' : 'Standard',
-      instructions: instructions.split('\n').filter(Boolean),
-    };
+      const payload: Partial<QuizProgram> = {
+        title,
+        code,
+        description,
+        stage: stage as any,
+        category: finalCategory,
+        eligibility: finalEligibility,
+        fee: Number(fee),
+        intakeCapacity: Number(intakeCapacity),
+        maxIntake: Number(intakeCapacity),
+        durationMinutes: Number(durationMinutes),
+        totalQuestions: Number(totalQuestions),
+        totalMarks: Number(totalMarks),
+        cutoffScore: Number(cutoffScore),
+        passingMarks: computedPassingMarks,
+        marksPerQuestion: computedMarksPerQuestion,
+        negativeMarking: Number(negativeMarkingPerWrong) > 0,
+        negativeMarkingPerWrong: Number(negativeMarkingPerWrong),
+        negativeMarksPerQuestion: Number(negativeMarkingPerWrong),
+        startDate,
+        endDate,
+        startTime: startDate,
+        endTime: endDate,
+        status: status as any,
+        proctoringMode,
+        proctoringStrictness: proctoringMode === 'strict_lockdown' ? 'High (Webcam + Fullscreen + Tab Lock)' : 'Standard',
+        instructions: instructions.split('\n').filter(Boolean),
+        shuffleQuestions,
+        allowReview,
+      };
 
-    if (editingProgram) {
-      updateQuizProgram(editingProgram.id, payload);
-    } else {
-      addQuizProgram({
-        ...payload,
-        tagline: description || title,
-        tags: ['Online Assessment', 'Proctored'],
-      } as any);
+      // Brief animation buffer for clear user feedback
+      await new Promise(resolve => setTimeout(resolve, 400));
+
+      if (editingProgram) {
+        updateQuizProgram(editingProgram.id, payload);
+        setShowCreateModal(false);
+      } else {
+        const created = addQuizProgram({
+          ...payload,
+          tagline: description || title,
+          tags: ['Online Assessment', 'Proctored'],
+        } as any);
+        setShowCreateModal(false);
+        if (created) {
+          setActiveProgramForQuestions(created);
+          setShowQuestionsEditorModal(true);
+        }
+      }
+    } finally {
+      setIsSavingProgram(false);
     }
+  };
 
-    setShowCreateModal(false);
+  const toDateTimeLocal = (val: string) => {
+    if (!val) return '';
+    return val.replace(' ', 'T').slice(0, 16);
+  };
+
+  const fromDateTimeLocal = (val: string) => {
+    if (!val) return '';
+    return val.replace('T', ' ');
+  };
+
+  const setStartDatePreset = (mode: 'now' | 'tomorrow_morning') => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    if (mode === 'now') {
+      const now = new Date();
+      setStartDate(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`);
+    } else {
+      const tmrw = new Date();
+      tmrw.setDate(tmrw.getDate() + 1);
+      setStartDate(`${tmrw.getFullYear()}-${pad(tmrw.getMonth() + 1)}-${pad(tmrw.getDate())} 09:00`);
+    }
+  };
+
+  const setEndDatePreset = (days: number) => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    let base = new Date();
+    if (startDate) {
+      const parsed = new Date(startDate.replace(' ', 'T'));
+      if (!isNaN(parsed.getTime())) base = parsed;
+    }
+    const target = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+    setEndDate(`${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())} 23:59`);
   };
 
   const safeQuizPrograms = quizPrograms || [];
 
   const filteredPrograms = safeQuizPrograms.filter(prog => {
-    const norm = getNormalizedStatus(prog.status);
+    const norm = getNormalizedStatus(prog.status, prog.startDate || prog.startTime, prog.endDate || prog.endTime);
     const matchesStatus = filterStatus === 'all' || norm === filterStatus;
     const matchesSearch =
       (prog.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -246,10 +333,37 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
     return matchesStatus && matchesSearch;
   });
 
-  const activePrograms = safeQuizPrograms.filter(p => getNormalizedStatus(p.status) === 'active');
-  const totalEnrolled = safeQuizPrograms.reduce((acc, p) => acc + (p.enrolledCount || 0), 0);
-  const totalCompleted = safeQuizPrograms.reduce((acc, p) => acc + (p.completedCount || 0), 0);
-  const totalLiveTaking = safeQuizPrograms.reduce((acc, p) => acc + (p.inProgressCount || 0), 0);
+  const activePrograms = safeQuizPrograms.filter(p => getNormalizedStatus(p.status, p.startDate || p.startTime, p.endDate || p.endTime) === 'active');
+
+  const totalEnrolledCandidates = useMemo(() => {
+    const fromRegistrations = (csrRegistrations || []).reduce((acc, reg) => {
+      const nomineeCount = Array.isArray(reg.nominees) ? reg.nominees.length : 0;
+      return acc + (nomineeCount > 0 ? nomineeCount : (reg.teamCount ? reg.teamCount * 4 : 1));
+    }, 0);
+    if (fromRegistrations > 0) return fromRegistrations;
+    return safeQuizPrograms.reduce((acc, p) => acc + (p.enrolledCount || 0), 0);
+  }, [csrRegistrations, safeQuizPrograms]);
+
+  const distinctInstitutesCount = useMemo(() => {
+    const institutes = new Set(
+      (csrRegistrations || [])
+        .map(r => r.institutionName || r.organization || (r as any).instituteName)
+        .filter(Boolean)
+    );
+    return institutes.size;
+  }, [csrRegistrations]);
+
+  const completedAttempts = useMemo(() => {
+    return (quizAttempts || []).filter(a => a.isCompleted);
+  }, [quizAttempts]);
+
+  const completedCount = completedAttempts.length;
+  const passedCount = completedAttempts.filter(a => (a.score || 0) >= (config?.r1CutoffScore || 65)).length;
+  const passRate = completedCount > 0 ? Math.round((passedCount / completedCount) * 100) : 0;
+
+  const liveTakingCount = useMemo(() => {
+    return (quizAttempts || []).filter(a => !a.isCompleted).length;
+  }, [quizAttempts]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -265,12 +379,6 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                 <h2 className="text-xl font-black text-slate-900 dark:text-white">
                   Quiz Programs & Live Test Operations
                 </h2>
-                <DocRequirementInfo
-                  specKey="admin_quiz_program_manager"
-                  variant="badge"
-                  badgeLabel="BRD §7.1 Specs"
-                  colorTheme="red"
-                />
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
                 Create, configure, and monitor pan-India online screening tests, intake limits, fee gates, and proctoring parameters.
@@ -280,6 +388,16 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+            title="Refresh quiz programs & intake capacities from Supabase"
+          >
+            <Loader2 className={`w-3.5 h-3.5 text-blue-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Syncing...' : 'Refresh Live DB'}</span>
+          </button>
+
           <button
             onClick={() => onNavigateToResults?.() || setAdminActiveTab('quiz_results')}
             className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
@@ -303,13 +421,13 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
             <span>Active Live Quizzes</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <span className={`w-2 h-2 rounded-full ${activePrograms.length > 0 ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'}`} />
           </div>
           <div className="text-2xl font-black text-slate-900 dark:text-white mt-2">
             {activePrograms.length} Live
           </div>
           <div className="text-xs text-emerald-600 font-medium mt-1">
-            {safeQuizPrograms.length} total registered programs
+            {safeQuizPrograms.length} total registered {safeQuizPrograms.length === 1 ? 'program' : 'programs'}
           </div>
         </div>
 
@@ -319,10 +437,10 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
             <Users className="w-4 h-4 text-blue-500" />
           </div>
           <div className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-            {totalEnrolled.toLocaleString()}
+            {totalEnrolledCandidates.toLocaleString()}
           </div>
           <div className="text-xs text-blue-600 font-medium mt-1">
-            Across registered institutions
+            Across {distinctInstitutesCount > 0 ? `${distinctInstitutesCount} registered ${distinctInstitutesCount === 1 ? 'candidate' : 'candidates'}` : 'registered candidates'}
           </div>
         </div>
 
@@ -332,10 +450,10 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
             <CheckCircle2 className="w-4 h-4 text-purple-500" />
           </div>
           <div className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-            {totalCompleted.toLocaleString()}
+            {completedCount.toLocaleString()}
           </div>
           <div className="text-xs text-purple-600 font-medium mt-1">
-            {quizAttempts?.length || 0} evaluated attempts
+            {completedCount} evaluated • {passRate}% qualified
           </div>
         </div>
 
@@ -345,10 +463,10 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
             <Zap className="w-4 h-4 text-amber-500" />
           </div>
           <div className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-            {totalLiveTaking.toLocaleString()}
+            {liveTakingCount.toLocaleString()}
           </div>
           <div className="text-xs text-amber-600 font-medium mt-1">
-            Real-time active test sessions
+            Active test sessions across {activePrograms.length} live {activePrograms.length === 1 ? 'quiz' : 'quizzes'}
           </div>
         </div>
       </div>
@@ -369,10 +487,10 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
-          {(['all', 'active', 'upcoming', 'completed', 'draft'] as const).map(st => {
+          {(['all', 'active', 'upcoming', 'completed', 'draft', 'paused'] as const).map(st => {
             const count = st === 'all'
               ? safeQuizPrograms.length
-              : safeQuizPrograms.filter(p => getNormalizedStatus(p.status) === st).length;
+              : safeQuizPrograms.filter(p => getNormalizedStatus(p.status, p.startDate || p.startTime, p.endDate || p.endTime) === st).length;
 
             return (
               <button
@@ -411,14 +529,28 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
           </div>
         ) : (
           filteredPrograms.map(prog => {
-            const normStatus = getNormalizedStatus(prog.status);
+            const normStatus = getNormalizedStatus(prog.status, prog.startDate || prog.startTime, prog.endDate || prog.endTime);
             const isLive = normStatus === 'active';
             const capacity = prog.intakeCapacity || prog.maxIntake || 5000;
-            const enrolled = prog.enrolledCount || 0;
-            const fillPercentage = Math.min(100, Math.round((enrolled / Math.max(1, capacity)) * 100));
-            const cutoff = prog.cutoffScore ?? prog.passingPercentage ?? 65;
+            const liveCandidatesCount = (prog.id === 'qp_case_comp_stage1_2026' && csrRegistrations && csrRegistrations.length > 0)
+              ? csrRegistrations.reduce((acc, r) => acc + (r.participantCount || r.nominees?.length || 1), 0)
+              : 0;
+            const enrolled = Math.max(prog.enrolledCount || 0, liveCandidatesCount);
+
+            // Format precise decimal percentage
+            const rawPercent = Math.min(100, (enrolled / Math.max(1, capacity)) * 100);
+            const fillPercentage = rawPercent === 0
+              ? '0'
+              : rawPercent < 1
+                ? rawPercent.toFixed(2)
+                : (rawPercent % 1 === 0 ? rawPercent.toFixed(0) : rawPercent.toFixed(1));
+
+            const cutoff = prog.cutoffScore ?? 65;
             const negMark = prog.negativeMarkingPerWrong ?? prog.negativeMarksPerQuestion ?? 0.5;
-            const dateDisplay = (prog.startDate || prog.startTime || '2026-09-10 10:00') + ' — ' + (prog.endDate || prog.endTime || '2026-09-15 22:00');
+            const { startFormatted, endFormatted } = formatQuizDateRange(
+              prog.startDate || prog.startTime || '2026-09-10 10:00',
+              prog.endDate || prog.endTime || '2026-09-15 22:00'
+            );
 
             return (
               <div
@@ -434,11 +566,13 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                       <span
                         className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${normStatus === 'active'
                           ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                          : normStatus === 'upcoming'
-                            ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20'
-                            : normStatus === 'completed'
-                              ? 'bg-purple-500/10 text-purple-600 border border-purple-500/20'
-                              : 'bg-slate-500/10 text-slate-500 border border-slate-500/20'
+                          : normStatus === 'paused'
+                            ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
+                            : normStatus === 'upcoming'
+                              ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20'
+                              : normStatus === 'completed'
+                                ? 'bg-purple-500/10 text-purple-600 border border-purple-500/20'
+                                : 'bg-slate-500/10 text-slate-500 border border-slate-500/20'
                           }`}
                       >
                         {normStatus.toUpperCase()}
@@ -446,21 +580,16 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                       <span className="text-[10px] font-bold text-slate-400 uppercase">
                         {(prog.stage || 'round_1').replace('_', ' ')}
                       </span>
-                      {prog.category && (
+                      {Boolean(prog.category && prog.category.trim()) && (
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                           {prog.category}
                         </span>
                       )}
-                      <DocRequirementInfo
-                        specKey="student_quiz_engine"
-                        variant="icon"
-                        size="xs"
-                        colorTheme="red"
-                      />
+
                     </div>
 
                     <h3 className="text-base font-black text-slate-900 dark:text-white">
-                      {prog.title}
+                      {toTitleCase(prog.title)}
                     </h3>
                     <p className="text-xs text-slate-500 line-clamp-2">
                       {prog.description || 'Mandatory screening assessment testing core strategy, business concepts, and financial fundamentals.'}
@@ -477,7 +606,7 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                     </button>
                     <button
                       onClick={() => {
-                        if (confirm(`Are you sure you want to delete quiz program "${prog.title}"?`)) {
+                        if (confirm(`Are you sure you want to delete quiz program "${toTitleCase(prog.title)}"?`)) {
                           deleteQuizProgram(prog.id);
                         }
                       }}
@@ -536,42 +665,39 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                   <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                     <div
                       className="h-full bg-red-600 rounded-full transition-all duration-500"
-                      style={{ width: `${fillPercentage}%` }}
+                      style={{ width: `${Math.max(rawPercent > 0 ? 0.8 : 0, rawPercent)}%` }}
                     />
                   </div>
                 </div>
 
-                {/* Footer Controls */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
-                  <div className="flex items-center gap-1.5 text-slate-500 text-[11px] truncate max-w-[220px]">
-                    <Calendar className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{dateDisplay}</span>
+                {/* Schedule Window Row */}
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-300">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-semibold text-slate-900 dark:text-white">{startFormatted}</span>
+                    <span className="text-slate-400 font-bold">→</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">{endFormatted}</span>
                   </div>
+                </div>
+
+                {/* Footer Controls */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                  <button
+                    onClick={() => {
+                      if (onNavigateToCurator) {
+                        onNavigateToCurator(prog.id);
+                      } else {
+                        setAdminActiveTab('quiz_editor');
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-300 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer border border-blue-200/60 dark:border-blue-800/60"
+                    title="Open Dedicated Questions Curator Page"
+                  >
+                    <ListOrdered className="w-3.5 h-3.5" />
+                    <span>Questions ({programQuestionMappings[prog.id] !== undefined ? programQuestionMappings[prog.id].length : (prog.assignedQuestionsCount || 0)}/{prog.totalQuestions})</span>
+                  </button>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        const newStatus = isLive ? 'draft' : 'live';
-                        updateQuizProgram(prog.id, { status: newStatus as any });
-                      }}
-                      className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition cursor-pointer ${isLive
-                        ? 'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20'
-                        : 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20'
-                        }`}
-                    >
-                      {isLive ? (
-                        <>
-                          <Pause className="w-3.5 h-3.5" />
-                          <span>Pause Test</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-3.5 h-3.5" />
-                          <span>Activate Live</span>
-                        </>
-                      )}
-                    </button>
-
                     <button
                       onClick={() => onNavigateToResults?.(prog.id) || setAdminActiveTab('quiz_results')}
                       className="px-3.5 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold hover:opacity-90 flex items-center gap-1 transition cursor-pointer shadow-xs"
@@ -652,73 +778,7 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                 />
               </div>
 
-              {/* Dynamic Assessment Category & Eligibility Criteria */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Assessment Category *
-                  </label>
-                  <select
-                    value={isCustomCategory ? '__custom__' : category}
-                    onChange={e => {
-                      if (e.target.value === '__custom__') {
-                        setIsCustomCategory(true);
-                      } else {
-                        setIsCustomCategory(false);
-                        setCategory(e.target.value);
-                      }
-                    }}
-                    className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                  >
-                    <option value="Corporate Strategy & Management">Corporate Strategy & Management</option>
-                    <option value="Corporate Strategy & Business Awareness">Corporate Strategy & Business Awareness</option>
-                    <option value="Management Concepts & Case Analysis">Management Concepts & Case Analysis</option>
-                    <option value="Sustainability & AI">Sustainability & AI</option>
-                    <option value="Economics & Policy">Economics & Policy</option>
-                    <option value="Finance & Marketing">Finance & Marketing</option>
-                    <option value="Data Interpretation">Data Interpretation</option>
-                    <option value="__custom__">Custom / Other Category...</option>
-                  </select>
-                  {isCustomCategory && (
-                    <input
-                      type="text"
-                      required
-                      placeholder="Type custom category name..."
-                      value={customCategory}
-                      onChange={e => setCustomCategory(e.target.value)}
-                      className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white mt-1"
-                    />
-                  )}
-                </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Candidate Eligibility Criteria
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. All registered management students"
-                    value={eligibility}
-                    onChange={e => setEligibility(e.target.value)}
-                    className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                  />
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {['All registered management students', 'Round 1 Qualifiers only', 'Regional Hub Finalists', 'Corporate Track nominees'].map(pill => (
-                      <button
-                        key={pill}
-                        type="button"
-                        onClick={() => setEligibility(pill)}
-                        className={`text-[10px] px-2 py-0.5 rounded-md border transition-colors cursor-pointer ${eligibility === pill
-                          ? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 font-semibold'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
-                          }`}
-                      >
-                        + {pill}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <div className="space-y-1">
@@ -809,9 +869,14 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Cutoff Score (%)
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Cutoff Score (%)
+                    </label>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-500/15 border border-emerald-500/25 dark:text-emerald-300 dark:bg-emerald-500/20 px-1.5 py-0.2 rounded font-mono">
+                      = {Math.round(Number(totalMarks) * (Number(cutoffScore) / 100))} / {totalMarks} Marks
+                    </span>
+                  </div>
                   <input
                     type="number"
                     min="0"
@@ -820,6 +885,10 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                     onChange={e => setCutoffScore(Number(e.target.value))}
                     className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                   />
+                  <div className="text-[10px] text-slate-500 flex items-center justify-between pt-0.5">
+                    <span>Percentage threshold</span>
+                    <span>Required passing marks</span>
+                  </div>
                 </div>
 
                 <div className="space-y-1">
@@ -837,117 +906,92 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                 </div>
               </div>
 
-              {/* Live Derived Marks & Cutoff Preview Banner with Manual Override Toggle */}
-              <div className="space-y-3">
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                    <span className="font-bold text-red-600 dark:text-red-400 flex items-center gap-1">
-                      ⚡ Scoring Model:
-                    </span>
-                    <span>
-                      Each question = <strong className="text-slate-900 dark:text-white">
-                        {useManualMarksOverride
-                          ? manualMarksPerQuestion
-                          : Math.round(Number(totalMarks) / Math.max(1, Number(totalQuestions)))} marks
-                      </strong>
-                    </span>
-                    <span className="text-slate-400">•</span>
-                    <span>
-                      Passing threshold = <strong className="text-slate-900 dark:text-white">
-                        {useManualMarksOverride
-                          ? manualPassingMarks
-                          : Math.round(Number(totalMarks) * (Number(cutoffScore) / 100))} marks
-                      </strong> ({cutoffScore}%)
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!useManualMarksOverride) {
-                        setManualMarksPerQuestion(Math.round(Number(totalMarks) / Math.max(1, Number(totalQuestions))));
-                        setManualPassingMarks(Math.round(Number(totalMarks) * (Number(cutoffScore) / 100)));
-                      }
-                      setUseManualMarksOverride(!useManualMarksOverride);
-                    }}
-                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer ${useManualMarksOverride
-                      ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 font-bold'
-                      : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:border-slate-400'
-                      }`}
-                  >
-                    <Sparkles className="w-3 h-3 text-amber-500" />
-                    {useManualMarksOverride ? 'Manual Override Active (Click to reset)' : 'Customize Marks Breakdown'}
-                  </button>
+              {/* Derived Cutoff & Score Info Banner (Decoupled from uniform per-question marks) */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-red-500/5 via-slate-50 to-slate-50 dark:from-red-950/20 dark:via-slate-800/80 dark:to-slate-800/80 border border-slate-200 dark:border-slate-700/60 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 flex-wrap">
+                  <span className="font-bold text-red-600 dark:text-red-400 flex items-center gap-1.5">
+                    <Award className="w-4 h-4 text-red-500" />
+                    Cutoff Threshold:
+                  </span>
+                  <span>
+                    Qualifying score = <strong className="text-slate-900 dark:text-white">
+                      {Math.round(Number(totalMarks) * (Number(cutoffScore) / 100))} marks
+                    </strong> ({cutoffScore}% of {totalMarks} pts)
+                  </span>
+                  <span className="text-slate-300 dark:text-slate-600 hidden sm:inline">•</span>
+                  <span className="text-slate-500 dark:text-slate-400">
+                    Target: <strong>{totalQuestions} questions</strong>
+                  </span>
                 </div>
-
-                {useManualMarksOverride && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-800/60 animate-in fade-in duration-150">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-amber-900 dark:text-amber-200">
-                          Marks per Question (Custom)
-                        </label>
-                        <span className="text-[10px] text-amber-700 dark:text-amber-400">
-                          Auto: {Math.round(Number(totalMarks) / Math.max(1, Number(totalQuestions)))}
-                        </span>
-                      </div>
-                      <input
-                        type="number"
-                        min="0.5"
-                        step="0.5"
-                        value={manualMarksPerQuestion}
-                        onChange={e => setManualMarksPerQuestion(Number(e.target.value))}
-                        className="w-full text-xs p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 text-slate-900 dark:text-white"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-amber-900 dark:text-amber-200">
-                          Passing Marks Threshold (Custom)
-                        </label>
-                        <span className="text-[10px] text-amber-700 dark:text-amber-400">
-                          Auto: {Math.round(Number(totalMarks) * (Number(cutoffScore) / 100))} ({cutoffScore}%)
-                        </span>
-                      </div>
-                      <input
-                        type="number"
-                        min="1"
-                        max={totalMarks}
-                        step="1"
-                        value={manualPassingMarks}
-                        onChange={e => setManualPassingMarks(Number(e.target.value))}
-                        className="w-full text-xs p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 text-slate-900 dark:text-white"
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Start Window
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="YYYY-MM-DD HH:mm"
-                    value={startDate}
-                    onChange={e => setStartDate(e.target.value)}
-                    className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                  />
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-red-500" />
+                      Start Window
+                    </label>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="datetime-local"
+                      value={toDateTimeLocal(startDate)}
+                      onChange={e => setStartDate(fromDateTimeLocal(e.target.value))}
+                      className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white scheme-light dark:scheme-dark cursor-pointer font-mono font-medium focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition"
+                    />
+                  </div>
+                  {/* Quick presets */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setStartDatePreset('now')}
+                      className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 cursor-pointer transition flex items-center gap-1"
+                      title="Set start window to current date and time"
+                    >
+                      <Clock className="w-2.5 h-2.5 text-slate-400" />
+                      Now
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStartDatePreset('tomorrow_morning')}
+                      className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 cursor-pointer transition"
+                      title="Set start window to tomorrow at 09:00 AM"
+                    >
+                      Tmrw 09:00
+                    </button>
+                  </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    End Window
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="YYYY-MM-DD HH:mm"
-                    value={endDate}
-                    onChange={e => setEndDate(e.target.value)}
-                    className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                  />
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-red-500" />
+                      End Window
+                    </label>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="datetime-local"
+                      value={toDateTimeLocal(endDate)}
+                      onChange={e => setEndDate(fromDateTimeLocal(e.target.value))}
+                      className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white scheme-light dark:scheme-dark cursor-pointer font-mono font-medium focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition"
+                    />
+                  </div>
+                  {/* Quick presets */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    {[3, 7, 14, 30].map(days => (
+                      <button
+                        key={days}
+                        type="button"
+                        onClick={() => setEndDatePreset(days)}
+                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 cursor-pointer transition"
+                        title={`Set end window to ${days} days from start window at 23:59`}
+                      >
+                        +{days}d
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="space-y-1">
@@ -964,6 +1008,35 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                     <option value="unmonitored">Open Practice Mode</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Anti-cheat and Review Toggles from School CRM */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={shuffleQuestions}
+                    onChange={e => setShuffleQuestions(e.target.checked)}
+                    className="mt-0.5 text-red-600 rounded focus:ring-red-500"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-900 dark:text-white block">Shuffle Question Order</span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">Randomize question order for each candidate (anti-cheat)</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allowReview}
+                    onChange={e => setAllowReview(e.target.checked)}
+                    className="mt-0.5 text-red-600 rounded focus:ring-red-500"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-900 dark:text-white block">Allow Candidate Review</span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">Reveal solutions & rationale immediately after submission</span>
+                  </div>
+                </label>
               </div>
 
               <div className="space-y-1">
@@ -999,15 +1072,26 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowCreateModal(false)}
-                    className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                    disabled={isSavingProgram}
+                    className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer"
+                    disabled={isSavingProgram}
+                    className="px-6 py-2 rounded-xl bg-red-600 hover:bg-red-700 disabled:bg-red-500/75 text-white text-xs font-bold shadow-md hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-80 transition flex items-center gap-2 cursor-pointer"
                   >
-                    {editingProgram ? 'Save Changes' : 'Create Quiz Program'}
+                    {isSavingProgram && <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />}
+                    <span>
+                      {isSavingProgram
+                        ? editingProgram
+                          ? 'Saving Changes...'
+                          : 'Creating Quiz Program...'
+                        : editingProgram
+                          ? 'Save Changes'
+                          : 'Create Quiz Program'}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -1015,6 +1099,13 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
           </div>
         </div>
       )}
+
+      {/* PROGRAM QUESTIONS EDITOR MODAL */}
+      <ProgramQuestionsEditorModal
+        isOpen={showQuestionsEditorModal}
+        onClose={() => setShowQuestionsEditorModal(false)}
+        program={activeProgramForQuestions}
+      />
     </div>
   );
 };

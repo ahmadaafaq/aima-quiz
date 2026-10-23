@@ -43,10 +43,16 @@ import {
   upsertQuizProgram,
   deleteQuizProgramFromDb,
   fetchQuizQuestionsPublic,
+  fetchQuizQuestionsAdmin,
   upsertQuizQuestion,
   upsertQuizQuestionsBulk,
   deleteQuizQuestionFromDb,
   fetchLeaderboard,
+  fetchAllProgramQuestionMappings,
+  fetchProgramQuestions,
+  saveProgramQuestions,
+  createAndAssignQuestion,
+  getLocalProgramQuestionsCache,
 } from '../lib/supabase';
 import {
   INITIAL_CONFIG,
@@ -54,8 +60,6 @@ import {
   ROUND_3_RUBRIC,
   ROUND_4_RUBRIC,
   REGIONAL_HUBS,
-  QUIZ_QUESTIONS,
-  MOCK_QUIZ_PROGRAMS,
   MOCK_USERS,
   MOCK_TEAMS,
   MOCK_INSTITUTIONS,
@@ -116,14 +120,23 @@ interface CompetitionContextType {
   addQuizProgram: (program: Omit<QuizProgram, 'id' | 'enrolledCount' | 'completedCount' | 'inProgressCount'>) => QuizProgram;
   updateQuizProgram: (id: string, program: Partial<QuizProgram>) => void;
   deleteQuizProgram: (id: string) => void;
+  refreshQuizPrograms: () => Promise<void>;
+  programQuestionMappings: Record<string, string[]>;
+  getProgramQuestions: (programId: string) => QuizQuestion[];
+  setProgramQuestions: (programId: string, questionIds: string[]) => Promise<void>;
+  createAndAssignQuestionToProgram: (programId: string, question: Omit<QuizQuestion, 'id'>) => Promise<QuizQuestion | null>;
+  smartAutoFillProgramQuestions: (programId: string, count: number, category?: string) => Promise<string[]>;
   questions: QuizQuestion[];
   quizAttempts: QuizAttempt[];
+  refreshQuizAttempts: () => Promise<void>;
   saveQuizProgress: (attemptId: string, answers: Record<string, number>, marked: string[], tabSwitches: number) => void;
   submitQuiz: (answers: Record<string, number>, marked: string[], timeTaken: number, tabSwitches: number) => Promise<QuizAttempt>;
   addQuestion: (q: Omit<QuizQuestion, 'id'>) => void;
   addQuestionsBulk: (newQuestions: Omit<QuizQuestion, 'id'>[]) => number;
   updateQuestion: (id: string, q: Partial<QuizQuestion>) => void;
   deleteQuestion: (id: string) => void;
+  isQuizActive: boolean;
+  setIsQuizActive: (active: boolean) => void;
   
   // Case Deck Module
   caseSubmissions: CaseSubmission[];
@@ -261,38 +274,76 @@ const CompetitionContext = createContext<CompetitionContextType | null>(null);
 
 const STORAGE_KEY = 'AIMA_ICL_2026_STORAGE_V1';
 
-const INITIAL_QUIZ_ATTEMPTS: QuizAttempt[] = [
-  {
-    attemptId: 'att_usr_student_leader_1',
-    studentId: 'usr_student_leader_1',
-    userId: 'usr_student_leader_1',
-    teamId: 'team_stratapex',
-    startTime: '2026-09-10T10:00:00Z',
-    submittedAt: '2026-09-10 14:32:00',
-    answers: { q1: 1, q2: 1, q3: 1 },
-    markedForReview: [],
-    score: 92,
-    analyticalScore: 36,
-    timeTakenSeconds: 1840,
-    tabSwitchCount: 0,
-    isCompleted: true,
-  },
-  {
-    attemptId: 'att_usr_student_member_1',
-    studentId: 'usr_student_member_1',
-    userId: 'usr_student_member_1',
-    teamId: 'team_stratapex',
-    startTime: '2026-09-10T10:15:00Z',
-    submittedAt: '2026-09-10 14:45:00',
-    answers: { q1: 1, q2: 1, q3: 1 },
-    markedForReview: [],
-    score: 89,
-    analyticalScore: 34,
-    timeTakenSeconds: 1920,
-    tabSwitchCount: 0,
-    isCompleted: true,
-  },
-];
+const INITIAL_QUIZ_ATTEMPTS: QuizAttempt[] = [];
+
+export const ADMIN_TAB_TO_SLUG: Record<string, string> = {
+  dynamic_registrations: 'registrations',
+  quiz_programs: 'quiz-programs',
+  quiz_editor: 'quiz-editor',
+  quiz_results: 'quiz-results',
+  offline_rounds: 'offline-rounds',
+  hubs: 'regional-hubs',
+  quiz_bank: 'question-bank',
+  participants: 'participants',
+  overview: 'overview',
+  evaluations: 'jury-evaluations',
+  case_decks: 'case-decks',
+  case_deadlines: 'case-deadlines',
+  stages: 'stages',
+  institutions: 'institutions',
+  sponsors: 'sponsors',
+  finances: 'finances',
+  announcements: 'announcements',
+  audit_logs: 'audit-logs',
+  system_settings: 'system-settings',
+};
+
+export const ADMIN_SLUG_TO_TAB: Record<string, string> = {
+  'dynamic-registrations': 'dynamic_registrations',
+  'registrations': 'dynamic_registrations',
+  'quiz-programs': 'quiz_programs',
+  'quizzes': 'quiz_programs',
+  'quiz-editor': 'quiz_editor',
+  'quiz_editor': 'quiz_editor',
+  'quiz-curator': 'quiz_editor',
+  'quiz-results': 'quiz_results',
+  'rankings': 'quiz_results',
+  'offline-rounds': 'offline_rounds',
+  'offline-results': 'offline_rounds',
+  'regional-hubs': 'hubs',
+  'hubs': 'hubs',
+  'quiz-bank': 'quiz_bank',
+  'question-bank': 'quiz_bank',
+  'participants': 'participants',
+  'candidate-roster': 'participants',
+  'overview': 'overview',
+  'jury-evaluations': 'evaluations',
+  'evaluations': 'evaluations',
+  'case-decks': 'case_decks',
+  'case-deadlines': 'case_deadlines',
+  'deadlines': 'case_deadlines',
+  'stages': 'stages',
+  'institutions': 'institutions',
+  'sponsors': 'sponsors',
+  'finances': 'finances',
+  'announcements': 'announcements',
+  'audit-logs': 'audit_logs',
+  'system-settings': 'system_settings',
+};
+
+export const getInitialAdminTab = (): string => {
+  if (typeof window !== 'undefined') {
+    const rawPath = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+    if (rawPath.startsWith('/admin/')) {
+      const parts = rawPath.split('/').filter(Boolean);
+      const subSlug = parts[1] || '';
+      if (subSlug) {
+        return ADMIN_SLUG_TO_TAB[subSlug] || subSlug.replace(/-/g, '_');
+      }
+    }
+  }
+  return 'dynamic_registrations';
+};
 
 const getInitialActiveView = (): string => {
   if (typeof window !== 'undefined') {
@@ -322,22 +373,22 @@ const getInitialActiveView = (): string => {
     if (path === '/contact' || path === '/contact-us' || path === '/contactus') {
       return 'contact_us';
     }
-    if (path === '/student' || path === '/workspace') {
+    if (path === '/student' || path === '/student-dashboard' || path === '/workspace') {
       return 'student';
     }
-    if (path === '/institute' || path === '/institutes') {
+    if (path === '/institute' || path === '/institute-portal' || path === '/institutes') {
       return 'institute';
     }
-    if (path === '/evaluator' || path === '/jury') {
+    if (path === '/evaluator' || path === '/evaluator-dashboard' || path === '/jury') {
       return 'evaluator';
     }
-    if (path === '/hub' || path === '/regional_hub') {
+    if (path === '/hub' || path === '/regional-hub' || path === '/regional_hub') {
       return 'regional_hub';
     }
-    if (path === '/corporate' || path === '/sponsor') {
+    if (path === '/corporate' || path === '/corporate-partner' || path === '/sponsor') {
       return 'corporate';
     }
-    if (path === '/requirements' || path === '/req_doc' || path === '/docs') {
+    if (path === '/requirements' || path === '/requirements-doc' || path === '/req_doc' || path === '/docs') {
       return 'requirements';
     }
     return 'public';
@@ -365,12 +416,21 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   function buildUserProfileFromParticipant(participant: SupabaseParticipantRow): UserProfile {
     const userId = 'participant_' + participant.email.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const teamId = 'team_participant_' + participant.registration_number;
+    const cachedReg = getLocalRegistrationsCache().find(
+      (r) => r.registrationNumber === participant.registration_number
+    );
+    // If registration has participantCount <= 1 and no teamName, candidate is a solo candidate
+    const isSolo = cachedReg
+      ? (!cachedReg.teamName && (cachedReg.participantCount || cachedReg.nominees?.length || 1) <= 1)
+      : false;
+    const isTeamLeader = isSolo ? false : Boolean(participant.is_team_leader);
+
     return {
       id: userId,
       name: participant.name,
       email: participant.email,
       mobile: participant.mobile || '',
-      role: participant.is_team_leader ? 'team_leader' : 'student',
+      role: isTeamLeader ? 'team_leader' : 'student',
       isVerified: true,
       gender: 'Other',
       state: '',
@@ -389,7 +449,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       hasPaidR1R2: true,
       hasPaidR3: false,
       teamId: teamId,
-      isTeamLeader: participant.is_team_leader,
+      registrationNumber: participant.registration_number,
+      isTeamLeader: isTeamLeader,
       quizScore: 0,
       quizCompleted: false,
     };
@@ -403,19 +464,26 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const isPaid = reg.paymentStatus === 'PAID';
     const isInst =
       reg.track === 'institutional' ||
+      (reg as any).registration_mode === 'institute' ||
       reg.organizationType === 'Academic Institution' ||
       reg.tierId?.startsWith('inst_') ||
-      (reg.participantCount && reg.participantCount > 4);
+      ((reg.participantCount ?? 0) > 4 && !reg.teamName);
     const participantCount = reg.participantCount || reg.nominees?.length || 1;
-    const totalAmount =
-      reg.totalPayable ||
-      (reg.ratePerPersonOrPackage ? Math.round(reg.ratePerPersonOrPackage * participantCount) : participantCount * 200);
-    const perStudentAmount = Math.round(totalAmount / participantCount) || 200;
+    const isComplimentary =
+      reg.totalPayable === 0 ||
+      (reg as any).total_amount === 0 ||
+      reg.paymentMethod === 'EARLY_BIRD_COMPLIMENTARY' ||
+      (reg as any).payment_method === 'EARLY_BIRD_COMPLIMENTARY' ||
+      reg.tierId === 'early_bird_free';
+    const totalAmount = isComplimentary
+      ? 0
+      : (reg.totalPayable ?? (reg as any).total_amount ?? (reg.ratePerPersonOrPackage ? Math.round(reg.ratePerPersonOrPackage * participantCount) : participantCount * 200));
+    const perStudentAmount = isComplimentary ? 0 : (participantCount > 0 ? Math.round(totalAmount / participantCount) : 0);
 
     const teamMembers: TeamMember[] = (reg.nominees && reg.nominees.length > 0)
       ? reg.nominees.map((n) => {
           const paymentLabel = isPaid
-            ? (isInst ? 'Institute Paid' : `Paid ₹${perStudentAmount.toLocaleString('en-IN')}`)
+            ? (isComplimentary ? 'Early Bird (₹0)' : isInst ? 'Institute Paid' : `Paid ₹${perStudentAmount.toLocaleString('en-IN')}`)
             : (isInst ? 'Invoice Pending' : `Pending ₹${perStudentAmount.toLocaleString('en-IN')}`);
           return {
             studentId: 'participant_' + n.email.replace(/[^a-z0-9]/gi, '_').toLowerCase(),
@@ -444,7 +512,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
           acceptedDeclaration: true,
           roleInTeam: participant.is_team_leader ? 'Team Leader' : 'Member',
           paymentLabel: isPaid
-            ? (isInst ? 'Institute Paid' : `Paid ₹${perStudentAmount.toLocaleString('en-IN')}`)
+            ? (isComplimentary ? 'Early Bird (₹0)' : isInst ? 'Institute Paid' : `Paid ₹${perStudentAmount.toLocaleString('en-IN')}`)
             : (isInst ? 'Invoice Pending' : `Pending ₹${perStudentAmount.toLocaleString('en-IN')}`),
           paymentStatus: reg.paymentStatus,
           amount: perStudentAmount,
@@ -455,7 +523,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     return {
       id: teamId,
-      name: reg.teamName || (reg.organizationName ? `${reg.organizationName} Team` : 'Case League Team'),
+      name: reg.teamName || (isInst ? `${reg.organizationName} Delegation` : (participantCount > 1 ? `${reg.organizationName} Team` : 'Individual Entry')),
       inviteCode: reg.registrationNumber,
       leaderId: leaderMember?.studentId || (participant ? 'participant_' + participant.email.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'leader_1'),
       leaderName: leaderMember?.name || participant?.name || 'Team Leader',
@@ -466,8 +534,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       assignedHub: 'north' as any,
       paymentStatus: reg.paymentStatus,
       invoiceNumber: reg.invoiceNumber,
-      registrationMode: isInst ? 'institute' : 'individual',
-      feeTier: reg.tierLabel || (isInst ? `Institutional Pack (${participantCount} participants)` : 'Team/Individual'),
+      registrationMode: isInst ? 'institute' : (reg.teamName ? 'team' : 'individual'),
+      feeTier: reg.tierLabel || (isInst ? `Institutional Pack (${participantCount} participants)` : (isComplimentary ? 'Early Bird Complimentary (₹0)' : 'Team/Individual')),
       totalAmount: totalAmount,
       subtotalAmount: reg.subtotalExclGst || Math.round(totalAmount / 1.18),
       gstAmount: reg.gstAmount || Math.round(totalAmount - totalAmount / 1.18),
@@ -532,9 +600,22 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return MOCK_TEAMS;
   });
 
+  const [isQuizActive, setIsQuizActive] = useState<boolean>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('subview') === 'quiz') return true;
+        const saved = sessionStorage.getItem('AIMA_STUDENT_ACTIVE_SUBVIEW');
+        if (saved && JSON.parse(saved)?.subView === 'quiz') return true;
+      }
+    } catch {}
+    return false;
+  });
+
   const [quizPrograms, setQuizPrograms] = useState<QuizProgram[]>([]);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
+  const [programQuestionMappings, setProgramQuestionMappings] = useState<Record<string, string[]>>({});
   const [aiEvaluations, setAiEvaluations] = useState<Record<string, any>>({});
   const [hubs, setHubs] = useState<RegionalHub[]>(REGIONAL_HUBS);
   const [institutions, setInstitutions] = useState<InstitutionalProfile[]>(MOCK_INSTITUTIONS);
@@ -558,7 +639,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [registrationModalTrack, setRegistrationModalTrack] = useState<'team' | 'institute'>('team');
   const [csrRegistrations, setCsrRegistrations] = useState<CSRBootcampRegistration[]>([]);
   const [csrEmailLogs, setCsrEmailLogs] = useState<CSREmailLog[]>(MOCK_CSR_EMAIL_LOGS);
-  const [adminActiveTab, setAdminActiveTab] = useState<string>('dynamic_registrations');
+  const [adminActiveTab, setAdminActiveTab] = useState<string>(getInitialAdminTab);
   const [targetRequirementSection, setTargetRequirementSection] = useState<string | null>(null);
   const [targetRequirementClause, setTargetRequirementClause] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
@@ -627,47 +708,55 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Round 1 Quiz Sub-system: Dynamic Mount Fetch Hooks with Mock Fallback ──
+  // ── Round 1 Quiz Sub-system: Dynamic Mount Fetch Hooks with Live DB Data ──
   useEffect(() => {
     fetchQuizPrograms()
       .then((data) => {
-        if (data && data.length > 0) {
+        if (Array.isArray(data)) {
           setQuizPrograms(data);
-        } else {
-          setQuizPrograms(MOCK_QUIZ_PROGRAMS);
         }
       })
       .catch((err) => {
-        console.warn('Fallback to mock quiz programs:', err);
-        setQuizPrograms(MOCK_QUIZ_PROGRAMS);
+        console.warn('Error loading quiz programs:', err);
       });
 
     fetchQuizQuestionsPublic()
       .then((data) => {
-        if (data && data.length > 0) {
+        if (Array.isArray(data)) {
           setQuestions(data);
-        } else {
-          setQuestions(QUIZ_QUESTIONS);
         }
       })
       .catch((err) => {
-        console.warn('Fallback to mock questions:', err);
-        setQuestions(QUIZ_QUESTIONS);
+        console.warn('Error loading quiz questions:', err);
       });
 
-    fetchLeaderboard()
-      .then((attempts) => {
-        if (attempts && attempts.length > 0) {
-          setQuizAttempts(attempts);
-        } else {
-          setQuizAttempts(INITIAL_QUIZ_ATTEMPTS);
-        }
-      })
-      .catch((err) => {
-        console.warn('Fallback to initial attempts:', err);
-        setQuizAttempts(INITIAL_QUIZ_ATTEMPTS);
-      });
+    refreshQuizAttempts();
   }, []);
+
+  const refreshQuizAttempts = async () => {
+    try {
+      const attempts = await fetchLeaderboard();
+      if (Array.isArray(attempts)) {
+        setQuizAttempts(attempts);
+      } else {
+        setQuizAttempts([]);
+      }
+    } catch (err) {
+      console.warn('refreshQuizAttempts error:', err);
+      setQuizAttempts([]);
+    }
+  };
+
+  const refreshQuizPrograms = async () => {
+    try {
+      const progs = await fetchQuizPrograms();
+      if (Array.isArray(progs)) {
+        setQuizPrograms(progs);
+      }
+    } catch (err) {
+      console.warn('refreshQuizPrograms error:', err);
+    }
+  };
 
   const loginParticipantSession = (participant: SupabaseParticipantRow) => {
     // 1. Save session to storage
@@ -834,7 +923,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     };
   }, []);
 
-  // Sync URL route with activeView & reset scroll to top of page
+  // Sync URL route with activeView & adminActiveTab & reset scroll to top of page
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -849,16 +938,18 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const isRegView = activeView === 'registration' || activeView === 'register' || activeView === 'bootcamp_registration';
 
     if (activeView === 'admin') {
-      if (currentPath !== '/admin') {
-        window.history.pushState({ view: 'admin' }, '', '/admin');
+      const adminSlug = ADMIN_TAB_TO_SLUG[adminActiveTab] || adminActiveTab.replace(/_/g, '-');
+      const targetAdminPath = `/admin/${adminSlug}`;
+      if (currentPath !== targetAdminPath) {
+        window.history.pushState({ view: 'admin', tab: adminActiveTab }, '', targetAdminPath);
       }
     } else if (isRegView) {
       if (currentPath !== '/registration') {
         window.history.pushState({ view: 'registration' }, '', '/registration');
       }
     } else if (activeView === 'participant_login' || activeView === 'login') {
-      if (currentPath !== '/login') {
-        window.history.pushState({ view: 'login' }, '', '/login');
+      if (currentPath !== '/participant-login' && currentPath !== '/login') {
+        window.history.pushState({ view: 'login' }, '', '/participant-login');
       }
     } else if (activeView === 'terms' || activeView === 'terms_conditions') {
       if (currentPath !== '/terms-and-conditions' && currentPath !== '/terms') {
@@ -881,35 +972,35 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         window.history.pushState({ view: 'contact_us' }, '', '/contact-us');
       }
     } else if (activeView === 'student') {
-      if (currentPath !== '/student') {
-        window.history.pushState({ view: 'student' }, '', '/student');
+      if (currentPath !== '/student-dashboard' && currentPath !== '/student') {
+        window.history.pushState({ view: 'student' }, '', '/student-dashboard');
       }
     } else if (activeView === 'institute') {
-      if (currentPath !== '/institute') {
-        window.history.pushState({ view: 'institute' }, '', '/institute');
+      if (currentPath !== '/institute-portal' && currentPath !== '/institute') {
+        window.history.pushState({ view: 'institute' }, '', '/institute-portal');
       }
     } else if (activeView === 'evaluator') {
-      if (currentPath !== '/evaluator') {
-        window.history.pushState({ view: 'evaluator' }, '', '/evaluator');
+      if (currentPath !== '/evaluator-dashboard' && currentPath !== '/evaluator') {
+        window.history.pushState({ view: 'evaluator' }, '', '/evaluator-dashboard');
       }
     } else if (activeView === 'regional_hub') {
-      if (currentPath !== '/hub') {
-        window.history.pushState({ view: 'regional_hub' }, '', '/hub');
+      if (currentPath !== '/regional-hub' && currentPath !== '/hub') {
+        window.history.pushState({ view: 'regional_hub' }, '', '/regional-hub');
       }
     } else if (activeView === 'corporate') {
-      if (currentPath !== '/corporate') {
-        window.history.pushState({ view: 'corporate' }, '', '/corporate');
+      if (currentPath !== '/corporate-partner' && currentPath !== '/corporate') {
+        window.history.pushState({ view: 'corporate' }, '', '/corporate-partner');
       }
     } else if (activeView === 'requirements' || activeView === 'req_doc') {
-      if (currentPath !== '/requirements') {
-        window.history.pushState({ view: 'requirements' }, '', '/requirements');
+      if (currentPath !== '/requirements-doc' && currentPath !== '/requirements') {
+        window.history.pushState({ view: 'requirements' }, '', '/requirements-doc');
       }
     } else if (activeView === 'public') {
       if (currentPath !== '/' && currentPath !== '') {
         window.history.pushState({ view: 'public' }, '', '/');
       }
     }
-  }, [activeView]);
+  }, [activeView, adminActiveTab]);
 
   // Handle browser back / forward navigation
   useEffect(() => {
@@ -919,6 +1010,12 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       const path = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
       if (path === '/admin' || path.startsWith('/admin/')) {
         setActiveView('admin');
+        const parts = path.split('/').filter(Boolean);
+        const subSlug = parts[1] || '';
+        if (subSlug) {
+          const tab = ADMIN_SLUG_TO_TAB[subSlug] || subSlug.replace(/-/g, '_');
+          setAdminActiveTab(tab);
+        }
       } else if (path === '/registration' || path === '/register' || path.startsWith('/registration') || path.startsWith('/register')) {
         setActiveView('registration');
       } else if (path === '/login' || path === '/participant_login' || path === '/participant-login') {
@@ -933,17 +1030,17 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setActiveView('privacy_policy');
       } else if (path === '/contact' || path === '/contact-us' || path === '/contactus') {
         setActiveView('contact_us');
-      } else if (path === '/student' || path === '/workspace') {
+      } else if (path === '/student' || path === '/student-dashboard' || path === '/workspace') {
         setActiveView('student');
-      } else if (path === '/institute' || path === '/institutes') {
+      } else if (path === '/institute' || path === '/institute-portal' || path === '/institutes') {
         setActiveView('institute');
-      } else if (path === '/evaluator' || path === '/jury') {
+      } else if (path === '/evaluator' || path === '/evaluator-dashboard' || path === '/jury') {
         setActiveView('evaluator');
-      } else if (path === '/hub' || path === '/regional_hub') {
+      } else if (path === '/hub' || path === '/regional-hub' || path === '/regional_hub') {
         setActiveView('regional_hub');
-      } else if (path === '/corporate' || path === '/sponsor') {
+      } else if (path === '/corporate' || path === '/corporate-partner' || path === '/sponsor') {
         setActiveView('corporate');
-      } else if (path === '/requirements' || path === '/req_doc' || path === '/docs') {
+      } else if (path === '/requirements' || path === '/requirements-doc' || path === '/req_doc' || path === '/docs') {
         setActiveView('requirements');
       } else if (path === '/' || path === '') {
         setActiveView('public');
@@ -967,6 +1064,48 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       .catch((err) => {
         console.warn('Initial Supabase sync notice:', err);
       });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Hydrate Quiz Programs, Questions, Attempts, and Program-to-Question Mappings
+  useEffect(() => {
+    let isMounted = true;
+
+    async function hydrateQuizSubsystem() {
+      try {
+        const [progs, qs, attempts, mappings] = await Promise.all([
+          fetchQuizPrograms(),
+          fetchQuizQuestionsAdmin(),
+          fetchLeaderboard(),
+          fetchAllProgramQuestionMappings(),
+        ]);
+
+        if (!isMounted) return;
+
+        if (Array.isArray(progs)) {
+          setQuizPrograms(progs);
+        }
+
+        if (Array.isArray(qs)) {
+          setQuestions(qs);
+        }
+
+        if (Array.isArray(attempts)) {
+          setQuizAttempts(attempts);
+        }
+
+        if (mappings && Object.keys(mappings).length > 0) {
+          setProgramQuestionMappings(mappings);
+        }
+      } catch (err: any) {
+        console.warn('Quiz subsystem hydration notice:', err?.message);
+      }
+    }
+
+    hydrateQuizSubsystem();
+
     return () => {
       isMounted = false;
     };
@@ -1462,24 +1601,25 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
     } catch (err: any) {
       console.warn('Server-side scoring fallback to local:', err?.message);
-      let totalScore = 0;
-      let analyticalScore = 0;
-      questions.forEach(q => {
+      let coreScore = 0;
+      let tieBreakerScore = 0;
+      questions.forEach((q, idx) => {
+        const order = Number((q as any).orderIndex ?? (idx + 1));
+        const isReserve = order > 25;
         const selected = answers[q.id];
-        if (selected !== undefined) {
-          if (selected === q.correctAnswerIndex) {
-            totalScore += q.marks;
-            if (q.category === 'Data Interpretation' || q.category === 'Logical Reasoning') {
-              analyticalScore += q.marks;
+        if (selected !== undefined && selected !== null) {
+          if (Number(selected) === Number(q.correctAnswerIndex)) {
+            if (isReserve) {
+              tieBreakerScore += Number(q.marks || 4);
+            } else {
+              coreScore += Number(q.marks || 4);
             }
-          } else if (config.r1NegativeMarking) {
-            totalScore -= q.negativeMarks;
           }
         }
       });
-      resultScore = Math.max(0, Math.round(totalScore * (100 / (Math.max(1, questions.length) * 4))));
-      resultAnalytical = analyticalScore;
-      isQualified = resultScore >= config.r1CutoffScore;
+      resultScore = coreScore;
+      resultAnalytical = tieBreakerScore;
+      isQualified = resultScore >= (quizPrograms[0]?.cutoffScore ?? 60);
     }
 
     const completedAttempt: QuizAttempt = {
@@ -1487,6 +1627,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       studentId: currentUser.id,
       userId: currentUser.id,
       teamId: currentUser.teamId,
+      programId: quizPrograms[0]?.id || 'qp_r1_national_2026',
       startTime: new Date(Date.now() - timeTaken * 1000).toISOString(),
       submittedAt,
       answers,
@@ -2110,6 +2251,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       enrolledCount: 0,
       completedCount: 0,
       inProgressCount: 0,
+      createdAt: new Date().toISOString(),
       ...program,
     };
     setQuizPrograms(prev => [newProgram, ...prev]);
@@ -2134,6 +2276,74 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setQuizPrograms(prev => prev.filter(p => p.id !== id));
     deleteQuizProgramFromDb(id).catch(console.error);
     addAuditLog('Quiz Program Deleted', 'Quiz', `Deleted quiz program ID ${id}`);
+  };
+
+  // ─── Quiz Program Questions Actions ─────────────────────────────────────
+  const getProgramQuestions = (programId: string): QuizQuestion[] => {
+    const qIds = programQuestionMappings[programId] || getLocalProgramQuestionsCache(programId);
+    if (qIds.length > 0) {
+      const qMap = new Map(questions.map(q => [q.id, q]));
+      const matched = qIds.map(id => qMap.get(id)).filter(Boolean) as QuizQuestion[];
+      if (matched.length > 0) return matched;
+    }
+    const prog = quizPrograms.find(p => p.id === programId);
+    if (prog && prog.category) {
+      const catMatched = questions.filter(q =>
+        q.category.toLowerCase().includes(prog.category.toLowerCase()) ||
+        prog.category.toLowerCase().includes(q.category.toLowerCase())
+      );
+      if (catMatched.length > 0) return catMatched;
+    }
+    return questions.slice(0, prog?.totalQuestions || 10);
+  };
+
+  const setProgramQuestions = async (programId: string, questionIds: string[]) => {
+    setProgramQuestionMappings(prev => ({ ...prev, [programId]: questionIds }));
+    await saveProgramQuestions(programId, questionIds);
+    addAuditLog('Program Questions Updated', 'Quiz', `Updated ${questionIds.length} questions for program ID ${programId}`);
+  };
+
+  const createAndAssignQuestionToProgram = async (
+    programId: string,
+    questionData: Omit<QuizQuestion, 'id'>
+  ): Promise<QuizQuestion | null> => {
+    const created = await createAndAssignQuestion(programId, questionData);
+    if (created) {
+      setQuestions(prev => [created, ...prev.filter(q => q.id !== created.id)]);
+      setProgramQuestionMappings(prev => {
+        const existing = prev[programId] || [];
+        if (!existing.includes(created.id)) {
+          return { ...prev, [programId]: [...existing, created.id] };
+        }
+        return prev;
+      });
+      addAuditLog('Question Created & Assigned', 'Quiz', `Created question "${created.questionText.slice(0, 30)}..." and linked to program ${programId}`);
+    }
+    return created;
+  };
+
+  const smartAutoFillProgramQuestions = async (
+    programId: string,
+    count: number,
+    category?: string
+  ): Promise<string[]> => {
+    const current = programQuestionMappings[programId] || getLocalProgramQuestionsCache(programId);
+    const currentSet = new Set(current);
+
+    const matching = questions.filter(
+      q => !currentSet.has(q.id) && (!category || q.category.toLowerCase() === category.toLowerCase())
+    );
+    const remaining = questions.filter(
+      q => !currentSet.has(q.id) && (category ? q.category.toLowerCase() !== category.toLowerCase() : false)
+    );
+    const candidates = [...matching, ...remaining];
+
+    const needed = Math.max(0, count - current.length);
+    const toAdd = candidates.slice(0, needed).map(q => q.id);
+    const updated = [...current, ...toAdd];
+
+    await setProgramQuestions(programId, updated);
+    return updated;
   };
 
   const moderateEvaluation = (evalId: string, moderatedScore: number, reason: string) => {
@@ -2569,6 +2779,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       emailDispatchedAt: now,
       secretariatEmailSent: true,
       registrantEmailSent: true,
+      quizProgramId: data.quizProgramId || 'qp_case_comp_stage1_2026',
     };
 
     const newEmailLog: CSREmailLog = {
@@ -2589,6 +2800,15 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     setCsrRegistrations(prev => [newReg, ...prev]);
     setCsrEmailLogs(prev => [newEmailLog, ...prev]);
+
+    // Dynamically increment enrolled count for Stage 1 Quiz Program
+    const addedCandidates = Number(data.participantCount || (Array.isArray(data.nominees) ? data.nominees.length : 0) || 1);
+    setQuizPrograms(prev => prev.map(p => {
+      if (p.id === 'qp_case_comp_stage1_2026') {
+        return { ...p, enrolledCount: (p.enrolledCount || 0) + addedCandidates };
+      }
+      return p;
+    }));
 
     // Financial & GST Ledger Integration
     const mapPaymentMethod = (m?: string): 'UPI' | 'Credit Card' | 'Debit Card' | 'Net Banking' | 'Waiver/Coupon' => {
@@ -2779,14 +2999,23 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         addQuizProgram,
         updateQuizProgram,
         deleteQuizProgram,
+        refreshQuizPrograms,
+        programQuestionMappings,
+        getProgramQuestions,
+        setProgramQuestions,
+        createAndAssignQuestionToProgram,
+        smartAutoFillProgramQuestions,
         questions,
         quizAttempts,
+        refreshQuizAttempts,
         saveQuizProgress,
         submitQuiz,
         addQuestion,
         addQuestionsBulk,
         updateQuestion,
         deleteQuestion,
+        isQuizActive,
+        setIsQuizActive,
         caseSubmissions,
         activeSubmission,
         submitCaseDeck,
