@@ -19,6 +19,7 @@ import {
   Phone,
   FileText,
 } from 'lucide-react';
+import { IS_EARLY_BIRD_FREE } from '../../data/feeConfig';
 
 interface PosterHero3DProps {
   onScrollToForm: () => void;
@@ -215,19 +216,30 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
                   <span>India&apos;s National Student Case Competition</span>
                 </div>
 
-                {/* Floating Highlighted Early Bird Registration Free Tag */}
-                <div className="animate-float inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-gradient-to-r from-emerald-500/20 via-amber-500/15 to-teal-500/20 border-2 border-emerald-400 dark:border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.45)] backdrop-blur-md">
-                  <span className="relative flex h-2.5 w-2.5 shrink-0">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_8px_#34d399]" />
-                  </span>
-                  <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
-                    Early Bird Registration Free
-                  </span>
-                  <span className="px-2 py-0.2 rounded-full bg-gradient-to-r from-amber-400 to-amber-300 text-slate-950 font-black text-[9px] uppercase tracking-wider shadow-xs">
-                    100% Free
-                  </span>
-                </div>
+                {/* Floating Tag */}
+                {IS_EARLY_BIRD_FREE ? (
+                  <div className="animate-float inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-gradient-to-r from-emerald-500/20 via-amber-500/15 to-teal-500/20 border-2 border-emerald-400 dark:border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.45)] backdrop-blur-md">
+                    <span className="relative flex h-2.5 w-2.5 shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_8px_#34d399]" />
+                    </span>
+                    <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                      Early Bird Registration Free
+                    </span>
+                    <span className="px-2 py-0.2 rounded-full bg-gradient-to-r from-amber-400 to-amber-300 text-slate-950 font-black text-[9px] uppercase tracking-wider shadow-xs">
+                      100% Free
+                    </span>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-500/10 border-2 border-blue-400/40 shadow-xs backdrop-blur-md">
+                    <span className="relative flex h-2 w-2 shrink-0">
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+                    </span>
+                    <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">
+                      Official Registrations Open
+                    </span>
+                  </div>
+                )}
               </div>
 
               <h1 className="text-3xl sm:text-4xl xl:text-5xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
@@ -261,15 +273,17 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
                 </div>
 
                 <div
-                  className="p-2.5 rounded-xl bg-white dark:bg-slate-900/80 border border-emerald-400/50 dark:border-emerald-500/50 space-y-0.5 shadow-xs relative overflow-hidden"
+                  className="p-2.5 rounded-xl bg-white dark:bg-slate-900/80 border border-blue-400/50 dark:border-blue-500/50 space-y-0.5 shadow-xs relative overflow-hidden"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Participation Fee</span>
-                    <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[9px] font-black uppercase">
-                      Early Bird Free
-                    </span>
+                    {IS_EARLY_BIRD_FREE && (
+                      <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[9px] font-black uppercase">
+                        Early Bird Free
+                      </span>
+                    )}
                   </div>
-                  <span className="font-black text-emerald-600 dark:text-emerald-400 text-xs block">₹200 / person</span>
+                  <span className="font-black text-blue-600 dark:text-blue-400 text-xs block">₹200 / person</span>
                   <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Flat fee, all students</span>
                 </div>
               </div>

@@ -90,25 +90,29 @@ export function mapAppRegToSupabaseRow(reg: CSRBootcampRegistration): SupabaseRe
   const isInst = reg.track === 'institutional' || reg.organizationType === 'Academic Institution';
   const leadNominee = reg.nominees?.[0];
   const coord = reg.coordinator;
+  const participantCount = reg.participantCount || reg.nominees?.length || 1;
+  const isFreeTier = (reg.subtotalExclGst === 0 && reg.totalPayable === 0) || reg.tierLabel?.includes('Early Bird');
+  const authoritativeSubtotal = isFreeTier ? 0 : participantCount * 200;
+  const authoritativeTotal = isFreeTier ? 0 : participantCount * 200;
 
   return {
-    registration_number: reg.registrationNumber,
-    registration_mode: isInst ? 'institute' : 'individual',
-    team_name: reg.teamName || null,
-    candidate_name: coord?.name || leadNominee?.name || 'Candidate',
-    candidate_email: coord?.email || leadNominee?.email || '',
-    candidate_phone: coord?.mobile || leadNominee?.mobile || null,
-    institute_name: reg.organizationName,
-    program: leadNominee?.program || null,
-    semester: leadNominee?.semester || null,
-    enrolment_number: leadNominee?.enrolmentNumber || null,
-    participant_count: reg.participantCount || reg.nominees?.length || 1,
-    fee_tier: reg.tierLabel || reg.tierId || null,
-    subtotal_amount: reg.subtotalExclGst || reg.ratePerPersonOrPackage * reg.participantCount,
-    gst_amount: reg.gstAmount,
-    total_amount: reg.totalPayable,
-    payment_method: reg.paymentMethod || 'gateway',
-    payment_status: reg.paymentStatus || 'PENDING_INVOICE',
+      registration_number: reg.registrationNumber,
+      registration_mode: isInst ? 'institute' : 'individual',
+      team_name: reg.teamName || null,
+      candidate_name: coord?.name || leadNominee?.name || 'Candidate',
+      candidate_email: coord?.email || leadNominee?.email || '',
+      candidate_phone: coord?.mobile || leadNominee?.mobile || null,
+      institute_name: reg.organizationName,
+      program: leadNominee?.program || null,
+      semester: leadNominee?.semester || null,
+      enrolment_number: leadNominee?.enrolmentNumber || null,
+      participant_count: participantCount,
+      fee_tier: isFreeTier ? 'Early Bird Complimentary (₹0)' : `₹200 per participant`,
+      subtotal_amount: authoritativeSubtotal,
+      gst_amount: 0,
+      total_amount: authoritativeTotal,
+      payment_method: reg.paymentMethod || 'gateway',
+      payment_status: reg.paymentStatus || 'PENDING_INVOICE',
     transaction_id: reg.transactionId || null,
     invoice_number: reg.invoiceNumber,
     nominees: reg.nominees || [],
