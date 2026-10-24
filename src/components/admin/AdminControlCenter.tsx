@@ -315,14 +315,6 @@ export const AdminControlCenter: React.FC = () => {
     items: MenuItem[];
   }
 
-  // Domain-aware visibility: show all admin menus on localhost & aima-quiz.vercel.app,
-  // keep only Registrations visible on research.aima.in (production).
-  const isLiveProduction =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === 'research.aima.in' ||
-      window.location.hostname.endsWith('.research.aima.in')) &&
-    !new URLSearchParams(window.location.search).get('demo');
-
   const stageBadgeMap: Record<string, string> = {
     round_1: 'Live R1',
     round_2: 'Live R2',
@@ -334,19 +326,14 @@ export const AdminControlCenter: React.FC = () => {
   const menuGroups: MenuGroup[] = [
     {
       id: 'command_broadcast',
-      title: 'Registrations',
+      title: 'Registrations & Command',
       items: [
-        ...(!isLiveProduction
-          ? [
-            /* PHASE 2: control dashboard removed for now
-           {
-             id: 'overview',
-             label: 'Executive Command',
-             icon: LayoutDashboard,
-             roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
-           }, */
-          ]
-          : []),
+        {
+          id: 'overview',
+          label: 'Executive Command',
+          icon: LayoutDashboard,
+          roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
+        },
         {
           id: 'dynamic_registrations',
           label: 'Dynamic Registrations (Supabase)',
@@ -354,168 +341,151 @@ export const AdminControlCenter: React.FC = () => {
           badge: `${csrRegistrations.length}`,
           roles: ['admin', 'all', 'institute_coordinator'],
         },
-        ...(!isLiveProduction
-          ? [
-            /* PHASE 2: Official Bulletins
-            {
-              id: 'announcements',
-              label: 'Official Bulletins',
-              icon: Radio,
-              badge: `${announcements.length}`,
-              roles: ['admin', 'all'],
-            },
-            {
-              id: 'stages',
-              label: 'Phase Progression Gates',
-              icon: Sliders,
-              badge: activeStageBadge,
-              roles: ['admin', 'all'],
-            },  */
-          ]
-          : []),
+        {
+          id: 'announcements',
+          label: 'Official Bulletins',
+          icon: Radio,
+          badge: `${announcements.length}`,
+          roles: ['admin', 'all'],
+        },
+        {
+          id: 'stages',
+          label: 'Phase Progression Gates',
+          icon: Sliders,
+          badge: activeStageBadge,
+          roles: ['admin', 'all'],
+        },
       ],
     },
-    // The following menu groups are only visible on localhost / aima-quiz.vercel.app (non-production)
-    ...(!isLiveProduction
-      ? [
+    {
+      id: 'round1_quiz',
+      title: 'Round 1: Screening Quiz',
+      items: [
         {
-          id: 'round1_quiz',
-          title: 'Round 1: Screening Quiz',
-          items: [
-            {
-              id: 'quiz_programs',
-              label: 'Quiz Programs & Events',
-              icon: Trophy,
-              badge: activeQuizProgramsCount > 0 ? `${activeQuizProgramsCount}` : undefined,
-              roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
-            },
-            /* PHASE 2: Quiz Question Bank
-           {
-             id: 'quiz_bank',
-             label: 'Quiz Question Bank',
-             icon: BookOpen,
-             badge: `${questions.length}`,
-             roles: ['admin', 'all', 'evaluator'],
-           },  */
-            {
-              id: 'quiz_results',
-              label: 'Quiz Results & Rankings',
-              icon: BarChart3,
-              badge: 'Live' as string | undefined,
-              roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
-            },
-          ],
-        },
-        /* PHASE 2: Round 2 Case Deck & AI
-        {
-          id: 'round2_case',
-          title: 'Round 2: Case Deck & AI',
-          items: [
-            {
-              id: 'case_decks',
-              label: 'Case Decks & AI Review',
-              icon: FileCheck,
-              badge: `${allSubmissions.length}`,
-              roles: ['admin', 'evaluator', 'all'],
-            },
-            {
-              id: 'case_deadlines',
-              label: 'Deadlines & Extensions',
-              icon: Clock,
-              badge: teams.filter(t => t.extensionRequest?.status === 'PENDING').length > 0
-                ? `${teams.filter(t => t.extensionRequest?.status === 'PENDING').length} Pending`
-                : undefined,
-              roles: ['admin', 'all'],
-            },
-            {
-              id: 'evaluations',
-              label: 'Jury Bench & Rubric',
-              icon: Scale,
-              badge: `${evaluations.length}`,
-              roles: ['admin', 'evaluator', 'all'],
-            },
-          ],
-        },
-        */
-        {
-          id: 'round34_offline',
-          title: 'Rounds 3 & 4: Offline Finals',
-          items: [
-            {
-              id: 'offline_rounds',
-              label: 'Offline Rounds Results',
-              icon: Award,
-              badge: offlineRoundResults.length > 0 ? `${offlineRoundResults.length}` : 'New',
-              roles: ['admin', 'all', 'regional_hub'],
-            },
-            {
-              id: 'hubs',
-              label: 'Regional Hubs & Zones',
-              icon: MapPin,
-              badge: `${hubs.length}`,
-              roles: ['admin', 'regional_hub', 'all'],
-            },
-          ],
-        },
-        /* =========================================================================
-         * PHASE 2 / 3 ROLLOUT: Ecosystem & Governance temporarily hidden
-         * =========================================================================
-        {
-          id: 'ecosystem_partners',
-          title: 'Ecosystem & Partners',
-          items: [
-            {
-              id: 'sponsors',
-              label: 'Corporate Partners & Sponsors',
-              icon: Briefcase,
-              badge: `${sponsors.length}`,
-              roles: ['admin', 'corporate_partner', 'all'],
-            },
-            {
-              id: 'institutions',
-              label: 'Accredited B-Schools',
-              icon: Building2,
-              badge: `${institutions.length}`,
-              roles: ['admin', 'institute_coordinator', 'all'],
-            },
-            {
-              id: 'participants',
-              label: 'Candidate Master Roster',
-              icon: Users,
-              badge: `${users.length}`,
-              roles: ['admin', 'institute_coordinator', 'all'],
-            },
-          ],
+          id: 'quiz_programs',
+          label: 'Quiz Programs & Events',
+          icon: Trophy,
+          badge: activeQuizProgramsCount > 0 ? `${activeQuizProgramsCount}` : undefined,
+          roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
         },
         {
-          id: 'finance_governance',
-          title: 'Finance & Governance',
-          items: [
-            {
-              id: 'finances',
-              label: 'Financial & GST Ledger',
-              icon: Coins,
-              badge: `₹${(grossRevenue / 1000).toFixed(0)}k`,
-              roles: ['admin', 'all'],
-            },
-            {
-              id: 'audit_logs',
-              label: 'ISO 27001 Audit Trail',
-              icon: ShieldAlert,
-              badge: `${auditLogs.length}`,
-              roles: ['admin', 'all'],
-            },
-            {
-              id: 'system_settings',
-              label: 'System Governance',
-              icon: Shield,
-              roles: ['admin', 'all'],
-            },
-          ],
+          id: 'quiz_bank',
+          label: 'Quiz Question Bank',
+          icon: BookOpen,
+          badge: `${questions.length}`,
+          roles: ['admin', 'all', 'evaluator'],
         },
-        ========================================================================= */
-      ]
-      : []),
+        {
+          id: 'quiz_results',
+          label: 'Quiz Results & Rankings',
+          icon: BarChart3,
+          badge: 'Live' as string | undefined,
+          roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
+        },
+      ],
+    },
+    {
+      id: 'round2_case',
+      title: 'Round 2: Case Deck & AI',
+      items: [
+        {
+          id: 'case_decks',
+          label: 'Case Decks & AI Review',
+          icon: FileCheck,
+          badge: `${allSubmissions.length}`,
+          roles: ['admin', 'evaluator', 'all'],
+        },
+        {
+          id: 'case_deadlines',
+          label: 'Deadlines & Extensions',
+          icon: Clock,
+          badge: teams.filter(t => t.extensionRequest?.status === 'PENDING').length > 0
+            ? `${teams.filter(t => t.extensionRequest?.status === 'PENDING').length} Pending`
+            : undefined,
+          roles: ['admin', 'all'],
+        },
+        {
+          id: 'evaluations',
+          label: 'Jury Bench & Rubric',
+          icon: Scale,
+          badge: `${evaluations.length}`,
+          roles: ['admin', 'evaluator', 'all'],
+        },
+      ],
+    },
+    {
+      id: 'round34_offline',
+      title: 'Rounds 3 & 4: Offline Finals',
+      items: [
+        {
+          id: 'offline_rounds',
+          label: 'Offline Rounds Results',
+          icon: Award,
+          badge: offlineRoundResults.length > 0 ? `${offlineRoundResults.length}` : 'New',
+          roles: ['admin', 'all', 'regional_hub'],
+        },
+        {
+          id: 'hubs',
+          label: 'Regional Hubs & Zones',
+          icon: MapPin,
+          badge: `${hubs.length}`,
+          roles: ['admin', 'regional_hub', 'all'],
+        },
+      ],
+    },
+    {
+      id: 'ecosystem_partners',
+      title: 'Ecosystem & Partners',
+      items: [
+        {
+          id: 'sponsors',
+          label: 'Corporate Partners & Sponsors',
+          icon: Briefcase,
+          badge: `${sponsors.length}`,
+          roles: ['admin', 'corporate_partner', 'all'],
+        },
+        {
+          id: 'institutions',
+          label: 'Accredited B-Schools',
+          icon: Building2,
+          badge: `${institutions.length}`,
+          roles: ['admin', 'institute_coordinator', 'all'],
+        },
+        {
+          id: 'participants',
+          label: 'Candidate Master Roster',
+          icon: Users,
+          badge: `${users.length}`,
+          roles: ['admin', 'institute_coordinator', 'all'],
+        },
+      ],
+    },
+    {
+      id: 'finance_governance',
+      title: 'Finance & Governance',
+      items: [
+        {
+          id: 'finances',
+          label: 'Financial & GST Ledger',
+          icon: Coins,
+          badge: `₹${(grossRevenue / 1000).toFixed(0)}k`,
+          roles: ['admin', 'all'],
+        },
+        {
+          id: 'audit_logs',
+          label: 'ISO 27001 Audit Trail',
+          icon: ShieldAlert,
+          badge: `${auditLogs.length}`,
+          roles: ['admin', 'all'],
+        },
+        {
+          id: 'system_settings',
+          label: 'System Governance',
+          icon: Shield,
+          roles: ['admin', 'all'],
+        },
+      ],
+    },
   ];
 
 if (!isAdminAuthed) {
