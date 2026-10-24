@@ -1862,41 +1862,88 @@ export async function fetchLeaderboard(): Promise<QuizAttempt[]> {
       console.warn('fetchLeaderboard /api/admin/quiz-attempts fallback:', apiErr?.message);
     }
 
+    const results: QuizAttempt[] = [];
+    const seenAttemptIds = new Set<string>();
+
     // 2. Direct Supabase view fallback
-    const { data, error } = await supabase
-      .from('quiz_attempts_leaderboard')
-      .select('*')
-      .order('score', { ascending: false })
-      .order('time_taken_seconds', { ascending: true });
+    try {
+      const { data, error } = await supabase
+        .from('quiz_attempts_leaderboard')
+        .select('*')
+        .order('score', { ascending: false })
+        .order('time_taken_seconds', { ascending: true });
 
-    if (error) {
-      console.warn('Could not fetch quiz_attempts_leaderboard from Supabase:', error.message);
-      return [];
+      if (data && Array.isArray(data)) {
+        data.forEach((row: any) => {
+          seenAttemptIds.add(row.attempt_id);
+          results.push({
+            attemptId: row.attempt_id,
+            studentId: row.student_id,
+            userId: row.user_id || row.student_id,
+            participantEmail: row.participant_email,
+            candidateName: row.candidate_name,
+            instituteName: row.institute_name,
+            registrationNumber: row.registration_number,
+            teamId: row.team_id || '',
+            programId: row.program_id,
+            startTime: row.submitted_at || new Date().toISOString(),
+            submittedAt: row.submitted_at,
+            answers: row.answers && typeof row.answers === 'object' ? row.answers : {},
+            markedForReview: Array.isArray(row.marked_for_review) ? row.marked_for_review : [],
+            score: Number(row.score ?? 0),
+            analyticalScore: Number(row.analytical_score ?? 0),
+            timeTakenSeconds: Number(row.time_taken_seconds ?? 0),
+            tabSwitchCount: Number(row.tab_switch_count ?? 0),
+            isCompleted: Boolean(row.is_completed ?? true),
+          });
+        });
+      }
+    } catch (e) {
+      console.warn('Could not query quiz_attempts_leaderboard view:', e);
     }
 
-    if (data && Array.isArray(data)) {
-      return data.map((row: any) => ({
-        attemptId: row.attempt_id,
-        studentId: row.student_id,
-        userId: row.user_id || row.student_id,
-        participantEmail: row.participant_email,
-        candidateName: row.candidate_name,
-        instituteName: row.institute_name,
-        registrationNumber: row.registration_number,
-        teamId: row.team_id || '',
-        programId: row.program_id,
-        startTime: row.submitted_at || new Date().toISOString(),
-        submittedAt: row.submitted_at,
-        answers: row.answers && typeof row.answers === 'object' ? row.answers : {},
-        markedForReview: Array.isArray(row.marked_for_review) ? row.marked_for_review : [],
-        score: Number(row.score ?? 0),
-        analyticalScore: Number(row.analytical_score ?? 0),
-        timeTakenSeconds: Number(row.time_taken_seconds ?? 0),
-        tabSwitchCount: Number(row.tab_switch_count ?? 0),
-        isCompleted: Boolean(row.is_completed ?? true),
-      }));
+    // 3. Dual-persistence read fallback: Extract attempts stored in registrations raw_data
+    try {
+      const { data: regRows } = await supabase
+        .from('registrations')
+        .select('registration_number, raw_data');
+
+      if (regRows && Array.isArray(regRows)) {
+        regRows.forEach((r: any) => {
+          const raw = r.raw_data || {};
+          const attempts = Array.isArray(raw.quizAttempts) ? raw.quizAttempts : [];
+          attempts.forEach((att: any) => {
+            if (att.attempt_id && !seenAttemptIds.has(att.attempt_id)) {
+              seenAttemptIds.add(att.attempt_id);
+              results.push({
+                attemptId: att.attempt_id,
+                studentId: att.student_id,
+                userId: att.user_id || att.student_id,
+                participantEmail: att.participant_email,
+                candidateName: att.candidateName || raw.coordinator?.name,
+                instituteName: att.instituteName || raw.organizationName,
+                registrationNumber: att.registrationNumber || r.registration_number,
+                teamId: att.team_id || '',
+                programId: att.program_id,
+                startTime: att.start_time || att.submitted_at || new Date().toISOString(),
+                submittedAt: att.submitted_at,
+                answers: att.answers && typeof att.answers === 'object' ? att.answers : {},
+                markedForReview: Array.isArray(att.marked_for_review) ? att.marked_for_review : [],
+                score: Number(att.score ?? 0),
+                analyticalScore: Number(att.analytical_score ?? 0),
+                timeTakenSeconds: Number(att.time_taken_seconds ?? 0),
+                tabSwitchCount: Number(att.tab_switch_count ?? 0),
+                isCompleted: Boolean(att.is_completed ?? true),
+              });
+            }
+          });
+        });
+      }
+    } catch (e) {
+      console.warn('Could not extract quizAttempts from registrations:', e);
     }
-    return [];
+
+    return results.sort((a, b) => b.score - a.score || a.timeTakenSeconds - b.timeTakenSeconds);
   } catch (err: any) {
     console.warn('fetchLeaderboard exception:', err?.message);
     return [];
@@ -1945,7 +1992,7 @@ export async function fetchQuizAttemptById(attemptId: string): Promise<QuizAttem
     console.warn('fetchQuizAttemptById server warning:', err?.message);
   }
 
-  // Fallback: direct table read
+  // Fallback 1: direct table read from quiz_attempts
   try {
     const { data: row, error } = await supabase
       .from('quiz_attempts')
@@ -1973,7 +2020,39 @@ export async function fetchQuizAttemptById(attemptId: string): Promise<QuizAttem
       };
     }
   } catch (err: any) {
-    console.warn('fetchQuizAttemptById fallback warning:', err?.message);
+    console.warn('fetchQuizAttemptById table fallback warning:', err?.message);
+  }
+
+  // Fallback 2: read from registrations raw_data
+  try {
+    const { data: regRows } = await supabase.from('registrations').select('raw_data');
+    if (regRows && Array.isArray(regRows)) {
+      for (const reg of regRows) {
+        const attempts = Array.isArray(reg.raw_data?.quizAttempts) ? reg.raw_data.quizAttempts : [];
+        const match = attempts.find((a: any) => a.attempt_id === attemptId);
+        if (match) {
+          return {
+            attemptId: match.attempt_id,
+            studentId: match.student_id,
+            userId: match.user_id || match.student_id,
+            participantEmail: match.participant_email,
+            teamId: match.team_id || '',
+            programId: match.program_id,
+            startTime: match.start_time || match.submitted_at || new Date().toISOString(),
+            submittedAt: match.submitted_at,
+            answers: match.answers && typeof match.answers === 'object' ? match.answers : {},
+            markedForReview: Array.isArray(match.marked_for_review) ? match.marked_for_review : [],
+            score: Number(match.score ?? 0),
+            analyticalScore: Number(match.analytical_score ?? 0),
+            timeTakenSeconds: Number(match.time_taken_seconds ?? 0),
+            tabSwitchCount: Number(match.tab_switch_count ?? 0),
+            isCompleted: Boolean(match.is_completed ?? true),
+          };
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn('fetchQuizAttemptById registrations fallback warning:', err?.message);
   }
   return null;
 }

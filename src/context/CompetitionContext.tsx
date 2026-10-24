@@ -1830,7 +1830,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
           studentId: currentUser.id,
           teamId: currentUser.teamId,
           participantEmail: currentUser.email,
-          programId: quizPrograms[0]?.id || 'qp_r1_national_2026',
+          programId: quizPrograms.find(p => p.id === 'qp_case_comp_stage1_2026')?.id || quizPrograms[0]?.id || 'qp_case_comp_stage1_2026',
         }),
       });
 
@@ -1872,7 +1872,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       studentId: currentUser.id,
       userId: currentUser.id,
       teamId: currentUser.teamId,
-      programId: quizPrograms[0]?.id || 'qp_r1_national_2026',
+      programId: quizPrograms.find(p => p.id === 'qp_case_comp_stage1_2026')?.id || quizPrograms[0]?.id || 'qp_case_comp_stage1_2026',
       startTime: new Date(Date.now() - timeTaken * 1000).toISOString(),
       submittedAt,
       answers,
@@ -1892,6 +1892,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       const history: QuizAttempt[] = existingHistoryStr ? JSON.parse(existingHistoryStr) : [];
       const updatedHistory = [completedAttempt, ...history.filter(a => a.studentId !== currentUser.id && a.userId !== currentUser.id && a.attemptId !== completedAttempt.attemptId)];
       localStorage.setItem('aima_quiz_attempts_all', JSON.stringify(updatedHistory));
+      refreshQuizAttempts().catch(() => {});
     } catch (storageErr) {
       console.warn('localStorage attempt caching notice:', storageErr);
     }

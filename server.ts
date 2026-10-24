@@ -681,8 +681,10 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
         return res.status(400).json({ error: "studentId is required for quiz submission." });
       }
 
-      // 1. Fetch program settings strictly from quiz_programs (SINGLE SOURCE OF TRUTH)
-      const targetProgramId = programId || "qp_case_comp_stage1_2026";
+      let targetProgramId = programId || "qp_case_comp_stage1_2026";
+      if (targetProgramId === "qp_r1_national_2026" || !targetProgramId) {
+        targetProgramId = "qp_case_comp_stage1_2026";
+      }
       const { data: prog } = await supabaseAdmin
         .from("quiz_programs")
         .select("negative_marking, negative_marks_per_question, cutoff_score, passing_marks, marks_per_question, total_marks, total_questions")
@@ -767,26 +769,100 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
       const submittedAt = new Date().toISOString();
 
       // 4. Persist to quiz_attempts table via service role
+      let savedToQuizAttempts = false;
+      let quizAttemptsError: string | null = null;
+
+      const attemptPayload = {
+        attempt_id: attemptId,
+        student_id: studentId,
+        user_id: studentId,
+        participant_email: participantEmail || null,
+        team_id: teamId || null,
+        program_id: targetProgramId,
+        start_time: new Date(Date.now() - (Number(timeTaken) || 0) * 1000).toISOString(),
+        submitted_at: submittedAt,
+        answers: cleanAnswers,
+        marked_for_review: Array.isArray(markedForReview) ? markedForReview : [],
+        score: mainScore,
+        analytical_score: tieBreakerScore, // Persist official Tie-Breaker Score (out of 20)
+        time_taken_seconds: Number(timeTaken) || 0,
+        tab_switch_count: Number(tabSwitches) || 0,
+        is_completed: true,
+      };
+
       try {
-        await supabaseAdmin.from("quiz_attempts").upsert({
-          attempt_id: attemptId,
-          student_id: studentId,
-          user_id: studentId,
-          participant_email: participantEmail || null,
-          team_id: teamId || null,
-          program_id: targetProgramId,
-          start_time: new Date(Date.now() - (Number(timeTaken) || 0) * 1000).toISOString(),
-          submitted_at: submittedAt,
-          answers: cleanAnswers,
-          marked_for_review: Array.isArray(markedForReview) ? markedForReview : [],
-          score: mainScore,
-          analytical_score: tieBreakerScore, // Persist official Tie-Breaker Score (out of 20)
-          time_taken_seconds: Number(timeTaken) || 0,
-          tab_switch_count: Number(tabSwitches) || 0,
-          is_completed: true,
-        }, { onConflict: "attempt_id" });
+        const { error: attErr } = await supabaseAdmin.from("quiz_attempts").upsert(
+          attemptPayload,
+          { onConflict: "attempt_id" }
+        );
+        if (attErr) {
+          quizAttemptsError = attErr.message;
+          console.warn("quiz_attempts write warning:", attErr.message);
+        } else {
+          savedToQuizAttempts = true;
+        }
       } catch (attErr: any) {
-        console.warn("quiz_attempts write warning:", attErr?.message);
+        quizAttemptsError = attErr?.message || String(attErr);
+        console.warn("quiz_attempts write warning:", quizAttemptsError);
+      }
+
+      // 5. Dual-persistence: Also write attempt into registrations raw_data
+      try {
+        let regNum = "";
+        let candidateName = "";
+        let instituteName = "";
+
+        if (studentId || participantEmail) {
+          const { data: partRow } = await supabaseAdmin
+            .from("participants")
+            .select("registration_number, name, institute_name, email")
+            .or(`id.eq.${studentId},email.eq.${participantEmail || studentId}`)
+            .maybeSingle();
+
+          if (partRow) {
+            regNum = partRow.registration_number || "";
+            candidateName = partRow.name || "";
+            instituteName = partRow.institute_name || "";
+          }
+        }
+
+        let regQuery = supabaseAdmin.from("registrations").select("id, raw_data, registration_number");
+        if (regNum) {
+          regQuery = regQuery.eq("registration_number", regNum);
+        } else if (teamId) {
+          regQuery = regQuery.or(`registration_number.eq.${teamId},id.eq.${teamId}`);
+        }
+
+        const { data: regRows } = await regQuery.limit(1);
+        const existingReg = regRows?.[0];
+
+        if (existingReg) {
+          const raw = existingReg.raw_data || {};
+          const prevAttempts = Array.isArray(raw.quizAttempts) ? raw.quizAttempts : [];
+          const fullAttempt = {
+            ...attemptPayload,
+            candidateName: candidateName || raw.coordinator?.name || "",
+            instituteName: instituteName || raw.organizationName || "",
+            registrationNumber: existingReg.registration_number,
+          };
+          const updatedAttempts = [
+            fullAttempt,
+            ...prevAttempts.filter((a: any) => a.attempt_id !== attemptId && a.student_id !== studentId)
+          ];
+
+          await supabaseAdmin
+            .from("registrations")
+            .update({
+              raw_data: {
+                ...raw,
+                quizAttempts: updatedAttempts,
+                latestQuizAttempt: fullAttempt,
+              },
+            })
+            .eq("id", existingReg.id);
+        }
+      } catch (regSaveErr: any) {
+        console.warn("Backup registration attempt write notice:", regSaveErr?.message);
       }
 
       return res.json({
@@ -797,6 +873,8 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
         isQualified,
         attemptId,
         submittedAt,
+        savedToQuizAttempts,
+        quizAttemptsError,
       });
     } catch (err: any) {
       console.error("Error in /api/quiz/submit:", err);
