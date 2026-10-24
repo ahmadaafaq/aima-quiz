@@ -819,6 +819,17 @@ export const DocRequirementInfo: React.FC<DocRequirementInfoProps> = ({
     lg: 'w-7 h-7 text-sm'
   }[size];
 
+  // BRD requirement specs 'i' buttons removed from production (admin and website).
+  // Kept accessible for internal developer inspection only via ?specs=1 or ?brd=1 query parameter.
+  const isBrdSpecsEnabled = typeof window !== 'undefined' && (
+    new URLSearchParams(window.location.search).get('specs') === '1' ||
+    new URLSearchParams(window.location.search).get('brd') === '1'
+  );
+
+  if (!isBrdSpecsEnabled) {
+    return null;
+  }
+
   return (
     <div ref={triggerRef} className={`relative inline-flex items-center align-middle ${className}`}>
       {/* ---------------- TRIGGER VARIANTS ---------------- */}
