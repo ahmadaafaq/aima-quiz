@@ -19,11 +19,52 @@ export const PolicyConsentModal: React.FC<PolicyConsentModalProps> = ({
   forceOpen,
   onConsentChange,
 }) => {
-  const { setActiveView } = useCompetition();
+  const { activeView, setActiveView } = useCompetition();
   const [isOpen, setIsOpen] = useState(false);
   const [showDeclinedNotice, setShowDeclinedNotice] = useState(false);
 
+  // Suppress modal on Admin portal, login screens, and authenticated candidate/partner dashboards
+  const isExcludedView = () => {
+    const excludedViews = [
+      'admin',
+      'participant_login',
+      'login',
+      'student',
+      'institute',
+      'evaluator',
+      'regional_hub',
+      'corporate',
+    ];
+    if (excludedViews.includes(activeView)) return true;
+
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname.toLowerCase();
+      if (
+        path.startsWith('/admin') ||
+        path.startsWith('/login') ||
+        path.startsWith('/participant_login') ||
+        path.startsWith('/participant-login') ||
+        path.startsWith('/student') ||
+        path.startsWith('/institute') ||
+        path.startsWith('/jury') ||
+        path.startsWith('/evaluator') ||
+        path.startsWith('/hub') ||
+        path.startsWith('/regional_hub') ||
+        path.startsWith('/regional-hub') ||
+        path.startsWith('/corporate')
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   useEffect(() => {
+    if (isExcludedView()) {
+      setIsOpen(false);
+      return;
+    }
+
     const saved = sessionStorage.getItem('aima_legal_consent');
     if (saved === 'yes') {
       setIsOpen(false);
@@ -31,22 +72,23 @@ export const PolicyConsentModal: React.FC<PolicyConsentModalProps> = ({
       // First time visiting or undecided in this session: show notifier popup
       setIsOpen(true);
     }
-  }, []);
+  }, [activeView]);
 
   useEffect(() => {
     const handleOpen = () => {
+      if (isExcludedView()) return;
       setShowDeclinedNotice(false);
       setIsOpen(true);
     };
     window.addEventListener('open_policy_consent', handleOpen);
     return () => window.removeEventListener('open_policy_consent', handleOpen);
-  }, []);
+  }, [activeView]);
 
   useEffect(() => {
-    if (forceOpen) {
+    if (forceOpen && !isExcludedView()) {
       setIsOpen(true);
     }
-  }, [forceOpen]);
+  }, [forceOpen, activeView]);
 
   const handleAccept = () => {
     sessionStorage.setItem('aima_legal_consent', 'yes');
@@ -62,7 +104,7 @@ export const PolicyConsentModal: React.FC<PolicyConsentModalProps> = ({
     onConsentChange?.(false);
   };
 
-  if (!isOpen) {
+  if (!isOpen || isExcludedView()) {
     return null;
   }
 

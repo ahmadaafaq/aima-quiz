@@ -12,6 +12,8 @@ import {
   saveRegistrationToSupabase,
   updateRegistrationPaymentInSupabase,
   createParticipantAccounts,
+  provisionUsersViaApi,
+  generateDefaultPassword,
 } from '../../lib/supabase';
 import {
   Building2,
@@ -874,6 +876,7 @@ export const RegistrationPage: React.FC = () => {
       paymentMethod: IS_EARLY_BIRD_FREE ? 'EARLY_BIRD_COMPLIMENTARY' : 'PO/NEFT_Pending',
       transactionId: IS_EARLY_BIRD_FREE ? txnNumber : undefined,
       invoiceNumber: invNumber.startsWith('INV-') ? invNumber.replace('INV-', 'PINV-') : invNumber,
+      quizProgramId: 'qp_case_comp_stage1_2026'
     };
 
     const result = registerCSRBootcamp(payload);
@@ -894,6 +897,45 @@ export const RegistrationPage: React.FC = () => {
     }).catch((err) => {
       console.warn('Participant account creation failed (non-critical):', err);
     });
+
+    // Secure Supabase Auth User Provisioning (auth.users + public.profiles)
+    try {
+      const nomineeUsers = (result.registration.nominees || []).map((nom) => ({
+        email: nom.email,
+        password: nom.password || generateDefaultPassword(nom.name, nom.mobile || ''),
+        name: nom.name,
+        mobile: nom.mobile,
+        organizationName: result.registration.organizationName,
+        registrationNumber: result.registration.registrationNumber,
+        program: nom.program,
+        semester: nom.semester,
+        enrolmentNumber: nom.enrolmentNumber,
+        isTeamLeader: !!nom.isTeamLeader,
+        role: nom.isTeamLeader ? 'team_leader' : 'student',
+      }));
+
+      if (result.registration.track === 'institutional' && result.registration.coordinator?.email) {
+        nomineeUsers.push({
+          email: result.registration.coordinator.email,
+          password: generateDefaultPassword(result.registration.coordinator.name || 'Coordinator', result.registration.coordinator.mobile || '2026'),
+          name: result.registration.coordinator.name || 'Institute Coordinator',
+          mobile: result.registration.coordinator.mobile,
+          organizationName: result.registration.organizationName,
+          registrationNumber: result.registration.registrationNumber,
+          isTeamLeader: false,
+          role: 'institute_coordinator',
+        });
+      }
+
+      provisionUsersViaApi({
+        registrationNumber: result.registration.registrationNumber,
+        users: nomineeUsers,
+      }).catch((err) => {
+        console.warn('Supabase Auth user provisioning notice:', err);
+      });
+    } catch (provisionErr) {
+      console.warn('User provisioning initialization error:', provisionErr);
+    }
 
     // If payment is required (> ₹0) and not proforma invoice: Redirect to AIMA Centralized Payment Hub
     if (!IS_EARLY_BIRD_FREE && feeCalculation.total > 0 && !isProforma) {
@@ -1078,10 +1120,10 @@ export const RegistrationPage: React.FC = () => {
               <div className="flex flex-col items-center gap-1.5 z-10 bg-slate-50 dark:bg-slate-950 px-1 sm:px-2">
                 <div
                   className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${currentStep === 1
-                      ? 'bg-blue-600 text-white ring-4 ring-blue-500/20 shadow-blue-500/30'
-                      : currentStep > 1
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                    ? 'bg-blue-600 text-white ring-4 ring-blue-500/20 shadow-blue-500/30'
+                    : currentStep > 1
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
                     }`}
                 >
                   {currentStep > 1 ? <Check className="w-4 h-4 stroke-[3]" /> : '1'}
@@ -1095,10 +1137,10 @@ export const RegistrationPage: React.FC = () => {
               <div className="flex flex-col items-center gap-1.5 z-10 bg-slate-50 dark:bg-slate-950 px-1 sm:px-2">
                 <div
                   className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${currentStep === 2
-                      ? 'bg-blue-600 text-white ring-4 ring-blue-500/20 shadow-blue-500/30'
-                      : currentStep > 2
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                    ? 'bg-blue-600 text-white ring-4 ring-blue-500/20 shadow-blue-500/30'
+                    : currentStep > 2
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
                     }`}
                 >
                   {currentStep > 2 ? <Check className="w-4 h-4 stroke-[3]" /> : '2'}
@@ -1112,8 +1154,8 @@ export const RegistrationPage: React.FC = () => {
               <div className="flex flex-col items-center gap-1.5 z-10 bg-slate-50 dark:bg-slate-950 px-1 sm:px-2">
                 <div
                   className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${currentStep >= 3
-                      ? 'bg-emerald-600 text-white ring-4 ring-emerald-500/20 shadow-emerald-500/30'
-                      : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                    ? 'bg-emerald-600 text-white ring-4 ring-emerald-500/20 shadow-emerald-500/30'
+                    : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
                     }`}
                 >
                   {currentStep === 4 ? <Check className="w-4 h-4 stroke-[3]" /> : '3'}
@@ -1140,8 +1182,8 @@ export const RegistrationPage: React.FC = () => {
                       setValidationError('');
                     }}
                     className={`flex-1 py-3 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${regMode === 'individual'
-                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25'
-                        : 'text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25'
+                      : 'text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
                       }`}
                   >
                     <UserCheck className="w-4 h-4 shrink-0" />
@@ -1154,8 +1196,8 @@ export const RegistrationPage: React.FC = () => {
                       setValidationError('');
                     }}
                     className={`flex-1 py-3 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${regMode === 'institute'
-                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25'
-                        : 'text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25'
+                      : 'text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
                       }`}
                   >
                     <Building2 className="w-4 h-4 shrink-0" />
@@ -1372,12 +1414,12 @@ export const RegistrationPage: React.FC = () => {
                               <div className="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden flex">
                                 <div
                                   className={`h-full transition-all ${passwordStrength <= 1
-                                      ? 'w-1/4 bg-red-500'
-                                      : passwordStrength === 2
-                                        ? 'w-2/4 bg-amber-500'
-                                        : passwordStrength === 3
-                                          ? 'w-3/4 bg-blue-500'
-                                          : 'w-full bg-emerald-500'
+                                    ? 'w-1/4 bg-red-500'
+                                    : passwordStrength === 2
+                                      ? 'w-2/4 bg-amber-500'
+                                      : passwordStrength === 3
+                                        ? 'w-3/4 bg-blue-500'
+                                        : 'w-full bg-emerald-500'
                                     }`}
                                 />
                               </div>
@@ -1413,8 +1455,8 @@ export const RegistrationPage: React.FC = () => {
                               onChange={(e) => setConfirmPassword(e.target.value)}
                               placeholder="Re-enter password"
                               className={`w-full pr-10 px-3.5 py-2.5 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono ${confirmPassword.length > 0 && !passwordsMatch
-                                  ? 'border-red-400 focus:ring-red-400'
-                                  : 'border-slate-300 dark:border-slate-700'
+                                ? 'border-red-400 focus:ring-red-400'
+                                : 'border-slate-300 dark:border-slate-700'
                                 }`}
                               required
                             />
@@ -1824,8 +1866,8 @@ export const RegistrationPage: React.FC = () => {
                             type="button"
                             onClick={() => setInstituteEntryTab('form')}
                             className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${instituteEntryTab === 'form'
-                                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
-                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                              ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                               }`}
                           >
                             <Users className="w-3.5 h-3.5" />
@@ -1835,8 +1877,8 @@ export const RegistrationPage: React.FC = () => {
                             type="button"
                             onClick={() => setInstituteEntryTab('excel')}
                             className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${instituteEntryTab === 'excel'
-                                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
-                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                              ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                               }`}
                           >
                             <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -1903,8 +1945,8 @@ export const RegistrationPage: React.FC = () => {
                         {excelUploadFeedback && (
                           <div
                             className={`p-4 rounded-xl text-xs flex items-center gap-2.5 ${excelUploadFeedback.type === 'success'
-                                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                                : 'bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800'
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                              : 'bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800'
                               }`}
                           >
                             {excelUploadFeedback.type === 'success' ? (
@@ -1950,8 +1992,8 @@ export const RegistrationPage: React.FC = () => {
                               {/* Member count indicator */}
                               <span
                                 className={`px-3 py-1 rounded-xl text-xs font-bold border ${team.members.length >= 4
-                                    ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
-                                    : 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                                  ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                                  : 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
                                   }`}
                               >
                                 {team.members.length} / 4 Members {team.members.length >= 4 && '(Max)'}
@@ -2242,11 +2284,10 @@ export const RegistrationPage: React.FC = () => {
 
                 {/* Participation Fee Display Box (Controlled cleanly by IS_EARLY_BIRD_FREE toggle) */}
                 <div
-                  className={`p-6 rounded-2xl border-2 space-y-4 transition-all ${
-                    IS_EARLY_BIRD_FREE
+                  className={`p-6 rounded-2xl border-2 space-y-4 transition-all ${IS_EARLY_BIRD_FREE
                       ? 'bg-gradient-to-br from-emerald-50/90 via-teal-50/40 to-blue-50/60 dark:from-emerald-950/30 dark:via-teal-950/20 dark:to-blue-950/20 border-emerald-500/80 shadow-md shadow-emerald-500/10'
                       : 'bg-gradient-to-br from-blue-50/80 to-indigo-50/50 dark:from-blue-950/30 dark:to-indigo-950/20 border-blue-600/80'
-                  }`}
+                    }`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -2457,8 +2498,8 @@ export const RegistrationPage: React.FC = () => {
                     <span className="text-slate-400 text-[11px] block">Payment Status</span>
                     <span
                       className={`font-bold text-sm ${activeCreatedRegistration.paymentStatus === 'PAID'
-                          ? 'text-emerald-600 dark:text-emerald-400'
-                          : 'text-amber-600 dark:text-amber-400'
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-amber-600 dark:text-amber-400'
                         }`}
                     >
                       {activeCreatedRegistration.paymentStatus === 'PAID' ? 'PAID & CLEARED' : 'PROFORMA / PENDING'}

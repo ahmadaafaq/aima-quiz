@@ -27,7 +27,7 @@ import { PaymentReturnListener } from './components/payment/PaymentReturnListene
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 const AppContent: React.FC = () => {
-  const { activeView, activeCertificateModal, setActiveCertificateModal, showRegistrationModal, setShowRegistrationModal, registrationModalTrack } = useCompetition();
+  const { activeView, isQuizActive, activeCertificateModal, setActiveCertificateModal, showRegistrationModal, setShowRegistrationModal, registrationModalTrack } = useCompetition();
 
   useEffect(() => {
     document.title = 'AIMA-ICRC India Case League 2026';
@@ -122,12 +122,24 @@ const AppContent: React.FC = () => {
     isRegistrationPage;
 
   // On live production (research.aima.in), hide navbar on public / registration / legal pages.
-  // On localhost, preview domains, or when ?demo=true is passed, show the navbar for demonstrating all pages.
-  const hideNavbar = isLegalPage || (isLiveSite && isPublicOrRegistration);
+  // When taking quiz (isQuizActive), hide navbar and footer completely for zero-distraction fullscreen lockdown.
+  const hideNavbar = isQuizActive || isLegalPage || (isLiveSite && isPublicOrRegistration);
+  const hideFooter = isQuizActive;
+
+  const isExcludedFromPolicyModal =
+    isQuizActive ||
+    activeView === 'admin' ||
+    activeView === 'participant_login' ||
+    activeView === 'login' ||
+    activeView === 'student' ||
+    activeView === 'institute' ||
+    activeView === 'evaluator' ||
+    activeView === 'regional_hub' ||
+    activeView === 'corporate';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-amber-500/20 selection:text-amber-700 dark:selection:text-amber-300">
-      {/* Top Sticky Header: Hidden on research.aima.in live site, visible for demo/localhost */}
+      {/* Top Sticky Header: Hidden during quiz lockdown or on research.aima.in live site */}
       {!hideNavbar && <Navbar />}
 
       {/* Main Routed Content */}
@@ -137,24 +149,27 @@ const AppContent: React.FC = () => {
         </ErrorBoundary>
       </main>
 
-      {/* Global Modals & Dialogs & AI Chatbot */}
-      <UnifiedRegistrationModal
-        isOpen={showRegistrationModal}
-        onClose={() => setShowRegistrationModal(false)}
-        initialTrack={registrationModalTrack}
-      />
-      <CertificateModal
-        certificate={activeCertificateModal}
-        onClose={() => setActiveCertificateModal(null)}
-      />
-      <CertificateVerifier />
-      <SupportModal />
-      <PolicyConsentModal />
-      <PaymentReturnListener />
-      {/* {!isRegistrationPage && <ChatAssistant />} */}
+      {/* Global Modals & Dialogs (suppressed during quiz session) */}
+      {!isQuizActive && (
+        <>
+          <UnifiedRegistrationModal
+            isOpen={showRegistrationModal}
+            onClose={() => setShowRegistrationModal(false)}
+            initialTrack={registrationModalTrack}
+          />
+          <CertificateModal
+            certificate={activeCertificateModal}
+            onClose={() => setActiveCertificateModal(null)}
+          />
+          <CertificateVerifier />
+          <SupportModal />
+          {!isExcludedFromPolicyModal && <PolicyConsentModal />}
+          <PaymentReturnListener />
+        </>
+      )}
 
-      {/* Bottom Footer */}
-      <Footer />
+      {/* Bottom Footer (suppressed during quiz session) */}
+      {!hideFooter && <Footer />}
     </div>
   );
 };

@@ -13,8 +13,13 @@ import {
   Sparkles,
   User,
   ShieldCheck,
+  Scale,
 } from 'lucide-react';
-import { loginParticipant, SupabaseParticipantRow } from '../../lib/supabase';
+import {
+  signInWithEmailPassword,
+  UserProfileRow,
+  SupabaseParticipantRow,
+} from '../../lib/supabase';
 import { useCompetition } from '../../context/CompetitionContext';
 
 interface ParticipantLoginPageProps {
@@ -28,30 +33,93 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
-  const [loggedIn, setLoggedIn] = useState<SupabaseParticipantRow | null>(null);
+  const [loggedInProfile, setLoggedInProfile] = useState<UserProfileRow | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    const result = await loginParticipant(email.trim(), password);
+    const result = await signInWithEmailPassword(email.trim(), password);
     setIsLoading(false);
 
-    if (result.success && result.participant) {
-      setLoggedIn(result.participant);
-      loginParticipantSession(result.participant);
-      onLoginSuccess?.(result.participant);
+    if (result.success && result.profile) {
+      const prof = result.profile;
+      setLoggedInProfile(prof);
+
+      if (prof.role === 'admin') {
+        const authData = {
+          user: prof.email,
+          role: 'super_admin',
+          token: 'aima_sec_' + Date.now().toString(36),
+          loginTime: new Date().toISOString(),
+        };
+        sessionStorage.setItem('AIMA_ADMIN_AUTH_TOKEN_V1', JSON.stringify(authData));
+        localStorage.setItem('AIMA_ADMIN_AUTH_TOKEN_V1', JSON.stringify(authData));
+      } else if (prof.role === 'student' || prof.role === 'team_leader' || prof.role === 'team_member') {
+        const participantRow: SupabaseParticipantRow = {
+          registration_number: prof.registration_number || '',
+          registration_mode: 'individual',
+          institute_name: prof.organization_name || 'Academic Institution',
+          username: prof.email,
+          email: prof.email,
+          password_hash: '',
+          name: prof.name,
+          mobile: prof.mobile || null,
+          program: prof.program || null,
+          semester: prof.semester || null,
+          enrolment_number: prof.enrolment_number || null,
+          is_team_leader: prof.is_team_leader,
+        };
+        loginParticipantSession(participantRow);
+        onLoginSuccess?.(participantRow);
+      }
     } else {
-      setError(result.error || 'Login failed. Please try again.');
+      setError(result.error || 'Authentication failed. Please check your credentials and try again.');
     }
   };
 
-  if (loggedIn) {
+  const handleNavigateToPortal = () => {
+    if (!loggedInProfile) return;
+    switch (loggedInProfile.role) {
+      case 'admin':
+        setActiveView('admin');
+        break;
+      case 'evaluator':
+        setActiveView('evaluator');
+        break;
+      case 'institute_coordinator':
+        setActiveView('institute');
+        break;
+      case 'student':
+      case 'team_leader':
+      case 'team_member':
+      default:
+        setActiveView('student');
+        break;
+    }
+  };
+
+  const getPortalLabel = (role: string) => {
+    switch (role) {
+      case 'admin':
+        return 'Go to Executive Admin Control Center';
+      case 'evaluator':
+        return 'Go to Jury Evaluation Station';
+      case 'institute_coordinator':
+        return 'Go to Institute Coordinator Portal';
+      case 'student':
+      case 'team_leader':
+      default:
+        return 'Go to My Student Workspace';
+    }
+  };
+
+  if (loggedInProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center py-12 px-4 bg-slate-50 dark:bg-slate-950">
         <div className="max-w-md w-full space-y-6">
-          {/* Success */}
+          {/* Success Card */}
           <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 rounded-3xl p-8 shadow-xl space-y-5 text-center">
             <div className="flex justify-center">
               <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
@@ -60,37 +128,43 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
             </div>
             <div>
               <h2 className="text-xl font-black text-slate-900 dark:text-white">Welcome back!</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{loggedIn.name}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{loggedInProfile.name}</p>
             </div>
             <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 space-y-2 text-left text-xs">
-              <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                <Building2 className="w-4 h-4 text-blue-500 shrink-0" />
-                <span className="font-semibold">{loggedIn.institute_name}</span>
-              </div>
+              {loggedInProfile.organization_name && (
+                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                  <Building2 className="w-4 h-4 text-blue-500 shrink-0" />
+                  <span className="font-semibold">{loggedInProfile.organization_name}</span>
+                </div>
+              )}
               <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
                 <Mail className="w-4 h-4 text-blue-500 shrink-0" />
-                <span>{loggedIn.email}</span>
+                <span>{loggedInProfile.email}</span>
               </div>
               <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
                 <User className="w-4 h-4 text-blue-500 shrink-0" />
-                <span className="capitalize">{loggedIn.registration_mode === 'institute' ? 'Institution Participant' : 'Individual Participant'}</span>
-                {loggedIn.is_team_leader && (
+                <span className="capitalize font-semibold text-blue-600 dark:text-blue-400">
+                  {loggedInProfile.role.replace('_', ' ')}
+                </span>
+                {loggedInProfile.is_team_leader && (
                   <span className="ml-1 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 font-bold text-[10px]">
                     Team Leader
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
-                <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span className="font-mono text-[10px]">Ref: {loggedIn.registration_number}</span>
-              </div>
+              {loggedInProfile.registration_number && (
+                <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                  <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span className="font-mono text-[10px]">Ref: {loggedInProfile.registration_number}</span>
+                </div>
+              )}
             </div>
             <button
-              onClick={() => setActiveView('student')}
+              onClick={handleNavigateToPortal}
               className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-600/25"
             >
               <Sparkles className="w-4 h-4" />
-              Go to My Workspace
+              <span>{getPortalLabel(loggedInProfile.role)}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -114,14 +188,14 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
           </div>
           <div className="space-y-1">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-300 dark:border-blue-700/50">
-              <GraduationCap className="w-3.5 h-3.5" />
-              <span>Participant Portal • National Online Quiz 2026</span>
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>AIMA-ICRC Unified Portal • India Case League 2026</span>
             </div>
             <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-              Participant Login
+              Sign In to Your Workspace
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Login with the email and password from your registration confirmation.
+              Enter your email and password to access your Student, Jury, Institution, or Secretariat Portal.
             </p>
           </div>
         </div>

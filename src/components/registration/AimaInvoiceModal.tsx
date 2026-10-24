@@ -29,12 +29,95 @@ export const AimaInvoiceModal: React.FC<AimaInvoiceModalProps> = ({
   const isProforma = registration.paymentStatus !== 'PAID';
 
   const handlePrint = () => {
-    window.print();
+    const printContent = document.getElementById('aima-invoice-sheet');
+    if (!printContent) {
+      window.print();
+      return;
+    }
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+        .map((el) => el.outerHTML)
+        .join('\n');
+
+      doc.open();
+      doc.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>${isProforma ? 'AIMA_Proforma_Invoice' : 'AIMA_Tax_Invoice'}_${registration.invoiceNumber}</title>
+            ${styles}
+            <style>
+              @page {
+                size: A4 portrait;
+                margin: 8mm 12mm;
+              }
+              html, body {
+                background: #ffffff !important;
+                color: #0f172a !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                height: auto !important;
+                min-height: 0 !important;
+                overflow: visible !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              #aima-invoice-sheet {
+                padding: 0 !important;
+                margin: 0 !important;
+                max-height: none !important;
+                overflow: visible !important;
+                width: 100% !important;
+              }
+              * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+            </style>
+          </head>
+          <body>
+            <div id="aima-invoice-sheet" class="${printContent.className}">
+              ${printContent.innerHTML}
+            </div>
+          </body>
+        </html>
+      `);
+      doc.close();
+
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 1000);
+      }, 250);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div
+      id="aima-invoice-modal-root"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200"
+    >
+      <div
+        id="aima-invoice-card"
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+      >
         {/* Actions bar at top */}
         <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -62,7 +145,10 @@ export const AimaInvoiceModal: React.FC<AimaInvoiceModalProps> = ({
         </div>
 
         {/* Invoice Printable Sheet */}
-        <div className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1 bg-white text-slate-900 font-sans text-xs">
+        <div
+          id="aima-invoice-sheet"
+          className="p-6 sm:p-8 space-y-5 print:space-y-3.5 overflow-y-auto flex-1 bg-white text-slate-900 font-sans text-xs print:p-0 print:m-0 print:overflow-visible print:text-black"
+        >
           {/* Header */}
           <div className="flex flex-wrap items-start justify-between border-b pb-6 gap-4">
             <div className="space-y-1">
@@ -95,7 +181,7 @@ export const AimaInvoiceModal: React.FC<AimaInvoiceModalProps> = ({
                 {registration.invoiceNumber}
               </div>
               <div className="text-slate-500 text-[11px]">
-                Date: {new Date(registration.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                Date: {new Date(registration.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}
               </div>
               <div className="text-slate-500 text-[11px]">
                 Reg Ref: <strong className="font-mono">{registration.registrationNumber}</strong>

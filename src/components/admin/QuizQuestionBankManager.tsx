@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useCompetition } from '../../context/CompetitionContext';
-import { QuizQuestion } from '../../types';
+import { QuizQuestion, QuizProgram } from '../../types';
 import {
   BookOpen,
   Plus,
@@ -16,16 +16,78 @@ import {
   Copy,
   Sparkles,
   HelpCircle,
-  Eye
+  Eye,
+  Check,
+  RotateCcw,
+  Archive,
+  Layers
 } from 'lucide-react';
 
+export const MASTER_QUIZ_CATEGORIES = [
+  'Corporate Strategy & Management',
+  'Corporate Strategy & Business Awareness',
+  'Management Concepts & Case Analysis',
+  'Sustainability & AI',
+  'Economics & Policy',
+  'Finance & Marketing',
+  'Data Interpretation',
+] as const;
+
+export function normalizeQuestionCategory(cat?: string): string {
+  if (!cat) return 'Corporate Strategy & Management';
+  const trimmed = cat.trim();
+  const lower = trimmed.toLowerCase();
+
+  if (lower === 'corporate strategy & management') return 'Corporate Strategy & Management';
+  if (lower === 'corporate strategy & business awareness') return 'Corporate Strategy & Business Awareness';
+  if (lower === 'management concepts & case analysis') return 'Management Concepts & Case Analysis';
+  if (lower === 'sustainability & ai') return 'Sustainability & AI';
+  if (lower === 'economics & policy') return 'Economics & Policy';
+  if (lower === 'finance & marketing') return 'Finance & Marketing';
+  if (lower === 'data interpretation') return 'Data Interpretation';
+
+  // Legacy & seed mappings
+  if (lower === 'corporate strategy' || lower === 'business strategy' || lower === 'strategy') {
+    return 'Corporate Strategy & Management';
+  }
+  if (lower === 'business awareness') {
+    return 'Corporate Strategy & Business Awareness';
+  }
+  if (
+    lower === 'management concepts' ||
+    lower.includes('case analysis') ||
+    lower.includes('operations') ||
+    lower.includes('supply chain') ||
+    lower === 'general management'
+  ) {
+    return 'Management Concepts & Case Analysis';
+  }
+  if (lower === 'financial acumen' || lower.includes('finance') || lower.includes('marketing')) {
+    return 'Finance & Marketing';
+  }
+  if (lower.includes('technology') || lower.includes('analytics') || lower.includes('sustainability') || lower.includes('ai')) {
+    return 'Sustainability & AI';
+  }
+  if (lower.includes('economics') || lower.includes('policy')) {
+    return 'Economics & Policy';
+  }
+  if (lower.includes('data') || lower.includes('interpretation')) {
+    return 'Data Interpretation';
+  }
+
+  return trimmed;
+}
+
 export const QuizQuestionBankManager: React.FC = () => {
-  const { questions, addQuestion, addQuestionsBulk, deleteQuestion } = useCompetition();
+  const { questions, addQuestion, addQuestionsBulk, updateQuestion, deleteQuestion, programQuestionMappings, quizPrograms } = useCompetition();
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [difficultyFilter, setDifficultyFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<'active' | 'archived' | 'all'>('active');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [hoveredAssignedQuestionId, setHoveredAssignedQuestionId] = useState<string | null>(null);
 
   // Modals
   const [showImportModal, setShowImportModal] = useState(false);
@@ -46,29 +108,145 @@ export const QuizQuestionBankManager: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Create Single Question Form State
-  const [singleForm, setSingleForm] = useState<Omit<QuizQuestion, 'id'>>({
-    category: 'Business Strategy',
-    difficulty: 'Medium',
+  const [singleForm, setSingleForm] = useState({
+    category: 'Corporate Strategy & Management',
+    difficulty: 'Medium' as 'Easy' | 'Medium' | 'Hard',
     questionText: '',
+    caseletSnippet: '',
     options: ['', '', '', ''],
-    correctOptionIndex: 0,
+    correctAnswerIndex: 0,
     marks: 4,
     negativeMarks: 1,
     explanation: '',
   });
 
-  // Calculate distinct categories
-  const categories = Array.from(new Set(questions.map(q => q.category))).filter(Boolean);
+  // Normalize questions to strictly match the 7 Master Categories
+  const normalizedQuestions = useMemo(() => {
+    return (questions || []).map(q => ({
+      ...q,
+      category: normalizeQuestionCategory(q.category),
+    }));
+  }, [questions]);
+
+  // Categories dropdown strictly displays the 7 Master Categories matching Create Quiz Program 1:1
+  const categories = useMemo(() => {
+    return [...MASTER_QUIZ_CATEGORIES];
+  }, []);
+
+  // Telemetry Calculations for Stat Cards
+  const distinctCategories = useMemo(
+    () => Array.from(new Set(normalizedQuestions.map(q => q.category).filter(Boolean))),
+    [normalizedQuestions]
+  );
+
+  const topCategoriesSummary = useMemo(() => {
+    if (distinctCategories.length === 0) return 'None assigned';
+    const cleanNames = distinctCategories.map(c => c.split('&')[0].replace('Corporate', '').trim());
+    const top3 = cleanNames.slice(0, 3).join(', ');
+    return distinctCategories.length > 3 ? `${top3}, +${distinctCategories.length - 3} more` : top3;
+  }, [distinctCategories]);
+
+  // Assigned vs Unassigned questions breakdown
+  const assignedQuestionIds = useMemo(() => {
+    const set = new Set<string>();
+    if (programQuestionMappings) {
+      Object.values(programQuestionMappings).forEach(ids => {
+        if (Array.isArray(ids)) {
+          ids.forEach(id => set.add(id));
+        }
+      });
+    }
+    return set;
+  }, [programQuestionMappings]);
+
+  // Program count per question mapping
+  const questionProgramMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (programQuestionMappings) {
+      Object.values(programQuestionMappings).forEach(ids => {
+        if (Array.isArray(ids)) {
+          ids.forEach(id => {
+            map[id] = (map[id] || 0) + 1;
+          });
+        }
+      });
+    }
+    return map;
+  }, [programQuestionMappings]);
+
+  // Full assigned quiz programs detail map for hover popover
+  const questionAssignedProgramsMap = useMemo(() => {
+    const map: Record<string, { program: QuizProgram; order: number }[]> = {};
+    if (programQuestionMappings && Array.isArray(quizPrograms)) {
+      const progMap = new Map(quizPrograms.map(p => [p.id, p]));
+      Object.entries(programQuestionMappings).forEach(([progId, qIds]) => {
+        const p = progMap.get(progId);
+        if (p && Array.isArray(qIds)) {
+          qIds.forEach((id, idx) => {
+            if (!map[id]) map[id] = [];
+            map[id].push({ program: p, order: idx + 1 });
+          });
+        }
+      });
+    }
+    return map;
+  }, [programQuestionMappings, quizPrograms]);
+
+  const assignedCount = useMemo(() => {
+    return normalizedQuestions.filter(q => assignedQuestionIds.has(q.id)).length;
+  }, [normalizedQuestions, assignedQuestionIds]);
+
+  const unassignedCount = Math.max(0, normalizedQuestions.length - assignedCount);
+
+  const activeQuestions = useMemo(
+    () => normalizedQuestions.filter(q => q.isActive !== false),
+    [normalizedQuestions]
+  );
+  const activeCount = activeQuestions.length;
+
+  const archivedQuestions = useMemo(
+    () => normalizedQuestions.filter(q => q.isActive === false),
+    [normalizedQuestions]
+  );
+  const archivedCount = archivedQuestions.length;
+
+  const weightageStats = useMemo(() => {
+    if (normalizedQuestions.length === 0) return { modeMarks: 4, modeNegMarks: 1, avgMarks: 4 };
+    const marksFreq: Record<number, number> = {};
+    const negFreq: Record<number, number> = {};
+    let sumMarks = 0;
+    normalizedQuestions.forEach(q => {
+      const m = Number(q.marks) || 4;
+      const nm = Number(q.negativeMarks) || 1;
+      marksFreq[m] = (marksFreq[m] || 0) + 1;
+      negFreq[nm] = (negFreq[nm] || 0) + 1;
+      sumMarks += m;
+    });
+    const modeMarks = Number(
+      Object.keys(marksFreq).reduce((a, b) => (marksFreq[Number(a)] >= marksFreq[Number(b)] ? a : b), '4')
+    );
+    const modeNegMarks = Number(
+      Object.keys(negFreq).reduce((a, b) => (negFreq[Number(a)] >= negFreq[Number(b)] ? a : b), '1')
+    );
+    const avgMarks = Math.round((sumMarks / normalizedQuestions.length) * 10) / 10;
+    return { modeMarks, modeNegMarks, avgMarks };
+  }, [normalizedQuestions]);
 
   // Filtered Questions
-  const filteredQuestions = questions.filter(q => {
+  const filteredQuestions = normalizedQuestions.filter(q => {
     const matchesSearch =
       q.questionText.toLowerCase().includes(searchQuery.toLowerCase()) ||
       q.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
       q.options.some(opt => opt.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCat = categoryFilter === 'all' || q.category === categoryFilter;
     const matchesDiff = difficultyFilter === 'all' || q.difficulty === difficultyFilter;
-    return matchesSearch && matchesCat && matchesDiff;
+    const matchesStatus =
+      statusFilter === 'all'
+        ? true
+        : statusFilter === 'archived'
+          ? q.isActive === false
+          : q.isActive !== false;
+    return matchesSearch && matchesCat && matchesDiff && matchesStatus;
   });
 
   // CSV Template Generator & Downloader
@@ -89,7 +267,7 @@ export const QuizQuestionBankManager: React.FC = () => {
 
     const sampleRows = [
       [
-        'Business Strategy',
+        'Corporate Strategy & Management',
         'Medium',
         'Which strategic framework assesses competitive intensity through five industry forces?',
         'Ansoff Matrix',
@@ -102,7 +280,7 @@ export const QuizQuestionBankManager: React.FC = () => {
         "Michael Porter's Five Forces analyzes supplier power, buyer power, competitive rivalry, threat of substitution, and threat of new entry.",
       ],
       [
-        'Financial Acumen',
+        'Finance & Marketing',
         'Hard',
         'What is the formula for calculating Return on Invested Capital (ROIC)?',
         'Net Profit / Total Equity',
@@ -115,7 +293,7 @@ export const QuizQuestionBankManager: React.FC = () => {
         'ROIC equals Net Operating Profit After Tax (NOPAT) divided by Invested Capital (Total Debt + Equity - Cash).',
       ],
       [
-        'Marketing & Consumer',
+        'Corporate Strategy & Business Awareness',
         'Easy',
         'The 4 Ps of the classical marketing mix model comprise Product, Price, Promotion, and which other component?',
         'People',
@@ -128,7 +306,7 @@ export const QuizQuestionBankManager: React.FC = () => {
         'E. Jerome McCarthy defined the original 4 Ps as Product, Price, Place, and Promotion.',
       ],
       [
-        'Operations & Supply Chain',
+        'Management Concepts & Case Analysis',
         'Medium',
         'In lean manufacturing and Six Sigma, what does the term DOWNTIME categorize?',
         'Factory machine scheduled stoppage',
@@ -141,7 +319,7 @@ export const QuizQuestionBankManager: React.FC = () => {
         'DOWNTIME stands for Defects, Overproduction, Waiting, Non-utilized talent, Transportation, Inventory, Motion, and Extra processing.',
       ],
       [
-        'Technology & Analytics',
+        'Sustainability & AI',
         'Medium',
         'In machine learning, what phenomenon occurs when a model fits training noise rather than generalizable patterns?',
         'Underfitting',
@@ -233,11 +411,12 @@ export const QuizQuestionBankManager: React.FC = () => {
     const colIndex = {
       category: rawHeaders.findIndex(h => h.includes('cat')),
       difficulty: rawHeaders.findIndex(h => h.includes('diff')),
+      caseletSnippet: rawHeaders.findIndex(h => h.includes('caselet') || h.includes('snippet') || h.includes('exhibit')),
       questionText: rawHeaders.findIndex(h => h.includes('question') || h.includes('text') || h.includes('prompt')),
-      optionA: rawHeaders.findIndex(h => h === 'optiona' || h === 'optiona' || h === 'a' || h === 'choice1'),
-      optionB: rawHeaders.findIndex(h => h === 'optionb' || h === 'optionb' || h === 'b' || h === 'choice2'),
-      optionC: rawHeaders.findIndex(h => h === 'optionc' || h === 'optionc' || h === 'c' || h === 'choice3'),
-      optionD: rawHeaders.findIndex(h => h === 'optiond' || h === 'optiond' || h === 'd' || h === 'choice4'),
+      optionA: rawHeaders.findIndex(h => h === 'optiona' || h === 'a' || h === 'choice1'),
+      optionB: rawHeaders.findIndex(h => h === 'optionb' || h === 'b' || h === 'choice2'),
+      optionC: rawHeaders.findIndex(h => h === 'optionc' || h === 'c' || h === 'choice3'),
+      optionD: rawHeaders.findIndex(h => h === 'optiond' || h === 'd' || h === 'choice4'),
       correctOption: rawHeaders.findIndex(
         h => h.includes('correct') || h.includes('answer') || h.includes('solution')
       ),
@@ -261,6 +440,7 @@ export const QuizQuestionBankManager: React.FC = () => {
 
       const category = getCol(cells, colIndex.category, 0) || 'Business Strategy';
       const difficultyRaw = getCol(cells, colIndex.difficulty, 1) || 'Medium';
+      const caseletSnippet = colIndex.caseletSnippet !== -1 ? (cells[colIndex.caseletSnippet] || '').trim() : '';
       const questionText = getCol(cells, colIndex.questionText, 2);
       const optA = getCol(cells, colIndex.optionA, 3);
       const optB = getCol(cells, colIndex.optionB, 4);
@@ -328,11 +508,13 @@ export const QuizQuestionBankManager: React.FC = () => {
           category,
           difficulty,
           questionText,
+          caseletSnippet: caseletSnippet || undefined,
           options: [optA, optB, optC, optD],
-          correctOptionIndex: correctIdx,
+          correctAnswerIndex: correctIdx,
           marks,
           negativeMarks,
           explanation: explanation || 'Refer to standard management case principles and industry benchmarks.',
+          isActive: true,
         },
       });
     }
@@ -382,14 +564,20 @@ export const QuizQuestionBankManager: React.FC = () => {
     if (!singleForm.questionText.trim()) return;
     if (singleForm.options.some(opt => !opt.trim())) return;
 
-    addQuestion(singleForm);
+    addQuestion({
+      ...singleForm,
+      caseletSnippet: singleForm.caseletSnippet.trim() || undefined,
+      explanation: singleForm.explanation.trim() || undefined,
+      isActive: true,
+    });
     setShowCreateModal(false);
     setSingleForm({
-      category: 'Business Strategy',
+      category: 'Corporate Strategy & Management',
       difficulty: 'Medium',
       questionText: '',
+      caseletSnippet: '',
       options: ['', '', '', ''],
-      correctOptionIndex: 0,
+      correctAnswerIndex: 0,
       marks: 4,
       negativeMarks: 1,
       explanation: '',
@@ -427,7 +615,7 @@ export const QuizQuestionBankManager: React.FC = () => {
             <button
               id="download-question-template-btn"
               onClick={handleDownloadTemplate}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-semibold transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-semibold transition-colors border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer"
               title="Download standard CSV spreadsheet format with column headers and sample questions"
             >
               <Download className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -441,7 +629,7 @@ export const QuizQuestionBankManager: React.FC = () => {
                 setShowImportModal(true);
                 setParsedRows([]);
               }}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
             >
               <Upload className="w-4 h-4" />
               <span>Import Questions via Spreadsheet</span>
@@ -451,10 +639,10 @@ export const QuizQuestionBankManager: React.FC = () => {
             <button
               id="create-single-question-btn"
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Add Question</span>
+              <span>Add Question</span>
             </button>
           </div>
         </div>
@@ -463,35 +651,43 @@ export const QuizQuestionBankManager: React.FC = () => {
       {/* KPI Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-          <span className="text-xs text-slate-500 uppercase font-semibold">Total Bank Size</span>
+          <span className="text-xs text-slate-500 font-semibold">Total Bank Size</span>
           <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-            {questions.length} Items
+            {questions.length} {questions.length === 1 ? 'Item' : 'Items'}
           </p>
-          <span className="text-[11px] text-emerald-600 font-medium">Ready for dynamic shuffling</span>
+          <span className="text-[11px] text-emerald-600 font-medium">
+            {activeCount} active in test pool
+          </span>
         </div>
 
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-          <span className="text-xs text-slate-500 uppercase font-semibold">Domain Categories</span>
+          <span className="text-xs text-slate-500 font-semibold">Domain Categories</span>
           <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-            {categories.length} Tracks
+            {distinctCategories.length} {distinctCategories.length === 1 ? 'Track' : 'Tracks'}
           </p>
-          <span className="text-[11px] text-slate-500">Strategy, Finance, Ops, Tech</span>
+          <span className="text-[11px] text-slate-500 truncate block" title={topCategoriesSummary}>
+            {topCategoriesSummary}
+          </span>
         </div>
 
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-          <span className="text-xs text-slate-500 uppercase font-semibold">Standard Weightage</span>
+          <span className="text-xs text-slate-500 font-semibold">Standard Weightage</span>
           <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-            +4 / -1
+            +{weightageStats.modeMarks} / -{weightageStats.modeNegMarks}
           </p>
-          <span className="text-[11px] text-slate-500">Marks per standard item</span>
+          <span className="text-[11px] text-slate-500">
+            Avg {weightageStats.avgMarks} pts per item
+          </span>
         </div>
 
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-          <span className="text-xs text-slate-500 uppercase font-semibold">Active In R1 Pool</span>
+          <span className="text-xs text-slate-500 font-semibold">Assigned To Quizzes</span>
           <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
-            100% Active
+            {assignedCount} / {normalizedQuestions.length}
           </p>
-          <span className="text-[11px] text-slate-500">Anti-cheat seeded order</span>
+          <span className="text-[11px] text-slate-500">
+            {unassignedCount} available in reserve
+          </span>
         </div>
       </div>
 
@@ -513,7 +709,7 @@ export const QuizQuestionBankManager: React.FC = () => {
             <select
               value={categoryFilter}
               onChange={e => setCategoryFilter(e.target.value)}
-              className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+              className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
             >
               <option value="all">All Domain Categories</option>
               {categories.map(cat => (
@@ -524,12 +720,22 @@ export const QuizQuestionBankManager: React.FC = () => {
             <select
               value={difficultyFilter}
               onChange={e => setDifficultyFilter(e.target.value)}
-              className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+              className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
             >
               <option value="all">All Difficulties</option>
               <option value="Easy">Easy</option>
               <option value="Medium">Medium</option>
               <option value="Hard">Hard</option>
+            </select>
+
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value as any)}
+              className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer font-medium"
+            >
+              <option value="active">Active Bank ({activeCount})</option>
+              <option value="archived">Archived ({archivedCount})</option>
+              <option value="all">All Questions ({normalizedQuestions.length})</option>
             </select>
           </div>
         </div>
@@ -537,99 +743,218 @@ export const QuizQuestionBankManager: React.FC = () => {
 
       {/* Questions Listing */}
       <div className="space-y-4">
-        {filteredQuestions.map((q, idx) => (
-          <div
-            key={q.id}
-            id={`question-card-${q.id}`}
-            className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-2 flex-1">
-                {/* Meta Badges */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                    Q{idx + 1} • {q.id}
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                    {q.category}
-                  </span>
-                  <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                    q.difficulty === 'Easy'
-                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-                      : q.difficulty === 'Hard'
-                      ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
-                      : 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
-                  }`}>
-                    {q.difficulty}
-                  </span>
-                  <span className="text-xs text-slate-500 font-medium">
-                    +{q.marks || 4} / -{q.negativeMarks ?? 1} marks
-                  </span>
-                </div>
-
-                {/* Question Text */}
-                <h3 className="text-base font-semibold text-slate-900 dark:text-white leading-snug">
-                  {q.questionText}
-                </h3>
-
-                {/* 4 Options Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
-                  {q.options.map((opt, optIdx) => {
-                    const isCorrect = optIdx === q.correctOptionIndex;
-                    const letter = String.fromCharCode(65 + optIdx);
-                    return (
-                      <div
-                        key={optIdx}
-                        className={`flex items-start gap-2.5 p-2.5 rounded-lg text-xs font-medium border transition-colors ${
-                          isCorrect
-                            ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
-                            : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
-                        }`}
-                      >
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                          isCorrect
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                        }`}>
-                          {letter}
-                        </span>
-                        <span className="flex-1 leading-relaxed">{opt}</span>
-                        {isCorrect && (
-                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider shrink-0">
-                            Correct
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Explanation */}
-                {q.explanation && (
-                  <div className="pt-2 text-xs text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-800/30 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">Explanation: </span>
-                    {q.explanation}
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  onClick={() => {
-                    if (confirm('Are you sure you want to delete this question?')) {
-                      deleteQuestion(q.id);
-                    }
-                  }}
-                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                  title="Delete Question"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+        {filteredQuestions.length === 0 ? (
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 p-12 text-center">
+            <BookOpen className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+              No questions found matching your filter criteria
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              Try switching filters, changing search terms, or checking the Archived status.
+            </p>
           </div>
-        ))}
+        ) : (
+          filteredQuestions.map((q, idx) => {
+            const correctIdx = q.correctAnswerIndex !== undefined ? q.correctAnswerIndex : (q as any).correctOptionIndex;
+            const assignedProgramsCount = questionProgramMap[q.id] || 0;
+            const shortId = q.id.startsWith('q_') ? `#${q.id.split('_').pop() || q.id.slice(-4)}` : `#${q.id}`;
+
+            return (
+              <div
+                key={q.id}
+                id={`question-card-${q.id}`}
+                className={`bg-white dark:bg-slate-900 rounded-xl border p-5 shadow-sm transition-all ${q.isActive === false
+                  ? 'border-slate-200 dark:border-slate-800 opacity-75 bg-slate-50/50 dark:bg-slate-900/50'
+                  : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                  }`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-2 flex-1">
+                    {/* Meta Badges */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Clean ID with click-to-copy */}
+                      <span
+                        onClick={() => {
+                          if (navigator?.clipboard?.writeText) {
+                            navigator.clipboard.writeText(q.id);
+                            setCopiedId(q.id);
+                            setTimeout(() => setCopiedId(null), 1500);
+                          }
+                        }}
+                        className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center gap-1.5 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                        title={`Database ID: ${q.id} (Click to copy)`}
+                      >
+                        <span>Q{idx + 1} • {shortId}</span>
+                        {copiedId === q.id ? (
+                          <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3 h-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 opacity-60 hover:opacity-100" />
+                        )}
+                      </span>
+
+                      {/* Informative Deployment Status Chip */}
+                      {q.isActive === false ? (
+                        <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-300 dark:border-slate-700 flex items-center gap-1">
+                          <Archive className="w-3 h-3" />
+                          Archived
+                        </span>
+                      ) : assignedProgramsCount > 0 ? (
+                        <div className="relative inline-block">
+                          <span
+                            onMouseEnter={() => setHoveredAssignedQuestionId(q.id)}
+                            onMouseLeave={() => setHoveredAssignedQuestionId(null)}
+                            className="px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors shadow-2xs"
+                          >
+                            <Layers className="w-3 h-3" />
+                            <span>Assigned ({assignedProgramsCount})</span>
+                          </span>
+
+                          {/* Hover Popover Portal Card */}
+                          {hoveredAssignedQuestionId === q.id && (questionAssignedProgramsMap[q.id]?.length || 0) > 0 && (
+                            <div
+                              onMouseEnter={() => setHoveredAssignedQuestionId(q.id)}
+                              onMouseLeave={() => setHoveredAssignedQuestionId(null)}
+                              className="absolute left-0 top-full mt-1.5 z-50 w-72 sm:w-80 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl animate-in fade-in zoom-in-95 duration-150"
+                            >
+                              <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800 text-[11px]">
+                                <span className="font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                                  <Layers className="w-3.5 h-3.5" />
+                                  <span>Assigned to {assignedProgramsCount} Quiz(zes)</span>
+                                </span>
+                              </div>
+
+                              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                {questionAssignedProgramsMap[q.id]?.map(({ program, order }) => (
+                                  <div
+                                    key={program.id}
+                                    className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 text-xs space-y-1 hover:border-indigo-300 dark:hover:border-indigo-700 transition"
+                                  >
+                                    <div className="flex items-start justify-between gap-1.5">
+                                      <span className="font-bold text-slate-800 dark:text-slate-100 line-clamp-1">
+                                        {program.title}
+                                      </span>
+                                      <span className="shrink-0 px-1.5 py-0.2 rounded text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/70 text-indigo-700 dark:text-indigo-300">
+                                        #{order} of {program.totalQuestions || 25}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                                      <span className="truncate">{program.category || 'General'}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                          In Reserve
+                        </span>
+                      )}
+
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                        {q.category}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-xs font-bold ${q.difficulty === 'Easy'
+                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                        : q.difficulty === 'Hard'
+                          ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                          : 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
+                        }`}>
+                        {q.difficulty}
+                      </span>
+                      <span className="text-xs text-slate-500 font-medium">
+                        +{q.marks || 4} / -{q.negativeMarks ?? 1} marks
+                      </span>
+                    </div>
+
+                    {/* Exhibit / Caselet Snippet if present */}
+                    {q.caseletSnippet && (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-800 dark:text-amber-200 text-xs font-mono leading-relaxed">
+                        <strong className="font-bold text-amber-700 dark:text-amber-300">EXHIBIT / CASELET:</strong> {q.caseletSnippet}
+                      </div>
+                    )}
+
+                    {/* Question Text */}
+                    <h3 className="text-base font-semibold text-slate-900 dark:text-white leading-snug">
+                      {q.questionText}
+                    </h3>
+
+                    {/* 4 Options Grid with Correct Answer Clearly Highlighted */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                      {q.options.map((opt, optIdx) => {
+                        const isCorrect = optIdx === correctIdx;
+                        const letter = String.fromCharCode(65 + optIdx);
+                        return (
+                          <div
+                            key={optIdx}
+                            className={`flex items-start gap-2.5 p-2.5 rounded-lg text-xs font-medium border transition-colors ${isCorrect
+                              ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-400/30'
+                              : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
+                              }`}
+                          >
+                            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${isCorrect
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                              }`}>
+                              {letter}
+                            </span>
+                            <span className="flex-1 leading-relaxed">{opt}</span>
+                            {isCorrect && (
+                              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
+                                <Check className="w-3 h-3" />
+                                Correct
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Explanation */}
+                    {q.explanation && (
+                      <div className="pt-2 text-xs text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-800/30 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Explanation: </span>
+                        {q.explanation}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Buttons: Soft Delete (Archive) / Restore */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {q.isActive === false ? (
+                      <button
+                        onClick={() => {
+                          updateQuestion(q.id, { isActive: true });
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-emerald-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                        title="Restore Question to Active Bank"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          const count = assignedProgramsCount;
+                          const msg = count > 0
+                            ? `Archive this question? It is currently assigned to ${count} quiz program(s). Archiving will soft-delete it from the active question bank while keeping existing quizzes working. You can restore it anytime.`
+                            : 'Archive this question? It will be soft-deleted from the active bank and can be restored anytime from the Archived filter.';
+                          if (confirm(msg)) {
+                            updateQuestion(q.id, { isActive: false });
+                          }
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                        title="Archive Question (Soft Delete)"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* ========================================================================= */}
@@ -689,22 +1014,20 @@ export const QuizQuestionBankManager: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setImportMode('upload')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                    importMode === 'upload'
-                      ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold'
-                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                  }`}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${importMode === 'upload'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    }`}
                 >
                   📁 Upload File (.csv, .tsv, .txt)
                 </button>
                 <button
                   type="button"
                   onClick={() => setImportMode('paste')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                    importMode === 'paste'
-                      ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold'
-                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                  }`}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${importMode === 'paste'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    }`}
                 >
                   📋 Paste CSV / Spreadsheet Content
                 </button>
@@ -900,106 +1223,93 @@ export const QuizQuestionBankManager: React.FC = () => {
       {/* MODAL: CREATE SINGLE QUESTION */}
       {/* ========================================================================= */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400">
-                  <Plus className="w-5 h-5" />
+                <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400">
+                  <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
                     Add New Quiz Question
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Define prompt, 4 choices, correct answer, and explanation
+                    Define prompt, 4 choices, correct answer, and evaluation parameters
                   </p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
+                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateSingle} className="space-y-4 pt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Domain Track / Category *
+            <form onSubmit={handleCreateSingle} className="space-y-4">
+              {/* Optional Caselet Snippet / Business Exhibit */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Caselet Snippet / Business Exhibit (Optional)
                   </label>
-                  <select
-                    value={singleForm.category}
-                    onChange={e => setSingleForm(prev => ({ ...prev, category: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="Business Strategy">Business Strategy</option>
-                    <option value="Financial Acumen">Financial Acumen</option>
-                    <option value="Marketing & Consumer">Marketing & Consumer</option>
-                    <option value="Operations & Supply Chain">Operations & Supply Chain</option>
-                    <option value="Technology & Analytics">Technology & Analytics</option>
-                    <option value="General Management">General Management</option>
-                  </select>
+                  <span className="text-[11px] text-slate-400">
+                    Scenario, balance sheet, or financial data excerpt
+                  </span>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Difficulty Level *
-                  </label>
-                  <select
-                    value={singleForm.difficulty}
-                    onChange={e => setSingleForm(prev => ({ ...prev, difficulty: e.target.value as any }))}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="Easy">Easy</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Hard">Hard</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Question Prompt *
-                </label>
                 <textarea
-                  rows={3}
-                  required
-                  value={singleForm.questionText}
-                  onChange={e => setSingleForm(prev => ({ ...prev, questionText: e.target.value }))}
-                  placeholder="Enter the complete business case or theoretical problem statement..."
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                  rows={2}
+                  value={singleForm.caseletSnippet}
+                  onChange={e => setSingleForm(prev => ({ ...prev, caseletSnippet: e.target.value }))}
+                  placeholder="e.g. Portfolio: ₹450 Cr | Vulnerability: Crop-loss dependent rural borrowers | Current Gross NPA: 3.4%"
+                  className="w-full text-xs p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
-              {/* 4 Options */}
-              <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Multiple Choice Options & Select Correct Answer *
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Question Text *
                 </label>
-                {singleForm.options.map((opt, idx) => {
+                <textarea
+                  rows={2}
+                  required
+                  value={singleForm.questionText}
+                  onChange={e => setSingleForm(prev => ({ ...prev, questionText: e.target.value }))}
+                  placeholder="e.g. Which strategic framework assesses competitive intensity through five industry forces?"
+                  className="w-full text-xs p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* 4 Options in 2x2 Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[0, 1, 2, 3].map(idx => {
                   const letter = String.fromCharCode(65 + idx);
-                  const isChecked = singleForm.correctOptionIndex === idx;
+                  const isChecked = singleForm.correctAnswerIndex === idx;
                   return (
-                    <div key={idx} className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSingleForm(prev => ({ ...prev, correctOptionIndex: idx }))}
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-colors ${
-                          isChecked
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
-                        }`}
-                        title="Click to mark as correct answer"
-                      >
-                        {letter}
-                      </button>
+                    <div key={idx} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                          Option {letter}
+                        </label>
+                        <label className="flex items-center gap-1.5 text-[11px] text-slate-500 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400">
+                          <input
+                            type="radio"
+                            name="correctOption"
+                            checked={isChecked}
+                            onChange={() => setSingleForm(prev => ({ ...prev, correctAnswerIndex: idx }))}
+                            className="text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          />
+                          <span className={isChecked ? 'text-indigo-600 dark:text-indigo-400 font-bold' : ''}>
+                            Correct Answer
+                          </span>
+                        </label>
+                      </div>
                       <input
                         type="text"
                         required
-                        value={opt}
+                        value={singleForm.options[idx] || ''}
                         onChange={e => {
                           const val = e.target.value;
                           setSingleForm(prev => {
@@ -1008,54 +1318,81 @@ export const QuizQuestionBankManager: React.FC = () => {
                             return { ...prev, options: newOpts };
                           });
                         }}
-                        placeholder={`Option ${letter} text...`}
-                        className={`flex-1 px-3 py-2 text-sm rounded-lg border bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 ${
-                          isChecked
-                            ? 'border-emerald-500 bg-emerald-50/20'
-                            : 'border-slate-200 dark:border-slate-700'
-                        }`}
+                        placeholder={`Enter Option ${letter}...`}
+                        className={`w-full text-xs p-2.5 rounded-lg border bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 ${isChecked
+                          ? 'border-indigo-400 dark:border-indigo-600 ring-1 ring-indigo-400/30'
+                          : 'border-slate-200 dark:border-slate-700'
+                          }`}
                       />
-                      {isChecked && (
-                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                          ✓ Correct
-                        </span>
-                      )}
                     </div>
                   );
                 })}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Marks Awarded
+              {/* Metadata 4-Column Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    Marks
                   </label>
                   <input
                     type="number"
-                    min="1"
-                    max="10"
+                    min="0.5"
+                    step="0.5"
                     value={singleForm.marks}
                     onChange={e => setSingleForm(prev => ({ ...prev, marks: Number(e.target.value) }))}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                    className="w-full text-xs p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                     Negative Penalty
                   </label>
                   <input
                     type="number"
                     min="0"
-                    max="5"
+                    step="0.25"
                     value={singleForm.negativeMarks}
                     onChange={e => setSingleForm(prev => ({ ...prev, negativeMarks: Number(e.target.value) }))}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                    className="w-full text-xs p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
                   />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    Difficulty
+                  </label>
+                  <select
+                    value={singleForm.difficulty}
+                    onChange={e => setSingleForm(prev => ({ ...prev, difficulty: e.target.value as any }))}
+                    className="w-full text-xs p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                  >
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    Category
+                  </label>
+                  <select
+                    value={singleForm.category}
+                    onChange={e => setSingleForm(prev => ({ ...prev, category: e.target.value }))}
+                    className="w-full text-xs p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer truncate"
+                  >
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {/* Explanation Textarea */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                   Answer Explanation & Rationale
                 </label>
                 <textarea
@@ -1063,23 +1400,25 @@ export const QuizQuestionBankManager: React.FC = () => {
                   value={singleForm.explanation}
                   onChange={e => setSingleForm(prev => ({ ...prev, explanation: e.target.value }))}
                   placeholder="Provide reference or mathematical steps explaining why this option is correct..."
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                  className="w-full text-xs p-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+              {/* Modal Footer */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors"
+                  className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors cursor-pointer flex items-center gap-1.5"
                 >
-                  Save Question
+                  <Check className="w-4 h-4" />
+                  <span>Save Question</span>
                 </button>
               </div>
             </form>
