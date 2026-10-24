@@ -272,22 +272,32 @@ export const StudentDashboard: React.FC = () => {
     currentTeam?.paymentStatus === 'PAID' ||
     currentUser.hasPaidR1R2;
 
-  const totalAmountVal =
-    liveRegistration?.totalPayable ??
-    (liveRegistration as any)?.total_amount ??
-    currentTeam?.totalAmount ??
-    (candidateCount * (config?.feeR1R2 || 200));
-
   const isComplimentary =
-    totalAmountVal === 0 ||
+    liveRegistration?.totalPayable === 0 ||
+    (liveRegistration as any)?.total_amount === 0 ||
+    currentTeam?.totalAmount === 0 ||
     liveRegistration?.paymentMethod === 'EARLY_BIRD_COMPLIMENTARY' ||
     (liveRegistration as any)?.payment_method === 'EARLY_BIRD_COMPLIMENTARY' ||
     liveRegistration?.tierId === 'early_bird_free' ||
-    (liveRegistration?.feeTier && liveRegistration.feeTier.includes('Early Bird'));
+    Boolean(liveRegistration?.feeTier && /early\s*bird/i.test(liveRegistration.feeTier)) ||
+    Boolean((liveRegistration as any)?.fee_tier && /early\s*bird/i.test((liveRegistration as any).fee_tier)) ||
+    Boolean(liveRegistration?.tierLabel && /early\s*bird/i.test(liveRegistration.tierLabel)) ||
+    Boolean(currentTeam?.feeTier && /early\s*bird/i.test(currentTeam.feeTier)) ||
+    Boolean((liveRegistration as any)?.raw_data?.fee_tier && /early\s*bird/i.test((liveRegistration as any).raw_data.fee_tier)) ||
+    Boolean((liveRegistration as any)?.raw_data?.tierLabel && /early\s*bird/i.test((liveRegistration as any).raw_data.tierLabel));
+
+  const totalAmountVal = isComplimentary
+    ? 0
+    : (
+        liveRegistration?.totalPayable ??
+        (liveRegistration as any)?.total_amount ??
+        currentTeam?.totalAmount ??
+        (candidateCount * (config?.feeR1R2 || 200))
+      );
 
   const formattedTotalAmount = isComplimentary ? '₹0' : `₹${Number(totalAmountVal || 0).toLocaleString('en-IN')}`;
   const perStudentAmount = isComplimentary ? 0 : (candidateCount > 0 ? Math.round(totalAmountVal / candidateCount) : 0);
-  const formattedPerStudentAmount = `₹${perStudentAmount.toLocaleString('en-IN')}`;
+  const formattedPerStudentAmount = isComplimentary ? '₹0' : `₹${perStudentAmount.toLocaleString('en-IN')}`;
 
   // Dynamic Schedule from competition_config
   const formattedR3Date = config?.r3RegionalStartDate

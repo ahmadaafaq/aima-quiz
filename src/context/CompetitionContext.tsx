@@ -507,7 +507,12 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       (reg as any).total_amount === 0 ||
       reg.paymentMethod === 'EARLY_BIRD_COMPLIMENTARY' ||
       (reg as any).payment_method === 'EARLY_BIRD_COMPLIMENTARY' ||
-      reg.tierId === 'early_bird_free';
+      reg.tierId === 'early_bird_free' ||
+      Boolean(reg.tierLabel && /early\s*bird/i.test(reg.tierLabel)) ||
+      Boolean((reg as any).fee_tier && /early\s*bird/i.test((reg as any).fee_tier)) ||
+      Boolean((reg as any).feeTier && /early\s*bird/i.test((reg as any).feeTier)) ||
+      Boolean((reg as any).raw_data?.fee_tier && /early\s*bird/i.test((reg as any).raw_data.fee_tier)) ||
+      Boolean((reg as any).raw_data?.tierLabel && /early\s*bird/i.test((reg as any).raw_data.tierLabel));
     const totalAmount = isComplimentary
       ? 0
       : (reg.totalPayable ?? (reg as any).total_amount ?? (reg.ratePerPersonOrPackage ? Math.round(reg.ratePerPersonOrPackage * participantCount) : participantCount * 200));
