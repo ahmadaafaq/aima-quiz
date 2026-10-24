@@ -3,11 +3,16 @@ import { useCompetition } from '../../context/CompetitionContext';
 import { QuizTaker } from './QuizTaker';
 import { CaseDeckSubmitter } from './CaseDeckSubmitter';
 import { DocRequirementInfo } from '../common/DocRequirementInfo';
+import { CasePresentationInstructionsModal } from './CasePresentationInstructionsModal';
+import { ParticipantLoginPage } from '../auth/ParticipantLoginPage';
+import { OFFICIAL_CASE_TRACKS, OFFICIAL_INSTRUCTION_DOCS, CaseTrack } from '../../data/caseTracks';
 import {
   AlertCircle,
+  AlertTriangle,
   Award,
   BookOpen,
   Building,
+  Building2,
   CheckCircle2,
   ChevronRight,
   Clock,
@@ -24,7 +29,6 @@ import {
   MapPin,
   Plus,
   QrCode,
-  Scale,
   Send,
   Shield,
   ShieldCheck,
@@ -40,10 +44,13 @@ import {
 
 export const StudentDashboard: React.FC = () => {
   const {
+    config,
     currentUser,
     currentTeam,
     createTeam,
     joinTeam,
+    addTeamMember,
+    selectTeamTrack,
     makePayment,
     quizAttempts,
     caseSubmissions,
@@ -52,16 +59,39 @@ export const StudentDashboard: React.FC = () => {
     setActiveCertificateModal,
     setActiveSupportModal,
     setActiveVerifierModal,
+    participantUser,
+    loginParticipantSession,
   } = useCompetition();
+
+  // Enforce real participant authentication - no mock data in production
+  if (!participantUser) {
+    return <ParticipantLoginPage onLoginSuccess={(part) => loginParticipantSession(part)} />;
+  }
 
   const [activeSubView, setActiveSubView] = useState<'overview' | 'quiz' | 'case_deck'>('overview');
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
   const [showJoinTeamModal, setShowJoinTeamModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [downloadedAdmitCard, setDownloadedAdmitCard] = useState(false);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [addMemberName, setAddMemberName] = useState('');
+  const [addMemberEmail, setAddMemberEmail] = useState('');
+  const [addMemberMobile, setAddMemberMobile] = useState('');
+  const [addMemberEnrolment, setAddMemberEnrolment] = useState('');
+  const [isAddingMember, setIsAddingMember] = useState(false);
+  const [addMemberFeedback, setAddMemberFeedback] = useState<{ success: boolean; message: string; password?: string } | null>(null);
+  const [copiedPass, setCopiedPass] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
   const [joinInviteCode, setJoinInviteCode] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
+
+  // Round 2 Track Selection & Offline Presentation Instructions
+  const [showInstructionsModal, setShowInstructionsModal] = useState(false);
+  const [selectedTrackForModal, setSelectedTrackForModal] = useState<CaseTrack | undefined>(undefined);
+  const [candidateTrackId, setCandidateTrackId] = useState<string>(
+    currentTeam?.selectedTrackId || currentUser.selectedTrackId || 'operations'
+  );
+  const [isChangingTrack, setIsChangingTrack] = useState(false);
+  const [trackLockSuccessMsg, setTrackLockSuccessMsg] = useState<string | null>(null);
 
   // Payment simulated methods
   const [payMethod, setPayMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
@@ -98,9 +128,59 @@ export const StudentDashboard: React.FC = () => {
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const handleDownloadHallTicket = () => {
-    setDownloadedAdmitCard(true);
-    setTimeout(() => setDownloadedAdmitCard(false), 3500);
+  const handleAddMemberSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addMemberName.trim() || !addMemberEmail.trim()) {
+      setAddMemberFeedback({ success: false, message: 'Please provide both full name and email address.' });
+      return;
+    }
+    setIsAddingMember(true);
+    setAddMemberFeedback(null);
+    try {
+      const res = await addTeamMember({
+        name: addMemberName.trim(),
+        email: addMemberEmail.trim(),
+        mobile: addMemberMobile.trim() || undefined,
+        enrolmentNumber: addMemberEnrolment.trim() || undefined,
+      });
+      setAddMemberFeedback(res);
+      if (res.success) {
+        setAddMemberName('');
+        setAddMemberEmail('');
+        setAddMemberMobile('');
+        setAddMemberEnrolment('');
+      }
+    } catch (err: any) {
+      setAddMemberFeedback({ success: false, message: err?.message || 'Failed to add member to team.' });
+    } finally {
+      setIsAddingMember(false);
+    }
+  };
+
+  const isResultsPublishedR1 = Boolean(config?.isResultsPublishedR1 ?? config?.isPublicResultsPublished ?? true);
+  const hasPassedR1 = Boolean(
+    currentUser.qualificationStatus?.r1Qualified ||
+    currentTeam?.r1Qualified ||
+    (myAttempt && (myAttempt.score || 0) >= (config?.r1CutoffScore || 60)) ||
+    myAttempt?.passed
+  );
+  const activeConfirmedTrackId = currentTeam?.selectedTrackId || currentUser.selectedTrackId;
+  const activeConfirmedTrack = OFFICIAL_CASE_TRACKS.find(t => t.id === activeConfirmedTrackId);
+
+  const handleConfirmTrack = () => {
+    const res = selectTeamTrack(candidateTrackId);
+    if (res.success) {
+      setTrackLockSuccessMsg(res.message);
+      setIsChangingTrack(false);
+      setTimeout(() => setTrackLockSuccessMsg(null), 6000);
+    }
+  };
+
+  const handleOpenInstructions = (track?: CaseTrack) => {
+    setSelectedTrackForModal(
+      track || activeConfirmedTrack || OFFICIAL_CASE_TRACKS.find(t => t.id === candidateTrackId) || OFFICIAL_CASE_TRACKS[1]
+    );
+    setShowInstructionsModal(true);
   };
 
   const handlePayment = (e: React.FormEvent) => {
@@ -295,8 +375,18 @@ export const StudentDashboard: React.FC = () => {
               <DocRequirementInfo specKey="team_formation" variant="icon" size="xs" colorTheme="slate" />
             </div>
             {currentTeam && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 border border-emerald-300">
-                {currentTeam.isLocked ? 'Roster Locked' : 'Open for Roster'}
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                currentTeam.members.length >= (currentTeam.maxMembers || 4)
+                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                  : currentTeam.isLocked
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-700'
+                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700'
+              }`}>
+                {currentTeam.members.length >= (currentTeam.maxMembers || 4)
+                  ? `Roster Complete (${currentTeam.members.length}/${currentTeam.maxMembers || 4})`
+                  : currentTeam.isLocked
+                    ? 'Roster Locked'
+                    : `Open for Member (${currentTeam.members.length}/${currentTeam.maxMembers || 4})`}
               </span>
             )}
           </div>
@@ -403,6 +493,31 @@ export const StudentDashboard: React.FC = () => {
                 </div>
               </div>
 
+              {/* Add 4th Member Action if Roster < 4 */}
+              {currentTeam.members.length < (currentTeam.maxMembers || 4) && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 dark:text-amber-300">
+                      <UserPlus className="w-4 h-4 text-amber-600" />
+                      <span>Roster Open ({currentTeam.members.length}/4 Members)</span>
+                    </div>
+                    <p className="text-[11px] text-amber-800/90 dark:text-amber-400/90 mt-0.5 leading-snug">
+                      Competition rules permit up to 4 members per team. You can add another teammate now.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setAddMemberFeedback(null);
+                      setShowAddMemberModal(true);
+                    }}
+                    className="w-full sm:w-auto px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add {currentTeam.members.length === 3 ? '4th' : 'Additional'} Member</span>
+                  </button>
+                </div>
+              )}
+
               <div className="pt-2 text-[11px] text-slate-500 leading-relaxed">
                 {isInstituteReg
                   ? `Institutional Cohort: ${currentTeam.members.length} student nominees registered by ${currentTeam.instituteName || 'Institution'}. Fees settled at institutional level.`
@@ -472,113 +587,271 @@ export const StudentDashboard: React.FC = () => {
             </button>
           </div>
 
-          {/* Round 2 Card */}
-          <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
+          {/* Round 2 Card: Track Selection & Offline Jury Presentation Workflow */}
+          {trackLockSuccessMsg && (
+            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center justify-between gap-2 animate-in fade-in">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold px-2.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20">
-                  ROUND 2
-                </span>
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  PPT/PDF Strategy Deck Submission
-                </span>
-                <DocRequirementInfo specKey="round2_case" variant="icon" size="xs" colorTheme="blue" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{trackLockSuccessMsg}</span>
               </div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                GreenGrid Mobility Case Study
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {myCaseSubmission
-                  ? `Uploaded: ${myCaseSubmission.fileName} (${myCaseSubmission.slideCount} slides) • Status: ${myCaseSubmission.status}`
-                  : 'Download official dossier, build 12-slide strategy solution & run Gemini AI pre-scan.'}
-              </p>
-            </div>
-
-            <button
-              onClick={() => setActiveSubView('case_deck')}
-              className="shrink-0 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-            >
-              <FileCheck className="w-3.5 h-3.5" />
-              <span>{myCaseSubmission ? 'Update Case Deck' : 'Submit Case Deck'}</span>
-            </button>
-          </div>
-
-          {/* Round 3 Regional Hub Card */}
-          <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold px-2.5 py-0.5 rounded bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20">
-                  ROUND 3
-                </span>
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Regional Live Round (Face-to-Face)
-                </span>
-                <DocRequirementInfo specKey="round3_regional" variant="icon" size="xs" colorTheme="purple" />
-              </div>
-              <span className="text-xs font-bold text-purple-600 dark:text-purple-400">
-                {hubInfo?.name || 'Regional Hub'}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Host Campus</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200">{hubInfo?.hostInstitute || 'Regional Host Campus'}</span>
-                <span className="text-[10px] text-slate-500 block">{hubInfo?.city || 'Regional Center'}</span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Defense Schedule</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200">Nov 14, 2026</span>
-                <span className="text-[10px] text-slate-500 block">Slot: 10:30 AM (Auditorium 2)</span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Admit Card (QR-Secured)</span>
-                <button
-                  onClick={handleDownloadHallTicket}
-                  className="font-bold text-amber-700 dark:text-amber-400 hover:underline flex items-center gap-1 mt-0.5 cursor-pointer"
-                >
-                  <Download className="w-3 h-3" /> Download Hall Ticket
-                </button>
-                {downloadedAdmitCard && (
-                  <span className="text-[10px] text-emerald-600 font-semibold block mt-1 animate-in fade-in">
-                    ✓ Hall ticket generated ({currentUser.name} - Hub Room B-204)
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Round 4 National Finale Card */}
-          <div className="p-5 rounded-3xl bg-gradient-to-r from-amber-500/10 via-amber-600/10 to-amber-500/5 border border-amber-500/30 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold px-2.5 py-0.5 rounded bg-amber-500 text-slate-950 font-extrabold">
-                  ROUND 4
-                </span>
-                <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  National Policy & Boardroom Grand Finale
-                </span>
-              </div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                National Winner • Cash Prize ₹5,00,000
-              </h3>
-              <p className="text-xs text-slate-600 dark:text-slate-400">
-                Presented before AIMA President & Union Ministry of Commerce delegations.
-              </p>
-            </div>
-
-            {myCert && (
               <button
-                onClick={() => setActiveCertificateModal(myCert)}
-                className="shrink-0 px-4 py-2.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-xl text-xs font-bold hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer shadow-sm"
+                onClick={() => setTrackLockSuccessMsg(null)}
+                className="text-xs text-emerald-600 hover:underline cursor-pointer"
               >
-                <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                <span>View National Trophy Credential</span>
+                Dismiss
               </button>
-            )}
-          </div>
+            </div>
+          )}
+
+          {isResultsPublishedR1 && hasPassedR1 ? (
+            !activeConfirmedTrackId || isChangingTrack ? (
+              /* State A: Must Step to Proceed - Select 1 of 6 Tracks */
+              <div className="p-6 sm:p-7 rounded-3xl bg-white dark:bg-slate-900 border-2 border-amber-500 ring-4 ring-amber-500/20 shadow-xl shadow-amber-500/10 space-y-6 animate-in fade-in transition-all">
+                {/* Highlighted Header Banner */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="flex h-3 w-3 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                    </span>
+                    <span className="text-xs font-black px-3 py-1 rounded-full bg-amber-500 text-slate-950 uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      MANDATORY ACTION REQUIRED • SELECT TRACK TO PROCEED
+                    </span>
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                      ✓ Round 1 Quiz Passed ({currentUser.quizScore || myAttempt?.score || 92}%)
+                    </span>
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20">
+                      ROUND 2 OFFLINE PRESENTATION
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-1">
+                    <div>
+                      <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100">
+                        Choose Your Official Functional Track for Round 2
+                      </h3>
+                      <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-3xl leading-relaxed mt-1">
+                        Round 1 results are published! Round 2 will happen <strong>OFFLINE</strong> inside the <strong>AIMA Venue Hall</strong> directly in front of certified Jury members. You <strong>MUST</strong> choose exactly 1 of the 6 functional tracks below to proceed with your presentation slot.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                      <button
+                        onClick={() => handleOpenInstructions()}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span>View Instructions & Rubric</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 6 Tracks Interactive Grid */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+                      Select 1 of 6 Functional Tracks (Click card to select)
+                    </span>
+                    <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                      {OFFICIAL_CASE_TRACKS.find(t => t.id === candidateTrackId)?.badge} Selected
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {OFFICIAL_CASE_TRACKS.map(track => {
+                      const isSelected = candidateTrackId === track.id;
+                      return (
+                        <div
+                          key={track.id}
+                          onClick={() => setCandidateTrackId(track.id)}
+                          className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between text-left relative ${
+                            isSelected
+                              ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-950/40 ring-2 ring-blue-500/30 shadow-md'
+                              : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${track.accentColor.badgeBg} ${track.accentColor.badgeText}`}>
+                                {track.badge}
+                              </span>
+                              <div
+                                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                                  isSelected
+                                    ? 'border-blue-600 bg-blue-600 text-white'
+                                    : 'border-slate-300 dark:border-slate-600'
+                                }`}
+                              >
+                                {isSelected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                              </div>
+                            </div>
+
+                            <div>
+                              <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">
+                                {track.name}
+                              </h4>
+                              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
+                                {track.tagline}
+                              </p>
+                            </div>
+
+                            <p className="text-xs text-slate-600 dark:text-slate-300 leading-snug">
+                              {track.competenciesTested}
+                            </p>
+
+                            {track.masterCaseTitle && (
+                              <div className="p-2 rounded-lg bg-blue-100/60 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800/60 text-[10px] text-blue-800 dark:text-blue-300 font-semibold">
+                                📌 <strong>Case:</strong> {track.masterCaseTitle}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[11px]">
+                            <span className="text-slate-400">
+                              3 Focus Questions (12 Slides)
+                            </span>
+                            <span className={`font-bold ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500'}`}>
+                              {isSelected ? '✓ Selected' : 'Click to Pick'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Highlighted Confirmation Action Bar */}
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                      Chosen Track: {OFFICIAL_CASE_TRACKS.find(t => t.id === candidateTrackId)?.name}
+                    </span>
+                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                      Click below to lock your selection and unlock the offline jury case presentation schedule at AIMA venue.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isChangingTrack && activeConfirmedTrackId && (
+                      <button
+                        onClick={() => setIsChangingTrack(false)}
+                        className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    )}
+
+                    <button
+                      onClick={handleConfirmTrack}
+                      className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-slate-950" />
+                      <span>Confirm & Lock Selected Track</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 flex items-start gap-2">
+                  <Building2 className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Offline Jury Workflow:</strong> Round 2 presentation happens in person at the AIMA Hall in front of Jury members. The Jury evaluates your presentation on official physical scorecards, which the Admin enters into the admin panel against each team to determine the winners.
+                  </span>
+                </div>
+              </div>
+            ) : (
+              /* State B: Track Confirmed - Display Confirmed State, Venue Details, Scorecard Workflow */
+              <div className="p-6 sm:p-7 rounded-3xl bg-white dark:bg-slate-900 border-2 border-emerald-500/40 shadow-sm space-y-6 animate-in fade-in">
+                {/* Header with Confirmed Track */}
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        ROUND 2 TRACK CONFIRMED
+                      </span>
+                      <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-blue-600 text-white">
+                        {activeConfirmedTrack?.badge || 'TRACK CONFIRMED'}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-500">
+                        Offline Case Presentation at AIMA Venue
+                      </span>
+                    </div>
+
+                    <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100">
+                      {activeConfirmedTrack?.name}
+                    </h3>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                      {activeConfirmedTrack?.description}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => setIsChangingTrack(true)}
+                      className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs transition-colors cursor-pointer"
+                    >
+                      Change Track
+                    </button>
+
+                    <button
+                      onClick={() => handleOpenInstructions(activeConfirmedTrack)}
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>View Instructions & Rubric</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bottom Action Footer */}
+                <div className="pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="text-[11px] text-slate-500 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    <span>Instructions file: <code className="font-mono text-slate-700 dark:text-slate-300">Participnat Instruction for Case presentation.docx</code></span>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => handleOpenInstructions(activeConfirmedTrack)}
+                      className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer"
+                    >
+                      View Instructions & Rubric Modal
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          ) : (
+            /* State C: Pending Qualification / Round 1 Results */
+            <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 opacity-75">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700">
+                    ROUND 2 LOCKED
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500">
+                    Offline Case Presentation (6 Tracks)
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-slate-700 dark:text-slate-300">
+                  AIMA Hall Offline Case Defense
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Requires completing Round 1 Quiz with a passing score (≥65%) and publication of Round 1 results to unlock track selection.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setActiveSubView('quiz')}
+                className="shrink-0 px-4 py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-500" />
+                <span>Complete Round 1 Quiz First</span>
+              </button>
+            </div>
+          )}
 
         </div>
 
@@ -647,6 +920,187 @@ export const StudentDashboard: React.FC = () => {
                 Join Team
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Team Member Modal */}
+      {showAddMemberModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                    Add Team Member
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Team: <strong className="text-amber-600">{currentTeam?.name}</strong> (Allowed 3-4 Members)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAddMemberModal(false);
+                  setAddMemberFeedback(null);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {addMemberFeedback?.success ? (
+              <div className="space-y-4 py-2">
+                <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-bold text-sm">
+                    <CheckCircle2 className="w-5 h-5 shrink-0" />
+                    <span>Teammate Successfully Added!</span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    {addMemberFeedback.message}
+                  </p>
+                </div>
+
+                {addMemberFeedback.password && (
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                    <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Teammate Login Credentials
+                    </div>
+                    <div className="flex items-center justify-between text-xs bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <div>
+                        <span className="text-slate-400 text-[10px] block">Default Temporary Password:</span>
+                        <code className="font-mono font-bold text-amber-600 dark:text-amber-400 text-sm">
+                          {addMemberFeedback.password}
+                        </code>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (addMemberFeedback.password) {
+                            navigator.clipboard.writeText(addMemberFeedback.password);
+                            setCopiedPass(true);
+                            setTimeout(() => setCopiedPass(false), 2000);
+                          }
+                        }}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs rounded-lg font-semibold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>{copiedPass ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Share this credential with your new teammate so they can log in using their email and this password.
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddMemberModal(false);
+                    setAddMemberFeedback(null);
+                  }}
+                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleAddMemberSubmit} className="space-y-4">
+                {addMemberFeedback && !addMemberFeedback.success && (
+                  <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{addMemberFeedback.message}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Full Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={addMemberName}
+                    onChange={e => setAddMemberName(e.target.value)}
+                    placeholder="e.g. Rahul Sharma"
+                    className="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Email Address <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={addMemberEmail}
+                    onChange={e => setAddMemberEmail(e.target.value)}
+                    placeholder="e.g. rahul.sharma@institution.edu.in"
+                    className="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">This email will be used for quiz login & official certificates.</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Mobile / WhatsApp
+                    </label>
+                    <input
+                      type="tel"
+                      value={addMemberMobile}
+                      onChange={e => setAddMemberMobile(e.target.value)}
+                      placeholder="e.g. 9876543210"
+                      className="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Roll / Enrolment No
+                    </label>
+                    <input
+                      type="text"
+                      value={addMemberEnrolment}
+                      onChange={e => setAddMemberEnrolment(e.target.value)}
+                      placeholder="e.g. MBA2026-042"
+                      className="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddMemberModal(false)}
+                    className="px-4 py-2.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-800 font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isAddingMember}
+                    className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {isAddingMember ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Registering Member...</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-3.5 h-3.5" />
+                        <span>Confirm & Add Teammate</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -727,6 +1181,13 @@ export const StudentDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Official Case Presentation Instructions Modal (.docx content) */}
+      <CasePresentationInstructionsModal
+        isOpen={showInstructionsModal}
+        onClose={() => setShowInstructionsModal(false)}
+        selectedTrack={selectedTrackForModal}
+      />
 
     </div>
   );

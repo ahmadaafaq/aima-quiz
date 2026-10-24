@@ -33,6 +33,9 @@ import {
   fetchRegistrationByNumber,
   fetchParticipantsByRegistration,
   getLocalRegistrationsCache,
+  saveParticipantTrackSelection,
+  saveJuryScorecardToDb,
+  addMemberToRegistrationInSupabase,
 } from '../lib/supabase';
 import {
   INITIAL_CONFIG,
@@ -55,6 +58,7 @@ import {
   MOCK_OFFLINE_ROUND_RESULTS,
   MOCK_CSR_EMAIL_LOGS,
 } from '../data/mockData';
+import { OFFICIAL_CASE_TRACKS } from '../data/caseTracks';
 
 interface CompetitionContextType {
   theme: 'light' | 'dark';
@@ -81,8 +85,18 @@ interface CompetitionContextType {
   currentTeam: Team | undefined;
   createTeam: (name: string, preferredHub?: RegionHubId) => { success: boolean; message: string; team?: Team };
   joinTeam: (inviteCode: string) => { success: boolean; message: string };
+  addTeamMember: (memberData: {
+    name: string;
+    email: string;
+    mobile?: string;
+    enrolmentNumber?: string;
+    program?: string;
+    semester?: string;
+    gender?: string;
+  }) => Promise<{ success: boolean; message: string; password?: string }>;
   leaveTeam: () => void;
   lockTeam: (teamId: string) => void;
+  selectTeamTrack: (trackId: string) => { success: boolean; message: string };
   requestDeadlineExtension: (teamId: string, requestData: {
     reasonCategory: 'Academic/Exam Clash' | 'Medical Emergency' | 'Technical/Hardware Issue' | 'Faculty/Mentor Review Delay' | 'Other';
     reasonDetails: string;
@@ -170,9 +184,9 @@ interface CompetitionContextType {
   updateSponsor: (id: string, sponsor: Partial<CorporateSponsor>) => void;
   deleteSponsor: (id: string) => void;
   
-  // Offline Rounds 3 & 4 Results Management
+  // Offline Rounds 2, 3 & 4 Results Management
   offlineRoundResults: OfflineRoundResult[];
-  recordOfflineResultsBulk: (round: 'round_3' | 'round_4', results: Array<Omit<OfflineRoundResult, 'id' | 'uploadedAt'>>) => { success: boolean; count: number };
+  recordOfflineResultsBulk: (round: 'round_2' | 'round_3' | 'round_4', results: Array<Omit<OfflineRoundResult, 'id' | 'uploadedAt'>>) => { success: boolean; count: number };
   updateOfflineResult: (id: string, updates: Partial<OfflineRoundResult>) => void;
   deleteOfflineResult: (id: string) => void;
   
@@ -351,6 +365,14 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   function buildUserProfileFromParticipant(participant: SupabaseParticipantRow): UserProfile {
     const userId = 'participant_' + participant.email.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const teamId = 'team_participant_' + participant.registration_number;
+
+    const cachedReg = getLocalRegistrationsCache().find(r => r.registrationNumber === participant.registration_number);
+    const rawData = (cachedReg as any)?.raw_data || {};
+    const nominee = (rawData.nominees || []).find((n: any) => n.email?.toLowerCase().trim() === participant.email?.toLowerCase().trim());
+    const selectedTrackId = (cachedReg as any)?.selectedTrackId || rawData.selectedTrackId || nominee?.selectedTrackId;
+    const selectedTrackName = (cachedReg as any)?.selectedTrackName || rawData.selectedTrackName || nominee?.selectedTrackName;
+    const trackSelectedAt = (cachedReg as any)?.trackSelectedAt || rawData.trackSelectedAt || nominee?.trackSelectedAt;
+
     return {
       id: userId,
       name: participant.name,
@@ -378,6 +400,9 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       isTeamLeader: participant.is_team_leader,
       quizScore: 0,
       quizCompleted: false,
+      selectedTrackId,
+      selectedTrackName,
+      trackSelectedAt,
     };
   }
 
@@ -439,6 +464,14 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     const leaderMember = teamMembers.find((m) => m.isLeader) || teamMembers[0];
 
+    const rawData = (reg as any).raw_data || {};
+    const participantNominee = (rawData.nominees || []).find(
+      (n: any) => participant && n.email && n.email.toLowerCase().trim() === participant.email.toLowerCase().trim()
+    );
+    const selectedTrackId = (reg as any).selectedTrackId || rawData.selectedTrackId || participantNominee?.selectedTrackId;
+    const selectedTrackName = (reg as any).selectedTrackName || rawData.selectedTrackName || participantNominee?.selectedTrackName;
+    const trackSelectedAt = (reg as any).trackSelectedAt || rawData.trackSelectedAt || participantNominee?.trackSelectedAt;
+
     return {
       id: teamId,
       name: reg.teamName || (reg.organizationName ? `${reg.organizationName} Team` : 'Case League Team'),
@@ -447,7 +480,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       leaderName: leaderMember?.name || participant?.name || 'Team Leader',
       instituteName: reg.organizationName || participant?.institute_name || '',
       members: teamMembers,
-      isLocked: isPaid,
+      isLocked: teamMembers.length >= 4 || Boolean(rawData.isLocked || (reg as any).isLocked),
       createdAt: reg.createdAt || new Date().toISOString(),
       assignedHub: 'north' as any,
       paymentStatus: reg.paymentStatus,
@@ -459,6 +492,9 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       gstAmount: reg.gstAmount || Math.round(totalAmount - totalAmount / 1.18),
       participantCount: participantCount,
       maxMembers: Math.max(participantCount, 4),
+      selectedTrackId,
+      selectedTrackName,
+      trackSelectedAt,
     };
   }
 
@@ -508,7 +544,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
             roleInTeam: initialParticipant.is_team_leader ? 'Team Leader' : 'Member',
           },
         ],
-        isLocked: true,
+        isLocked: false,
         createdAt: initialParticipant.created_at || new Date().toISOString(),
         assignedHub: 'north' as any,
         paymentStatus: 'PAID',
@@ -565,6 +601,9 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
           ...prev,
           teamId,
           hasPaidR1R2: reg.paymentStatus === 'PAID',
+          selectedTrackId: synTeam.selectedTrackId,
+          selectedTrackName: synTeam.selectedTrackName,
+          trackSelectedAt: synTeam.trackSelectedAt,
         }));
         return;
       }
@@ -592,7 +631,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
           leaderName: leader?.name || participant.name,
           instituteName: participant.institute_name,
           members: teamMembers,
-          isLocked: true,
+          isLocked: teamMembers.length >= 4,
           createdAt: participant.created_at || new Date().toISOString(),
           assignedHub: 'north' as any,
           paymentStatus: 'PAID',
@@ -864,6 +903,30 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         if (!isMounted) return;
         if (res.registrations && res.registrations.length >= 0) {
           setCsrRegistrations(res.registrations);
+
+          // Extract saved offline jury results from Supabase registrations raw_data
+          const savedOfflineResults: OfflineRoundResult[] = [];
+          res.registrations.forEach(r => {
+            const raw = (r as any).raw_data || {};
+            if (Array.isArray(raw.offlineRoundResults)) {
+              savedOfflineResults.push(...raw.offlineRoundResults);
+            }
+          });
+          if (savedOfflineResults.length > 0) {
+            setOfflineRoundResults(prev => {
+              const ids = new Set(savedOfflineResults.map(s => s.id));
+              return [...savedOfflineResults, ...prev.filter(p => !ids.has(p.id))];
+            });
+          }
+
+          // Build real teams from Supabase registrations
+          if (res.registrations.length > 0) {
+            const realTeams = res.registrations.map(r => buildSyntheticTeamFromReg(r));
+            setTeams(prev => {
+              const realIds = new Set(realTeams.map(t => t.id));
+              return [...realTeams, ...prev.filter(t => !realIds.has(t.id))];
+            });
+          }
         }
       })
       .catch((err) => {
@@ -1026,13 +1089,13 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (!found) {
       return { success: false, message: 'Invalid team invitation code. Please verify with your team leader.' };
     }
-    if (found.isLocked) {
-      return { success: false, message: 'Team roster has been locked by the leader or admin.' };
-    }
     if (found.members.length >= 4) {
       return { success: false, message: 'Team is already at maximum capacity (4 members).' };
     }
-    if (found.members.some(m => m.studentId === currentUser.id)) {
+    if (found.isLocked && found.members.length >= 4) {
+      return { success: false, message: 'Team roster has been locked by the leader or admin.' };
+    }
+    if (found.members.some(m => m.studentId === currentUser.id || m.email?.toLowerCase().trim() === currentUser.email?.toLowerCase().trim())) {
       return { success: false, message: 'You are already a member of this team.' };
     }
 
@@ -1051,11 +1114,98 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       },
     ];
 
-    const updatedTeam = { ...found, members: updatedMembers };
+    const isNowLocked = updatedMembers.length >= 4;
+    const updatedTeam = { ...found, members: updatedMembers, isLocked: isNowLocked };
     setTeams(prev => prev.map(t => (t.id === found.id ? updatedTeam : t)));
     updateUserProfile({ teamId: found.id, isTeamLeader: false, role: 'team_member', assignedHub: found.assignedHub });
     addAuditLog('Team Joined', 'Team', `Joined team "${found.name}" via code ${inviteCode}`);
+
+    // If joining an official AIMA registration cohort, persist to Supabase
+    if (found.inviteCode && found.inviteCode.startsWith('AIMA-CL26-')) {
+      addMemberToRegistrationInSupabase(found.inviteCode, {
+        name: currentUser.name,
+        email: currentUser.email,
+        mobile: currentUser.mobile,
+        enrolmentNumber: currentUser.enrolmentNumber,
+        program: currentUser.programme,
+        semester: currentUser.yearSemester,
+      }).catch(err => console.warn('Sync joined member to Supabase notice:', err));
+    }
+
     return { success: true, message: `Successfully joined team "${found.name}"!` };
+  };
+
+  const addTeamMember = async (
+    memberData: {
+      name: string;
+      email: string;
+      mobile?: string;
+      enrolmentNumber?: string;
+      program?: string;
+      semester?: string;
+      gender?: string;
+    }
+  ): Promise<{ success: boolean; message: string; password?: string }> => {
+    const targetTeam = userTeam;
+    if (!targetTeam) {
+      return { success: false, message: 'No active team found to add member to.' };
+    }
+    if (targetTeam.members.length >= 4) {
+      return { success: false, message: 'Team already has the maximum capacity of 4 members.' };
+    }
+
+    const regNum =
+      participantUser?.registration_number ||
+      targetTeam.inviteCode ||
+      (targetTeam as any).registrationNumber ||
+      '';
+
+    const res = await addMemberToRegistrationInSupabase(regNum, memberData);
+    if (!res.success || !res.member) {
+      return { success: false, message: res.error || 'Failed to add team member to database.' };
+    }
+
+    const newTeamMember: TeamMember = {
+      studentId: 'participant_' + memberData.email.replace(/[^a-z0-9]/gi, '_').toLowerCase(),
+      name: memberData.name.trim(),
+      email: memberData.email.toLowerCase().trim(),
+      mobile: memberData.mobile || '',
+      institute: targetTeam.instituteName,
+      isLeader: false,
+      hasPaid: true,
+      acceptedDeclaration: true,
+      roleInTeam: 'Team Member',
+      paymentLabel: 'Nominated Member',
+      paymentStatus: 'PAID',
+    };
+
+    const updatedMembers = [...targetTeam.members, newTeamMember];
+    const isNowLocked = updatedMembers.length >= 4;
+
+    setTeams(prev =>
+      prev.map(t =>
+        t.id === targetTeam.id
+          ? {
+              ...t,
+              members: updatedMembers,
+              participantCount: updatedMembers.length,
+              isLocked: isNowLocked,
+            }
+          : t
+      )
+    );
+
+    addAuditLog(
+      'Team Member Added',
+      'Team',
+      `Added 4th member ${memberData.name} (${memberData.email}) to team "${targetTeam.name}" (${regNum}).`
+    );
+
+    return {
+      success: true,
+      message: `Teammate ${memberData.name} successfully added to Team ${targetTeam.name}!`,
+      password: res.password,
+    };
   };
 
   const leaveTeam = () => {
@@ -1088,6 +1238,57 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const lockTeam = (teamId: string) => {
     setTeams(prev => prev.map(t => (t.id === teamId ? { ...t, isLocked: true } : t)));
     addAuditLog('Team Locked', 'Team', `Roster locked for team ID ${teamId}`);
+  };
+
+  const selectTeamTrack = (trackId: string): { success: boolean; message: string } => {
+    const track = OFFICIAL_CASE_TRACKS.find(t => t.id === trackId);
+    if (!track) {
+      return { success: false, message: 'Invalid track selected. Please select one of the 6 official tracks.' };
+    }
+
+    const now = new Date().toISOString();
+
+    if (userTeam) {
+      setTeams(prev =>
+        prev.map(t =>
+          t.id === userTeam.id
+            ? { ...t, selectedTrackId: track.id, selectedTrackName: track.name, trackSelectedAt: now }
+            : t
+        )
+      );
+    }
+
+    updateUserProfile({
+      selectedTrackId: track.id,
+      selectedTrackName: track.name,
+      trackSelectedAt: now,
+    });
+
+    addAuditLog(
+      'Track Selected',
+      'Team',
+      `Participant/Team selected Track ${track.trackNumber}: "${track.name}" for Round 2 offline presentation at AIMA venue.`
+    );
+
+    // Save track selection to Supabase database (and update on change)
+    const regNum =
+      participantUser?.registration_number ||
+      (userTeam as any)?.inviteCode ||
+      (userTeam as any)?.registrationNumber ||
+      currentUser.institutionId?.replace('inst_participant_', '') ||
+      currentUser.institution ||
+      '';
+    const email = participantUser?.email || currentUser.email || '';
+    if (regNum || email) {
+      saveParticipantTrackSelection(regNum, email, track.id, track.name).catch((err) => {
+        console.warn('Could not persist track selection to Supabase:', err);
+      });
+    }
+
+    return {
+      success: true,
+      message: `Track "${track.name}" confirmed successfully! You are now qualified to proceed with your offline case presentation at the AIMA venue.`,
+    };
   };
 
   const requestDeadlineExtension = (
@@ -1704,7 +1905,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
 
   const recordOfflineResultsBulk = (
-    round: 'round_3' | 'round_4',
+    round: 'round_2' | 'round_3' | 'round_4',
     newResults: Array<Omit<OfflineRoundResult, 'id' | 'uploadedAt'>>
   ): { success: boolean; count: number } => {
     const timestamp = new Date().toISOString();
@@ -1726,7 +1927,14 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const res = created.find(c => c.teamId === t.id);
         if (!res) return t;
 
-        if (round === 'round_3') {
+        if (round === 'round_2') {
+          return {
+            ...t,
+            r2AverageScore: res.aggregateScore,
+            r2Rank: res.rank,
+            r2Qualified: res.qualifiedNextRound,
+          };
+        } else if (round === 'round_3') {
           return {
             ...t,
             r3AttendanceVerified: res.attendanceVerified,
@@ -1750,10 +1958,32 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       })
     );
 
+    // Persist each jury scorecard to Supabase DB against that team/participant
+    created.forEach(scorecard => {
+      saveJuryScorecardToDb({
+        teamId: scorecard.teamId,
+        teamName: scorecard.teamName,
+        instituteName: scorecard.instituteName,
+        round: scorecard.round,
+        trackId: scorecard.trackId,
+        trackName: scorecard.trackName,
+        offlineQuizScore: scorecard.offlineQuizScore,
+        livePresentationScore: scorecard.livePresentationScore,
+        qaDefenseScore: scorecard.qaDefenseScore || 0,
+        aggregateScore: scorecard.aggregateScore,
+        rank: scorecard.rank,
+        attendanceVerified: scorecard.attendanceVerified,
+        qualifiedNextRound: scorecard.qualifiedNextRound,
+        award: scorecard.award,
+        notes: scorecard.notes,
+        evaluatedBy: scorecard.evaluatedBy,
+      }).catch(err => console.warn('Error saving jury scorecard to DB:', err));
+    });
+
     addAuditLog(
       'Offline Results Uploaded',
       'Results',
-      `Admin bulk recorded offline scores for ${created.length} teams in ${round === 'round_3' ? 'Round 3 (Regional Live)' : 'Round 4 (National Grand Finale)'}.`
+      `Admin recorded offline jury scores for ${created.length} teams in ${round === 'round_2' ? 'Round 2 (Offline Presentation at AIMA Venue)' : round === 'round_3' ? 'Round 3 (Regional Live)' : 'Round 4 (National Grand Finale)'}.`
     );
 
     return { success: true, count: created.length };
@@ -1769,7 +1999,14 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setTeams(tList =>
           tList.map(t => {
             if (t.id !== updated.teamId) return t;
-            if (updated.round === 'round_3') {
+            if (updated.round === 'round_2') {
+              return {
+                ...t,
+                r2AverageScore: updated.aggregateScore,
+                r2Rank: updated.rank,
+                r2Qualified: updated.qualifiedNextRound,
+              };
+            } else if (updated.round === 'round_3') {
               return {
                 ...t,
                 r3AttendanceVerified: updated.attendanceVerified,
@@ -1792,6 +2029,26 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
             }
           })
         );
+
+        // Persist updated jury scorecard to DB
+        saveJuryScorecardToDb({
+          teamId: updated.teamId,
+          teamName: updated.teamName,
+          instituteName: updated.instituteName,
+          round: updated.round,
+          trackId: updated.trackId,
+          trackName: updated.trackName,
+          offlineQuizScore: updated.offlineQuizScore,
+          livePresentationScore: updated.livePresentationScore,
+          qaDefenseScore: updated.qaDefenseScore || 0,
+          aggregateScore: updated.aggregateScore,
+          rank: updated.rank,
+          attendanceVerified: updated.attendanceVerified,
+          qualifiedNextRound: updated.qualifiedNextRound,
+          award: updated.award,
+          notes: updated.notes,
+          evaluatedBy: updated.evaluatedBy,
+        }).catch(err => console.warn('Error updating jury scorecard in DB:', err));
 
         return updated;
       })
@@ -2583,8 +2840,10 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         currentTeam: userTeam,
         createTeam,
         joinTeam,
+        addTeamMember,
         leaveTeam,
         lockTeam,
+        selectTeamTrack,
         requestDeadlineExtension,
         reviewDeadlineExtension,
         updateTeamDeadline,

@@ -46,7 +46,7 @@ export const OfflineRoundsManager: React.FC = () => {
     teams,
   } = useCompetition();
 
-  const [activeRoundTab, setActiveRoundTab] = useState<'all' | 'round_3' | 'round_4'>('all');
+  const [activeRoundTab, setActiveRoundTab] = useState<'all' | 'round_2' | 'round_3' | 'round_4'>('all');
   const [selectedHub, setSelectedHub] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [qualificationFilter, setQualificationFilter] = useState<'all' | 'qualified' | 'champion' | 'attendance_verified'>('all');
@@ -58,8 +58,8 @@ export const OfflineRoundsManager: React.FC = () => {
 
   // Form State for Manual Entry / Edit
   const [formTeamId, setFormTeamId] = useState('');
-  const [formRound, setFormRound] = useState<'round_3' | 'round_4'>('round_3');
-  const [formHubName, setFormHubName] = useState('Southern Regional Hub (IIM Bangalore)');
+  const [formRound, setFormRound] = useState<'round_2' | 'round_3' | 'round_4'>('round_2');
+  const [formHubName, setFormHubName] = useState('AIMA Hall / Centralized Arena');
   const [formQuizScore, setFormQuizScore] = useState<number>(45);
   const [formPresentationScore, setFormPresentationScore] = useState<number>(44);
   const [formQaScore, setFormQaScore] = useState<number>(9);
@@ -70,7 +70,7 @@ export const OfflineRoundsManager: React.FC = () => {
 
   // Bulk Upload File State
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadRound, setUploadRound] = useState<'round_3' | 'round_4'>('round_3');
+  const [uploadRound, setUploadRound] = useState<'round_2' | 'round_3' | 'round_4'>('round_2');
   const [isProcessingUpload, setIsProcessingUpload] = useState(false);
 
   // Filtered results
@@ -92,6 +92,7 @@ export const OfflineRoundsManager: React.FC = () => {
   });
 
   // Calculate statistics
+  const r2Results = offlineRoundResults.filter(r => r.round === 'round_2');
   const r3Results = offlineRoundResults.filter(r => r.round === 'round_3');
   const r4Results = offlineRoundResults.filter(r => r.round === 'round_4');
 
@@ -367,6 +368,16 @@ export const OfflineRoundsManager: React.FC = () => {
               All Offline Rounds ({offlineRoundResults.length})
             </button>
             <button
+              onClick={() => setActiveRoundTab('round_2')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeRoundTab === 'round_2'
+                  ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              Round 2: AIMA Offline Defense ({r2Results.length})
+            </button>
+            <button
               onClick={() => setActiveRoundTab('round_3')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeRoundTab === 'round_3'
@@ -604,7 +615,20 @@ export const OfflineRoundsManager: React.FC = () => {
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                 Target Competition Stage:
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setUploadRound('round_2')}
+                  className={`p-3 rounded-xl border text-left cursor-pointer transition-colors ${
+                    uploadRound === 'round_2'
+                      ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/30 text-blue-900 dark:text-blue-200'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  <span className="font-bold text-xs block">Round 2: Offline Case</span>
+                  <span className="text-[10px] text-slate-500 block mt-0.5">AIMA Venue Hall jury defense across 6 tracks</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setUploadRound('round_3')}
@@ -614,8 +638,8 @@ export const OfflineRoundsManager: React.FC = () => {
                       : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                   }`}
                 >
-                  <span className="font-bold text-xs block">Round 3: Regional Live Hubs</span>
-                  <span className="text-[10px] text-slate-500 block mt-0.5">Live PPT defense + Offline quiz (IIMB, FMS, IIMC, JBIMS, IIFM)</span>
+                  <span className="font-bold text-xs block">Round 3: Regional Hubs</span>
+                  <span className="text-[10px] text-slate-500 block mt-0.5">Live PPT defense + Offline quiz</span>
                 </button>
 
                 <button
@@ -628,7 +652,7 @@ export const OfflineRoundsManager: React.FC = () => {
                   }`}
                 >
                   <span className="font-bold text-xs block">Round 4: Grand Finale</span>
-                  <span className="text-[10px] text-slate-500 block mt-0.5">National Boardroom Presentation at AIMA HQ New Delhi</span>
+                  <span className="text-[10px] text-slate-500 block mt-0.5">National Finale at AIMA HQ New Delhi</span>
                 </button>
               </div>
             </div>
@@ -738,6 +762,7 @@ export const OfflineRoundsManager: React.FC = () => {
                     disabled={!!editingResult}
                     className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                   >
+                    <option value="round_2">Round 2: Offline Case Defense (AIMA Hall)</option>
                     <option value="round_3">Round 3: Regional Live Hub</option>
                     <option value="round_4">Round 4: National Grand Finale</option>
                   </select>

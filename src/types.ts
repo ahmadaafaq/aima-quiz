@@ -70,6 +70,11 @@ export interface UserProfile {
     r4Finalist: boolean;
     r4Winner?: 'winner' | 'first_runner_up' | 'second_runner_up' | 'special_award';
   };
+  
+  // Track Selection for Round 2 Offline Presentation
+  selectedTrackId?: string;
+  selectedTrackName?: string;
+  trackSelectedAt?: string;
 }
 
 export interface TeamMember {
@@ -110,7 +115,9 @@ export interface DeadlineExtensionRequest {
 
 export interface OfflineRoundResult {
   id: string;
-  round: 'round_3' | 'round_4';
+  round: 'round_2' | 'round_3' | 'round_4';
+  trackId?: string;
+  trackName?: string;
   teamId: string;
   teamName: string;
   instituteName: string;
@@ -154,6 +161,11 @@ export interface Team {
   gstAmount?: number;
   participantCount?: number;
   maxMembers?: number;
+  
+  // Track Selection for Round 2 Offline Presentation
+  selectedTrackId?: string;
+  selectedTrackName?: string;
+  trackSelectedAt?: string;
   
   // Round 2 Deadlines & Extension Requests
   submissionDeadline?: string;
@@ -541,6 +553,7 @@ export interface CompetitionConfig {
   isResultsLockedR3: boolean;
   isResultsLockedR4: boolean;
   isPublicResultsPublished: boolean;
+  isResultsPublishedR1?: boolean;
 }
 
 export interface CSRBootcampNominee {

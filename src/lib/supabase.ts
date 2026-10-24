@@ -564,6 +564,302 @@ export async function updateRegistrationPaymentInSupabase(
   }
 }
 
+/**
+ * Save / Update Participant Selected Track in Supabase database
+ */
+export async function saveParticipantTrackSelection(
+  registrationNumber: string,
+  email: string,
+  trackId: string,
+  trackName: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    let existingQuery = supabase.from('registrations').select('*');
+    if (registrationNumber) {
+      existingQuery = existingQuery.eq('registration_number', registrationNumber);
+    } else if (email) {
+      existingQuery = existingQuery.eq('coordinator_email', email.toLowerCase().trim());
+    }
+
+    const { data: existingRows, error: fetchErr } = await existingQuery;
+
+    if (fetchErr) {
+      console.warn('Error fetching registration for track update:', fetchErr.message);
+    }
+
+    const existing = existingRows?.[0];
+    const now = new Date().toISOString();
+    const rawData = existing?.raw_data || {};
+
+    const updatedNominees = (rawData.nominees || []).map((n: any) => {
+      if (n.email && n.email.toLowerCase().trim() === email.toLowerCase().trim()) {
+        return {
+          ...n,
+          selectedTrackId: trackId,
+          selectedTrackName: trackName,
+          trackSelectedAt: now,
+        };
+      }
+      return n;
+    });
+
+    const updatedRaw = {
+      ...rawData,
+      selectedTrackId: trackId,
+      selectedTrackName: trackName,
+      trackSelectedAt: now,
+      nominees: updatedNominees,
+    };
+
+    if (existing) {
+      const { error: updErr } = await supabase
+        .from('registrations')
+        .update({ raw_data: updatedRaw })
+        .eq('id', existing.id);
+
+      if (updErr) {
+        console.warn('Supabase track update error:', updErr.message);
+      }
+    }
+
+    // Update local cache
+    const cached = getLocalRegistrationsCache();
+    const updated = cached.map((r) => {
+      if (r.registrationNumber === registrationNumber) {
+        return {
+          ...r,
+          selectedTrackId: trackId,
+          selectedTrackName: trackName,
+          trackSelectedAt: now,
+          raw_data: updatedRaw,
+        } as any;
+      }
+      return r;
+    });
+    saveLocalRegistrationCache(updated);
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('Error saving participant track in Supabase:', err);
+    return { success: false, error: err?.message };
+  }
+}
+
+/**
+ * Save / Update Jury Scorecard in Supabase database against team / participant
+ */
+export async function saveJuryScorecardToDb(scorecard: {
+  teamId: string;
+  registrationNumber?: string;
+  teamName: string;
+  instituteName: string;
+  round: 'round_2' | 'round_3' | 'round_4';
+  trackId?: string;
+  trackName?: string;
+  offlineQuizScore: number;
+  livePresentationScore: number;
+  qaDefenseScore: number;
+  aggregateScore: number;
+  rank: number;
+  attendanceVerified: boolean;
+  qualifiedNextRound?: boolean;
+  award?: string;
+  notes?: string;
+  evaluatedBy?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const regNum = scorecard.registrationNumber || scorecard.teamId.replace('team_participant_', '').replace('team_', '');
+    const { data: existingRows } = await supabase
+      .from('registrations')
+      .select('*')
+      .or(`registration_number.eq.${regNum},team_name.eq.${scorecard.teamName}`);
+
+    const existing = existingRows?.[0];
+    const now = new Date().toISOString();
+    const rawData = existing?.raw_data || {};
+    const prevOfflineResults = rawData.offlineRoundResults || [];
+
+    const updatedItem = {
+      ...scorecard,
+      id: `off_${scorecard.round}_${Date.now()}`,
+      registrationNumber: regNum,
+      uploadedAt: now,
+    };
+
+    const existingIdx = prevOfflineResults.findIndex(
+      (r: any) => r.round === scorecard.round && (r.teamId === scorecard.teamId || r.registrationNumber === regNum)
+    );
+
+    let newOfflineResults;
+    if (existingIdx >= 0) {
+      newOfflineResults = [...prevOfflineResults];
+      newOfflineResults[existingIdx] = updatedItem;
+    } else {
+      newOfflineResults = [...prevOfflineResults, updatedItem];
+    }
+
+    const updatedRaw = {
+      ...rawData,
+      offlineRoundResults: newOfflineResults,
+      latestJuryScorecard: updatedItem,
+    };
+
+    if (existing) {
+      const { error: updErr } = await supabase
+        .from('registrations')
+        .update({ raw_data: updatedRaw })
+        .eq('id', existing.id);
+
+      if (updErr) {
+        console.warn('Supabase jury scorecard update notice:', updErr.message);
+      }
+    }
+
+    // Update local cache
+    const cached = getLocalRegistrationsCache();
+    const updated = cached.map((r) => {
+      if (r.registrationNumber === regNum || r.teamName === scorecard.teamName) {
+        return {
+          ...r,
+          offlineRoundResults: newOfflineResults,
+          raw_data: updatedRaw,
+        } as any;
+      }
+      return r;
+    });
+    saveLocalRegistrationCache(updated);
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('Error saving jury scorecard to Supabase:', err);
+    return { success: false, error: err?.message };
+  }
+}
+
+/**
+ * Add an additional team member (up to max 4) to an existing registration in Supabase
+ */
+export async function addMemberToRegistrationInSupabase(
+  registrationNumber: string,
+  newMember: {
+    name: string;
+    email: string;
+    mobile?: string;
+    enrolmentNumber?: string;
+    program?: string;
+    semester?: string;
+    gender?: string;
+  }
+): Promise<{ success: boolean; member?: any; password?: string; error?: string }> {
+  try {
+    const { data: rows, error: fetchErr } = await supabase
+      .from('registrations')
+      .select('*')
+      .eq('registration_number', registrationNumber);
+
+    if (fetchErr || !rows || rows.length === 0) {
+      return { success: false, error: 'Registration record not found for ' + registrationNumber };
+    }
+
+    const regRow = rows[0];
+    const existingNominees = regRow.nominees || [];
+    if (existingNominees.length >= 4) {
+      return { success: false, error: 'Team already has the maximum capacity of 4 members.' };
+    }
+
+    const emailClean = newMember.email.toLowerCase().trim();
+    if (existingNominees.some((n: any) => n.email && n.email.toLowerCase().trim() === emailClean)) {
+      return { success: false, error: 'A member with this email address already exists in the team.' };
+    }
+
+    const password = generateDefaultPassword(newMember.name, newMember.mobile || '');
+    const nomineeItem: any = {
+      id: `nom_tm_${existingNominees.length}_${Date.now().toString(36)}`,
+      name: newMember.name.trim(),
+      email: emailClean,
+      mobile: newMember.mobile || '',
+      enrolmentNumber: newMember.enrolmentNumber || '',
+      program: newMember.program || regRow.program || 'Management Program',
+      semester: newMember.semester || regRow.semester || 'Semester 1',
+      gender: newMember.gender || 'Other',
+      isTeamLeader: false,
+      designation: 'Team Member',
+      instituteName: regRow.institute_name,
+      password: password,
+    };
+
+    const updatedNominees = [...existingNominees, nomineeItem];
+    const rawData = regRow.raw_data || {};
+    const updatedRaw = {
+      ...rawData,
+      nominees: updatedNominees,
+      participantCount: updatedNominees.length,
+      isLocked: updatedNominees.length >= 4,
+    };
+
+    // Update registrations table
+    const { error: updErr } = await supabase
+      .from('registrations')
+      .update({
+        nominees: updatedNominees,
+        participant_count: updatedNominees.length,
+        raw_data: updatedRaw,
+      })
+      .eq('id', regRow.id);
+
+    if (updErr) {
+      console.warn('Error updating registration nominees:', updErr.message);
+    }
+
+    // Create participant account in 'participants' table so they can log in
+    const participantRow: SupabaseParticipantRow = {
+      registration_number: registrationNumber,
+      registration_mode: regRow.registration_mode || 'individual',
+      institute_name: regRow.institute_name,
+      username: emailClean,
+      email: emailClean,
+      password_hash: hashPassword(password),
+      name: nomineeItem.name,
+      mobile: nomineeItem.mobile || null,
+      program: nomineeItem.program || null,
+      semester: nomineeItem.semester || null,
+      enrolment_number: nomineeItem.enrolmentNumber || null,
+      is_team_leader: false,
+      coordinator_name: regRow.coordinator_name || null,
+      coordinator_email: regRow.coordinator_email || null,
+      created_at: new Date().toISOString(),
+    };
+
+    await supabase
+      .from('participants')
+      .upsert(participantRow, { onConflict: 'email' });
+
+    // Update local cache
+    const cached = getLocalRegistrationsCache();
+    const updatedCache = cached.map((c) => {
+      if (c.registrationNumber === registrationNumber) {
+        return {
+          ...c,
+          nominees: updatedNominees,
+          participantCount: updatedNominees.length,
+          raw_data: updatedRaw,
+        };
+      }
+      return c;
+    });
+    saveLocalRegistrationCache(updatedCache);
+
+    return {
+      success: true,
+      member: nomineeItem,
+      password,
+    };
+  } catch (err: any) {
+    console.error('Error adding member to registration:', err);
+    return { success: false, error: err?.message || 'Failed to add member' };
+  }
+}
+
 export const SUPABASE_SQL_SETUP_SCRIPT = `-- ==============================================================
 -- ALL INDIA MANAGEMENT ASSOCIATION (AIMA) - INDIA CASE LEAGUE 2026
 -- Supabase Schema for Dynamic Registrations & Participant Vault
