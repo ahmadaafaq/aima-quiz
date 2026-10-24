@@ -33,6 +33,11 @@ const TEMPLATES = {
 
 const LOGIN_URL = 'https://research.aima.in';
 
+// Sender configuration — Official institutional sender for AIMA
+export const SENDER_EMAIL    = (import.meta as any).env?.VITE_EMAIL_FROM      || 'Sjames@aima.in';
+export const SENDER_NAME     = (import.meta as any).env?.VITE_EMAIL_FROM_NAME || 'All India Management Association (AIMA)';
+export const REPLY_TO_EMAIL  = (import.meta as any).env?.VITE_EMAIL_REPLY_TO  || 'Sjames@aima.in';
+
 // Guard — silently skip if EmailJS is not configured (local dev without .env)
 function isConfigured(): boolean {
   return Boolean(SERVICE_ID && PUBLIC_KEY);
@@ -44,9 +49,16 @@ async function send(templateId: string, params: Record<string, string>): Promise
     console.info('[Email] EmailJS not configured — skipping email to:', params.to_email || '(unknown)');
     return;
   }
+  const payload = {
+    from_name:    SENDER_NAME,
+    from_email:   SENDER_EMAIL,
+    reply_to:     REPLY_TO_EMAIL,
+    sender_email: SENDER_EMAIL,
+    ...params,
+  };
   try {
-    await emailjs.send(SERVICE_ID, templateId, params, { publicKey: PUBLIC_KEY });
-    console.info('[Email] Sent to', params.to_email);
+    await emailjs.send(SERVICE_ID, templateId, payload, { publicKey: PUBLIC_KEY });
+    console.info('[Email] Sent to', params.to_email, 'from', SENDER_EMAIL);
   } catch (err) {
     // Log but never surface to the user — email is non-blocking
     console.warn('[Email] Send failed:', err);
