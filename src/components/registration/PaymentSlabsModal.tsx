@@ -16,12 +16,14 @@ interface PaymentSlabsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectTier?: (tierId: string) => void;
+  selectedTierId?: string;
 }
 
 export const PaymentSlabsModal: React.FC<PaymentSlabsModalProps> = ({
   isOpen,
   onClose,
   onSelectTier,
+  selectedTierId,
 }) => {
   if (!isOpen) return null;
 
@@ -81,59 +83,85 @@ export const PaymentSlabsModal: React.FC<PaymentSlabsModalProps> = ({
             <div className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center justify-between">
               <span>Nomination Slabs &amp; Tier Rates</span>
               <span className="text-[11px] font-semibold text-slate-500">
-                Transparent Pricing • No Hidden Costs
+                Comparative Testing • ₹200 / ₹500
               </span>
             </div>
 
             <div className="grid grid-cols-1 gap-3">
-              {FEE_TIERS.map((tier) => (
-                <div
-                  key={tier.id}
-                  className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60 hover:bg-blue-50/40 dark:hover:bg-slate-800 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
-                        {tier.label}
-                      </span>
-                      {tier.isPackage && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
-                          Institutional Pack
+              {FEE_TIERS.map((tier) => {
+                const isSelected = selectedTierId === tier.id;
+                return (
+                  <div
+                    key={tier.id}
+                    onClick={() => onSelectTier?.(tier.id)}
+                    className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs cursor-pointer ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-50/90 dark:bg-blue-950/40 ring-2 ring-blue-500/30'
+                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60 hover:bg-blue-50/40 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
+                          {tier.label}
                         </span>
+                        {tier.isPackage && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
+                            Institutional Pack
+                          </span>
+                        )}
+                        {isSelected && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-600 text-white flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> Selected
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {tier.subLabel}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between sm:justify-end gap-5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200 dark:border-slate-700">
+                      <div className="text-left sm:text-right">
+                        <span className="block text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                          Fee (Excl. GST)
+                        </span>
+                        <span className="font-mono font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-200">
+                          ₹{tier.rateExclGst.toLocaleString('en-IN')}
+                          <span className="text-[10px] font-normal text-slate-500">
+                            {tier.isPackage ? ' flat' : ' / person'}
+                          </span>
+                        </span>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="block text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+                          Fee (Incl. 18% GST)
+                        </span>
+                        <span className="font-mono font-black text-sm sm:text-base text-blue-700 dark:text-blue-300">
+                          ₹{tier.rateInclGst.toLocaleString('en-IN')}
+                          <span className="text-[10px] font-normal text-blue-600/80 dark:text-blue-400/80">
+                            {tier.isPackage ? ' flat' : ' / person'}
+                          </span>
+                        </span>
+                      </div>
+
+                      {onSelectTier && (
+                        <button
+                          type="button"
+                          className={`text-xs px-3 py-1.5 rounded-xl font-bold transition-all ${
+                            isSelected
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          {isSelected ? 'Active' : 'Choose'}
+                        </button>
                       )}
                     </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      {tier.subLabel}
-                    </p>
                   </div>
-
-                  <div className="flex items-center justify-between sm:justify-end gap-5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200 dark:border-slate-700">
-                    <div className="text-left sm:text-right">
-                      <span className="block text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                        Fee (Excl. GST)
-                      </span>
-                      <span className="font-mono font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-200">
-                        ₹{tier.rateExclGst.toLocaleString('en-IN')}
-                        <span className="text-[10px] font-normal text-slate-500">
-                          {tier.isPackage ? ' flat' : ' / person'}
-                        </span>
-                      </span>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="block text-[10px] font-semibold text-blue-600 dark:text-blue-400">
-                        Fee (Incl. 18% GST)
-                      </span>
-                      <span className="font-mono font-black text-sm sm:text-base text-blue-700 dark:text-blue-300">
-                        ₹{tier.rateInclGst.toLocaleString('en-IN')}
-                        <span className="text-[10px] font-normal text-blue-600/80 dark:text-blue-400/80">
-                          {tier.isPackage ? ' flat' : ' / person'}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

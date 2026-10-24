@@ -6,6 +6,7 @@ import { PosterHero3D } from './PosterHero3D';
 import { RulesAndTermsCard } from './RulesAndTermsCard';
 import { AimaGatewayModal } from './AimaGatewayModal';
 import { AimaInvoiceModal } from './AimaInvoiceModal';
+import { PaymentSlabsModal } from './PaymentSlabsModal';
 
 import { CSRBootcampNominee, CSRBootcampRegistration } from '../../types';
 import {
@@ -57,11 +58,19 @@ import {
 import {
   IS_EARLY_BIRD_FREE,
   PARTICIPATION_FEE_PER_PERSON,
+  COMPARATIVE_TEST_FEE_PER_PERSON,
   EARLY_BIRD_FEE_PER_PERSON,
   FEE_TIERS,
+  getInitialFeeTierId,
 } from '../../data/feeConfig';
 import { initiatePaymentRedirect } from '../../config/paymentConfig';
-export { IS_EARLY_BIRD_FREE, PARTICIPATION_FEE_PER_PERSON, EARLY_BIRD_FEE_PER_PERSON, FEE_TIERS };
+export {
+  IS_EARLY_BIRD_FREE,
+  PARTICIPATION_FEE_PER_PERSON,
+  COMPARATIVE_TEST_FEE_PER_PERSON,
+  EARLY_BIRD_FEE_PER_PERSON,
+  FEE_TIERS,
+};
 
 interface TeamMemberInput {
   id: string;
@@ -180,6 +189,8 @@ export const RegistrationPage: React.FC = () => {
   const [activeCreatedRegistration, setActiveCreatedRegistration] = useState<CSRBootcampRegistration | null>(null);
   const [showGatewayModal, setShowGatewayModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [showFeeSlabsModal, setShowFeeSlabsModal] = useState(false);
+  const [selectedFeeTierId, setSelectedFeeTierId] = useState<string>(getInitialFeeTierId);
   const [copiedLogins, setCopiedLogins] = useState(false);
 
   // Smooth scroll helper to form
@@ -195,6 +206,7 @@ export const RegistrationPage: React.FC = () => {
     setCopiedLogins(false);
     setShowGatewayModal(false);
     setShowInvoiceModal(false);
+    setShowFeeSlabsModal(false);
 
     // Track 1: Individual participant state
     setName('');
@@ -264,9 +276,10 @@ export const RegistrationPage: React.FC = () => {
     return count || 1;
   }, [regMode, isOnboardingTeam, teamMembers.length, instituteTeams]);
 
-  // Participation fee calculation with Early Bird promotional support
+  // Participation fee calculation with Early Bird promotional support & Comparative Testing (₹200 / ₹500)
   const feeCalculation = useMemo(() => {
-    const standardRate = PARTICIPATION_FEE_PER_PERSON;
+    const tier = FEE_TIERS.find((t) => t.id === selectedFeeTierId) || FEE_TIERS[0];
+    const standardRate = tier.rateInclGst;
     const standardTotal = standardRate * totalHeadcount;
     const effectiveRate = IS_EARLY_BIRD_FREE ? EARLY_BIRD_FEE_PER_PERSON : standardRate;
     const total = IS_EARLY_BIRD_FREE ? 0 : standardTotal;
@@ -274,6 +287,8 @@ export const RegistrationPage: React.FC = () => {
 
     return {
       participantCount: totalHeadcount,
+      tierId: tier.id,
+      tierLabel: tier.label,
       standardRate,
       effectiveRate,
       ratePerPerson: effectiveRate,
@@ -282,7 +297,7 @@ export const RegistrationPage: React.FC = () => {
       total,
       isEarlyBird: IS_EARLY_BIRD_FREE,
     };
-  }, [totalHeadcount]);
+  }, [totalHeadcount, selectedFeeTierId]);
 
   // Password strength check
   const passwordStrength = useMemo(() => {
@@ -858,8 +873,8 @@ export const RegistrationPage: React.FC = () => {
         mobile: coordPhone,
         designation: regMode === 'individual' ? 'Participant / Leader' : 'Faculty Coordinator',
       },
-      tierId: IS_EARLY_BIRD_FREE ? 'early_bird_free' : 'standard_per_person',
-      tierLabel: IS_EARLY_BIRD_FREE ? 'Early Bird Complimentary (₹0)' : `₹${PARTICIPATION_FEE_PER_PERSON} per participant`,
+      tierId: IS_EARLY_BIRD_FREE ? 'early_bird_free' : feeCalculation.tierId,
+      tierLabel: IS_EARLY_BIRD_FREE ? 'Early Bird Complimentary (₹0)' : `₹${feeCalculation.standardRate} per participant (${feeCalculation.tierLabel})`,
       participantCount: feeCalculation.participantCount,
       ratePerPersonOrPackage: feeCalculation.ratePerPerson,
       subtotalExclGst: feeCalculation.total,
@@ -1022,7 +1037,7 @@ export const RegistrationPage: React.FC = () => {
       {/* ============================================================== */}
       <PosterHero3D
         onScrollToForm={handleScrollToForm}
-        onOpenFeeModal={() => { }}
+        onOpenFeeModal={() => setShowFeeSlabsModal(true)}
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
@@ -2295,9 +2310,13 @@ export const RegistrationPage: React.FC = () => {
                         <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
                           Participation Fee – India Case League 2026
                         </span>
-                        {IS_EARLY_BIRD_FREE && (
+                        {IS_EARLY_BIRD_FREE ? (
                           <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black text-[9px] uppercase tracking-wider shadow-xs">
                             Early Bird Free • 100% Free
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white font-black text-[9px] uppercase tracking-wider shadow-xs">
+                            Audit &amp; Comparative QA Testing
                           </span>
                         )}
                       </div>
@@ -2309,12 +2328,12 @@ export const RegistrationPage: React.FC = () => {
                               <span>₹0 (Free)</span>
                             </h4>
                             <span className="line-through text-slate-400 dark:text-slate-500 text-sm font-semibold">
-                              ₹{PARTICIPATION_FEE_PER_PERSON} per Participant
+                              ₹{feeCalculation.standardRate} per Participant
                             </span>
                           </>
                         ) : (
                           <h4 className="text-xl font-black text-slate-900 dark:text-white">
-                            ₹{PARTICIPATION_FEE_PER_PERSON} per Participant
+                            ₹{feeCalculation.standardRate} per Participant
                           </h4>
                         )}
                       </div>
@@ -2346,6 +2365,65 @@ export const RegistrationPage: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Tier Selection for Comparative QA & Audit Testing (₹200 vs ₹500) */}
+                  {!IS_EARLY_BIRD_FREE && (
+                    <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                          Select Nomination Tier / Transaction Amount:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowFeeSlabsModal(true)}
+                          className="text-[11px] font-bold text-blue-600 hover:text-blue-500 underline cursor-pointer"
+                        >
+                          View Official Tariff Slabs
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {FEE_TIERS.map((tier) => {
+                          const isSelected = selectedFeeTierId === tier.id;
+                          return (
+                            <button
+                              key={tier.id}
+                              type="button"
+                              onClick={() => setSelectedFeeTierId(tier.id)}
+                              className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                                isSelected
+                                  ? 'bg-white dark:bg-slate-800 border-blue-600 shadow-md ring-2 ring-blue-500/20'
+                                  : 'bg-white/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                              }`}
+                            >
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <div
+                                    className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                                      isSelected
+                                        ? 'border-blue-600 bg-blue-600'
+                                        : 'border-slate-300 dark:border-slate-600'
+                                    }`}
+                                  >
+                                    {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                  </div>
+                                  <span className="font-extrabold text-xs text-slate-900 dark:text-white">
+                                    {tier.label}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 pl-5 mt-0.5">
+                                  {tier.subLabel}
+                                </p>
+                              </div>
+                              <span className="font-mono font-black text-sm text-blue-600 dark:text-blue-400 shrink-0">
+                                ₹{tier.rateInclGst}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="p-4 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-xs space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="text-slate-600 dark:text-slate-400">Rate per Participant:</span>
@@ -2353,7 +2431,7 @@ export const RegistrationPage: React.FC = () => {
                         {IS_EARLY_BIRD_FREE ? (
                           <>
                             <span className="line-through text-slate-400 text-[11px]">
-                              ₹{PARTICIPATION_FEE_PER_PERSON}
+                              ₹{feeCalculation.standardRate}
                             </span>
                             <span className="font-bold text-emerald-600 dark:text-emerald-400">
                               ₹0 / person (Free)
@@ -2361,7 +2439,7 @@ export const RegistrationPage: React.FC = () => {
                           </>
                         ) : (
                           <span className="font-bold text-slate-900 dark:text-white">
-                            ₹{PARTICIPATION_FEE_PER_PERSON} / person
+                            ₹{feeCalculation.standardRate} / person ({feeCalculation.tierLabel})
                           </span>
                         )}
                       </div>
@@ -2608,6 +2686,16 @@ export const RegistrationPage: React.FC = () => {
           isOpen={showInvoiceModal}
           onClose={() => setShowInvoiceModal(false)}
           registration={activeCreatedRegistration}
+        />
+
+        <PaymentSlabsModal
+          isOpen={showFeeSlabsModal}
+          onClose={() => setShowFeeSlabsModal(false)}
+          selectedTierId={selectedFeeTierId}
+          onSelectTier={(tierId) => {
+            setSelectedFeeTierId(tierId);
+            setShowFeeSlabsModal(false);
+          }}
         />
 
 
