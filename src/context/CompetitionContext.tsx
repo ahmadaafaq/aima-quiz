@@ -788,13 +788,34 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const refreshQuizAttempts = async () => {
     try {
       const attempts = await fetchLeaderboard();
-      if (Array.isArray(attempts)) {
-        setQuizAttempts(attempts);
-      } else {
-        setQuizAttempts([]);
+      let merged = Array.isArray(attempts) ? [...attempts] : [];
+      try {
+        const cachedStr = localStorage.getItem('aima_quiz_attempts_all');
+        if (cachedStr) {
+          const cachedAttempts: QuizAttempt[] = JSON.parse(cachedStr);
+          const existingIds = new Set(merged.map(m => m.studentId || m.userId || m.attemptId));
+          cachedAttempts.forEach(c => {
+            const key = c.studentId || c.userId || c.attemptId;
+            if (key && !existingIds.has(key)) {
+              merged.push(c);
+            }
+          });
+        }
+      } catch (e) {
+        // ignore
       }
+      setQuizAttempts(merged);
     } catch (err) {
       console.warn('refreshQuizAttempts error:', err);
+      try {
+        const cachedStr = localStorage.getItem('aima_quiz_attempts_all');
+        if (cachedStr) {
+          setQuizAttempts(JSON.parse(cachedStr));
+          return;
+        }
+      } catch (e) {
+        // ignore
+      }
       setQuizAttempts([]);
     }
   };
@@ -1864,6 +1885,16 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     };
 
     setQuizAttempts(prev => [completedAttempt, ...prev.filter(q => q.studentId !== currentUser.id && q.userId !== currentUser.id)]);
+
+    try {
+      localStorage.setItem('aima_quiz_attempt_' + currentUser.id, JSON.stringify(completedAttempt));
+      const existingHistoryStr = localStorage.getItem('aima_quiz_attempts_all');
+      const history: QuizAttempt[] = existingHistoryStr ? JSON.parse(existingHistoryStr) : [];
+      const updatedHistory = [completedAttempt, ...history.filter(a => a.studentId !== currentUser.id && a.userId !== currentUser.id && a.attemptId !== completedAttempt.attemptId)];
+      localStorage.setItem('aima_quiz_attempts_all', JSON.stringify(updatedHistory));
+    } catch (storageErr) {
+      console.warn('localStorage attempt caching notice:', storageErr);
+    }
 
     updateUserProfile({
       quizScore: resultScore,
