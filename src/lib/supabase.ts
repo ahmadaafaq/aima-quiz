@@ -92,8 +92,9 @@ export function mapAppRegToSupabaseRow(reg: CSRBootcampRegistration): SupabaseRe
   const coord = reg.coordinator;
   const participantCount = reg.participantCount || reg.nominees?.length || 1;
   const isFreeTier = (reg.subtotalExclGst === 0 && reg.totalPayable === 0) || reg.tierLabel?.includes('Early Bird');
-  const authoritativeSubtotal = isFreeTier ? 0 : participantCount * 200;
-  const authoritativeTotal = isFreeTier ? 0 : participantCount * 200;
+  const unitRate = reg.ratePerPersonOrPackage ?? ((reg.tierId as string) === 'comparative_tier' ? 500 : 200);
+  const authoritativeSubtotal = isFreeTier ? 0 : (reg.totalPayable ?? participantCount * unitRate);
+  const authoritativeTotal = isFreeTier ? 0 : (reg.totalPayable ?? participantCount * unitRate);
 
   return {
       registration_number: reg.registrationNumber,
@@ -107,7 +108,7 @@ export function mapAppRegToSupabaseRow(reg: CSRBootcampRegistration): SupabaseRe
       semester: leadNominee?.semester || null,
       enrolment_number: leadNominee?.enrolmentNumber || null,
       participant_count: participantCount,
-      fee_tier: isFreeTier ? 'Early Bird Complimentary (₹0)' : `₹200 per participant`,
+      fee_tier: isFreeTier ? 'Early Bird Complimentary (₹0)' : (reg.tierLabel || `₹${unitRate} per participant`),
       subtotal_amount: authoritativeSubtotal,
       gst_amount: 0,
       total_amount: authoritativeTotal,
