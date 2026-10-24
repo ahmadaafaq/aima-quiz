@@ -38,6 +38,14 @@ import {
   addMemberToRegistrationInSupabase,
 } from '../lib/supabase';
 import {
+  sendRegistrationConfirmation,
+  sendTeamMemberAddedEmail,
+  sendR1ResultsEmail,
+  sendFinalResultsEmail,
+  broadcastR1Results,
+  broadcastFinalResults,
+} from '../lib/emailService';
+import {
   INITIAL_CONFIG,
   ROUND_2_RUBRIC,
   ROUND_3_RUBRIC,
@@ -215,6 +223,8 @@ interface CompetitionContextType {
   setActiveVerifierModal: (show: boolean) => void;
   generateCertificate: (cert: Omit<CertificateRecord, 'id' | 'certificateNumber' | 'qrVerificationUrl'>) => CertificateRecord;
   verifyCertificateCode: (certCode: string) => CertificateRecord | undefined;
+  declareRound1Results: () => Promise<{ success: boolean; sentCount: number; message: string }>;
+  declareFinalResults: () => Promise<{ success: boolean; sentCount: number; message: string }>;
   
   // Support & Tickets
   supportTickets: SupportTicket[];
@@ -1201,6 +1211,16 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       `Added 4th member ${memberData.name} (${memberData.email}) to team "${targetTeam.name}" (${regNum}).`
     );
 
+    // Dispatch welcome email with credentials to newly added member
+    if (memberData.email) {
+      sendTeamMemberAddedEmail({
+        toName: memberData.name.trim(),
+        toEmail: memberData.email.toLowerCase().trim(),
+        teamName: targetTeam.name,
+        tempPassword: res.password || 'ICL2026@' + memberData.email.split('@')[0],
+      }).catch(err => console.warn('[Email] Failed to send team addition email:', err));
+    }
+
     return {
       success: true,
       message: `Teammate ${memberData.name} successfully added to Team ${targetTeam.name}!`,
@@ -1562,6 +1582,20 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
 
     addAuditLog('Quiz Submitted', 'Quiz', `Completed Round 1 Business Quiz with score ${scaledScore}/100 (Tab switches: ${tabSwitches})`);
+
+    // Dispatch Round 1 results email if results are currently declared/published
+    if (config.isResultsPublishedR1 || config.isPublicResultsPublished) {
+      if (currentUser.email) {
+        sendR1ResultsEmail({
+          toName: currentUser.name,
+          toEmail: currentUser.email,
+          teamName: userTeam?.name || 'Individual',
+          score: scaledScore,
+          qualified: isQualified,
+        }).catch(err => console.warn('[Email] R1 result email send failed:', err));
+      }
+    }
+
     return completedAttempt;
   };
 
@@ -2093,12 +2127,121 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     };
     setCertificates(prev => [newCert, ...prev]);
     addAuditLog('Certificate Generated', 'System', `Issued ${cert.achievement} certificate ${certNumber} to ${cert.recipientName}`);
+
+    // Dispatch final results email along with certificate link & attachment to recipient
+    if (newCert.recipientEmail) {
+      sendFinalResultsEmail({
+        toName: newCert.recipientName,
+        toEmail: newCert.recipientEmail,
+        teamName: newCert.teamName || newCert.recipientName,
+        achievement: newCert.achievement,
+        certNumber: newCert.certificateNumber,
+        certVerifyUrl: newCert.qrVerificationUrl,
+      }).catch(err => console.warn('[Email] Final certificate email error:', err));
+    }
+
     return newCert;
   };
 
   const verifyCertificateCode = (certCode: string): CertificateRecord | undefined => {
     const cleaned = certCode.trim().toUpperCase();
     return certificates.find(c => c.certificateNumber.toUpperCase() === cleaned || c.id === certCode);
+  };
+
+  const declareRound1Results = async (): Promise<{ success: boolean; sentCount: number; message: string }> => {
+    setConfig(prev => ({
+      ...prev,
+      isResultsPublishedR1: true,
+      isPublicResultsPublished: true,
+    }));
+
+    const emailList: { name: string; email: string; teamName: string; score: number; qualified: boolean }[] = [];
+    const seenEmails = new Set<string>();
+
+    teams.forEach(t => {
+      const teamScore = t.r1AvgScore || 0;
+      const isQualified = Boolean(t.r1Qualified ?? (teamScore >= config.r1CutoffScore));
+      t.members.forEach(m => {
+        if (m.email && !seenEmails.has(m.email.toLowerCase())) {
+          seenEmails.add(m.email.toLowerCase());
+          emailList.push({
+            name: m.name,
+            email: m.email,
+            teamName: t.name,
+            score: teamScore,
+            qualified: isQualified,
+          });
+        }
+      });
+    });
+
+    quizAttempts.forEach(qa => {
+      const u = users.find(usr => usr.id === qa.studentId || usr.id === qa.userId);
+      if (u?.email && !seenEmails.has(u.email.toLowerCase())) {
+        seenEmails.add(u.email.toLowerCase());
+        emailList.push({
+          name: u.name,
+          email: u.email,
+          teamName: u.teamId ? (teams.find(t => t.id === u.teamId)?.name || 'Team') : 'Individual',
+          score: qa.score,
+          qualified: qa.score >= config.r1CutoffScore,
+        });
+      }
+    });
+
+    await broadcastR1Results(emailList);
+
+    addAuditLog(
+      'Round 1 Results Declared',
+      'System',
+      `Round 1 results officially declared. Dispatched notification emails to ${emailList.length} candidate(s).`
+    );
+
+    return {
+      success: true,
+      sentCount: emailList.length,
+      message: `Round 1 results successfully declared. Sent notifications to ${emailList.length} participant(s).`,
+    };
+  };
+
+  const declareFinalResults = async (): Promise<{ success: boolean; sentCount: number; message: string }> => {
+    const list: {
+      name: string;
+      email: string;
+      teamName: string;
+      achievement: string;
+      certNumber: string;
+      certVerifyUrl: string;
+    }[] = [];
+    const seenEmails = new Set<string>();
+
+    certificates.forEach(c => {
+      if (c.recipientEmail && !seenEmails.has(c.recipientEmail.toLowerCase())) {
+        seenEmails.add(c.recipientEmail.toLowerCase());
+        list.push({
+          name: c.recipientName,
+          email: c.recipientEmail,
+          teamName: c.teamName || c.recipientName,
+          achievement: c.achievement,
+          certNumber: c.certificateNumber,
+          certVerifyUrl: c.qrVerificationUrl,
+        });
+      }
+    });
+
+    await broadcastFinalResults(list);
+
+    addAuditLog(
+      'Final Results & Certificates Declared',
+      'System',
+      `Grand Finale results declared. Dispatched official certificates to ${list.length} recipient(s).`
+    );
+
+    return {
+      success: true,
+      sentCount: list.length,
+      message: `Final results declared. Dispatched certificates to ${list.length} recipient(s).`,
+    };
   };
 
   const createSupportTicket = (
@@ -2519,6 +2662,28 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       `Registered team "${formData.teamName}" (${teamMembers.length} members) from ${formData.instituteName}. Txn: ${transactionId}, Inv: ${invoiceNumber}`
     );
 
+    // Dispatch registration confirmation email to leader and team members
+    if (formData.leaderEmail) {
+      sendRegistrationConfirmation({
+        toName: formData.leaderName,
+        toEmail: formData.leaderEmail,
+        registrationNumber: inviteCode,
+        teamName: formData.teamName,
+        instituteName: formData.instituteName,
+      }).catch(e => console.warn('[Email] Leader registration email error:', e));
+    }
+    formData.members?.forEach(m => {
+      if (m.email && m.email !== formData.leaderEmail) {
+        sendRegistrationConfirmation({
+          toName: m.name,
+          toEmail: m.email,
+          registrationNumber: inviteCode,
+          teamName: formData.teamName,
+          instituteName: formData.instituteName,
+        }).catch(e => console.warn('[Email] Member registration email error:', e));
+      }
+    });
+
     return {
       success: true,
       team: newTeam,
@@ -2623,6 +2788,17 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       `Enrolled "${formData.instituteName}" for batch of ${formData.studentBatchSize} students. Voucher: ${voucherCode}, Inv: ${invoiceNumber}`
     );
 
+    // Dispatch registration confirmation to institute coordinator
+    if (formData.coordinatorEmail) {
+      sendRegistrationConfirmation({
+        toName: formData.coordinatorName,
+        toEmail: formData.coordinatorEmail,
+        registrationNumber: voucherCode,
+        teamName: formData.instituteName,
+        instituteName: formData.instituteName,
+      }).catch(e => console.warn('[Email] Institute registration email error:', e));
+    }
+
     return {
       success: true,
       institution: newInst,
@@ -2710,6 +2886,34 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     saveRegistrationToSupabase(newReg).catch(err => {
       console.warn('Supabase dynamic save error (cached locally):', err);
     });
+
+    // Dispatch registration confirmation email to coordinator and each nominee
+    try {
+      if (data.coordinator?.email) {
+        sendRegistrationConfirmation({
+          toName: data.coordinator.name || 'Coordinator',
+          toEmail: data.coordinator.email,
+          registrationNumber: data.registrationNumber,
+          teamName: data.organizationName,
+          instituteName: data.organizationName,
+        }).catch(e => console.warn('[Email] Coordinator confirmation email error:', e));
+      }
+      if (Array.isArray(data.nominees)) {
+        data.nominees.forEach(nominee => {
+          if (nominee.email && nominee.email !== data.coordinator?.email) {
+            sendRegistrationConfirmation({
+              toName: nominee.name,
+              toEmail: nominee.email,
+              registrationNumber: data.registrationNumber,
+              teamName: data.organizationName,
+              instituteName: data.organizationName,
+            }).catch(e => console.warn('[Email] Nominee confirmation email error:', e));
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[Email] Error dispatching registration confirmation emails:', e);
+    }
 
     return {
       registration: newReg,
@@ -2921,6 +3125,8 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setActiveVerifierModal,
         generateCertificate,
         verifyCertificateCode,
+        declareRound1Results,
+        declareFinalResults,
         supportTickets,
         createSupportTicket,
         updateTicketStatus,

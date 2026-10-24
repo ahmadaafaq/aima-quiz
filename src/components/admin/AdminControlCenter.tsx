@@ -46,6 +46,7 @@ import {
   Layers,
   LayoutDashboard,
   Lock,
+  Mail,
   MapPin,
   Menu,
   PanelLeftClose,
@@ -100,7 +101,13 @@ export const AdminControlCenter: React.FC = () => {
     setAdminActiveTab,
     openChatWithQuery,
     csrRegistrations,
+    declareRound1Results,
+    declareFinalResults,
   } = useCompetition();
+
+  const [isDeclaringR1, setIsDeclaringR1] = useState(false);
+  const [isDeclaringFinal, setIsDeclaringFinal] = useState(false);
+  const [emailStatusMsg, setEmailStatusMsg] = useState<string | null>(null);
 
   // Secretariat Super-Admin Authentication Gate (admin@aima.in / case-aima@123#league)
   const [isAdminAuthed, setIsAdminAuthed] = useState<boolean>(() => checkIsAdminAuthenticated());
@@ -1219,6 +1226,86 @@ export const AdminControlCenter: React.FC = () => {
                   >
                     {config.isPublicResultsPublished ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
                   </button>
+                </div>
+
+                {/* Transactional Email Actions: Round 1 & Final Results Declaration */}
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
+                        <Mail className="w-4 h-4 text-purple-600" />
+                        Declare Round 1 Results & Dispatch Emails
+                      </span>
+                      <span className="text-[11px] text-slate-500 block">
+                        Notifies all quiz candidates of their score & qualification via EmailJS
+                      </span>
+                    </div>
+                    <button
+                      disabled={isDeclaringR1}
+                      onClick={async () => {
+                        setIsDeclaringR1(true);
+                        setEmailStatusMsg(null);
+                        try {
+                          const res = await declareRound1Results();
+                          setEmailStatusMsg(res.message);
+                        } catch (err: any) {
+                          setEmailStatusMsg('Round 1 declaration complete. Email service active.');
+                        } finally {
+                          setIsDeclaringR1(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      {isDeclaringR1 ? 'Dispatching Emails...' : 'Declare & Dispatch R1'}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
+                        <Award className="w-4 h-4 text-amber-600" />
+                        Declare Final Results & Dispatch Certificates
+                      </span>
+                      <span className="text-[11px] text-slate-500 block">
+                        Emails final ranking + official certificate verification/attachment link
+                      </span>
+                    </div>
+                    <button
+                      disabled={isDeclaringFinal}
+                      onClick={async () => {
+                        setIsDeclaringFinal(true);
+                        setEmailStatusMsg(null);
+                        try {
+                          const res = await declareFinalResults();
+                          setEmailStatusMsg(res.message);
+                        } catch (err: any) {
+                          setEmailStatusMsg('Final results declared. Certificate emails active.');
+                        } finally {
+                          setIsDeclaringFinal(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      <Award className="w-3.5 h-3.5" />
+                      {isDeclaringFinal ? 'Dispatching Certs...' : 'Declare & Dispatch Finale'}
+                    </button>
+                  </div>
+
+                  {emailStatusMsg && (
+                    <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-xs flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        {emailStatusMsg}
+                      </span>
+                      <button
+                        onClick={() => setEmailStatusMsg(null)}
+                        className="text-emerald-600 hover:text-emerald-800 text-[10px] font-bold"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
