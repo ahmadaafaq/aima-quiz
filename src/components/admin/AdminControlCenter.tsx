@@ -326,14 +326,16 @@ export const AdminControlCenter: React.FC = () => {
   const menuGroups: MenuGroup[] = [
     {
       id: 'command_broadcast',
-      title: 'Registrations & Command',
+      title: 'Registrations',
       items: [
+        /* PHASE 2: control dashboard removed for now
         {
           id: 'overview',
           label: 'Executive Command',
           icon: LayoutDashboard,
           roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
         },
+        */
         {
           id: 'dynamic_registrations',
           label: 'Dynamic Registrations (Supabase)',
@@ -341,6 +343,7 @@ export const AdminControlCenter: React.FC = () => {
           badge: `${csrRegistrations.length}`,
           roles: ['admin', 'all', 'institute_coordinator'],
         },
+        /* PHASE 2: Official Bulletins & Stages
         {
           id: 'announcements',
           label: 'Official Bulletins',
@@ -355,6 +358,7 @@ export const AdminControlCenter: React.FC = () => {
           badge: activeStageBadge,
           roles: ['admin', 'all'],
         },
+        */
       ],
     },
     {
@@ -368,6 +372,7 @@ export const AdminControlCenter: React.FC = () => {
           badge: activeQuizProgramsCount > 0 ? `${activeQuizProgramsCount}` : undefined,
           roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
         },
+        /* PHASE 2: Quiz Question Bank
         {
           id: 'quiz_bank',
           label: 'Quiz Question Bank',
@@ -375,6 +380,7 @@ export const AdminControlCenter: React.FC = () => {
           badge: `${questions.length}`,
           roles: ['admin', 'all', 'evaluator'],
         },
+        */
         {
           id: 'quiz_results',
           label: 'Quiz Results & Rankings',
@@ -384,6 +390,7 @@ export const AdminControlCenter: React.FC = () => {
         },
       ],
     },
+    /* PHASE 2: Round 2 Case Deck & AI
     {
       id: 'round2_case',
       title: 'Round 2: Case Deck & AI',
@@ -413,6 +420,7 @@ export const AdminControlCenter: React.FC = () => {
         },
       ],
     },
+    */
     {
       id: 'round34_offline',
       title: 'Rounds 3 & 4: Offline Finals',
@@ -433,6 +441,9 @@ export const AdminControlCenter: React.FC = () => {
         },
       ],
     },
+    /* =========================================================================
+     * PHASE 2 / 3 ROLLOUT: Ecosystem & Governance temporarily hidden
+     * =========================================================================
     {
       id: 'ecosystem_partners',
       title: 'Ecosystem & Partners',
@@ -486,6 +497,7 @@ export const AdminControlCenter: React.FC = () => {
         },
       ],
     },
+    ========================================================================= */
   ];
 
 if (!isAdminAuthed) {
