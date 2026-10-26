@@ -40,11 +40,10 @@ export const LegalPageLayout: React.FC<LegalPageLayoutProps> = ({
     theme,
     toggleTheme,
     setActiveView,
-    currentUser,
     participantUser,
-    logoutParticipantSession,
+    logoutParticipant,
   } = useCompetition();
-  const loggedInParticipant = participantUser || (currentUser && currentUser.role !== 'admin' ? currentUser : null);
+  const loggedInParticipant = participantUser;
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -157,8 +156,7 @@ export const LegalPageLayout: React.FC<LegalPageLayoutProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      logoutParticipantSession();
-                      setActiveView('public');
+                      logoutParticipant('public');
                     }}
                     className="h-9 px-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs text-xs font-bold shrink-0"
                     title="Logout session"

@@ -38,11 +38,10 @@ export const PublicHome: React.FC = () => {
     setActiveView,
     theme,
     toggleTheme,
-    currentUser,
     participantUser,
-    logoutParticipantSession,
+    logoutParticipant,
   } = useCompetition();
-  const loggedInParticipant = participantUser || (currentUser && currentUser.role !== 'admin' ? currentUser : null);
+  const loggedInParticipant = participantUser;
 
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [showBrochureModal, setShowBrochureModal] = useState(false);
@@ -152,8 +151,7 @@ export const PublicHome: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      logoutParticipantSession();
-                      setActiveView('public');
+                      logoutParticipant('public');
                     }}
                     className="h-9 px-2.5 rounded-xl bg-red-950/40 hover:bg-red-900/60 border border-red-900/60 hover:border-red-700 text-red-400 hover:text-red-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs text-xs font-bold shrink-0"
                     title="Logout session"

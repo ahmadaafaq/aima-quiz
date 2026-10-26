@@ -292,7 +292,8 @@ interface CompetitionContextType {
   // Participant (Nominee) Auth
   participantUser: SupabaseParticipantRow | null;
   loginParticipantSession: (participant: SupabaseParticipantRow) => void;
-  logoutParticipant: () => void;
+  logoutParticipant: (targetView?: string) => void;
+  logoutParticipantSession: (targetView?: string) => void;
 }
 
 const CompetitionContext = createContext<CompetitionContextType | null>(null);
@@ -864,7 +865,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setActiveView('student');
   };
 
-  const logoutParticipant = () => {
+  const logoutParticipant = (targetView: string = 'participant_login') => {
     setParticipantUser(null);
     setCurrentUser(MOCK_USERS[0]);
     setTeams((prev) => prev.filter((t) => !t.id.startsWith('team_participant_')));
@@ -872,14 +873,17 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       sessionStorage.removeItem(PARTICIPANT_SESSION_KEY);
       localStorage.removeItem(PARTICIPANT_SESSION_KEY);
       sessionStorage.removeItem('AIMA_STUDENT_ACTIVE_SUBVIEW');
+      sessionStorage.removeItem('AIMA_USER_PROFILE');
+      localStorage.removeItem('AIMA_USER_PROFILE');
       supabase.auth.signOut().catch(() => {});
     } catch {
       // ignore
     }
-    setActiveView('participant_login');
+    setActiveView(targetView);
     if (typeof window !== 'undefined') {
       try {
-        window.history.pushState({}, '', '/login');
+        const nextUrl = targetView === 'public' ? '/' : '/login';
+        window.history.pushState({}, '', nextUrl);
       } catch {
         // ignore
       }
@@ -3656,6 +3660,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         participantUser,
         loginParticipantSession,
         logoutParticipant,
+        logoutParticipantSession: logoutParticipant,
       }}
     >
       {children}

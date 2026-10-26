@@ -61,35 +61,31 @@ export const UnifiedRegistrationModal: React.FC<UnifiedRegistrationModalProps> =
   const [copiedInvoice, setCopiedInvoice] = useState(false);
 
   // Team Registration Form State
-  const [leaderName, setLeaderName] = useState('Aarav Singhania');
-  const [leaderEmail, setLeaderEmail] = useState('aarav.singhania@iimb.ac.in');
-  const [leaderMobile, setLeaderMobile] = useState('+91 98765 43210');
-  const [instituteName, setInstituteName] = useState('Indian Institute of Management Bangalore (IIMB)');
-  const [programme, setProgramme] = useState('Post Graduate Programme in Management (MBA)');
-  const [specialisation, setSpecialisation] = useState('Strategy & Operations');
-  const [yearSemester, setYearSemester] = useState('2nd Year / Term 4');
-  const [studentIdCardNumber, setStudentIdCardNumber] = useState('IIMB-2025-MBA-1044');
+  const [leaderName, setLeaderName] = useState('');
+  const [leaderEmail, setLeaderEmail] = useState('');
+  const [leaderMobile, setLeaderMobile] = useState('');
+  const [instituteName, setInstituteName] = useState('');
+  const [programme, setProgramme] = useState('');
+  const [specialisation, setSpecialisation] = useState('');
+  const [yearSemester, setYearSemester] = useState('');
+  const [studentIdCardNumber, setStudentIdCardNumber] = useState('');
 
-  const [teamName, setTeamName] = useState('StratApex Consulting');
+  const [teamName, setTeamName] = useState('');
   const [preferredHub, setPreferredHub] = useState<RegionHubId>('south');
   const [selectedDomain, setSelectedDomain] = useState('EV Ecosystem & Clean Energy Mobility');
 
-  const [members, setMembers] = useState([
-    { name: 'Diya Mehra', email: 'diya.mehra@iimb.ac.in', mobile: '+91 98765 43211', collegeRollNo: 'IIMB-2025-MBA-1082' },
-    { name: 'Rohan Verma', email: 'rohan.verma@iimb.ac.in', mobile: '+91 98765 43212', collegeRollNo: 'IIMB-2025-MBA-1120' },
-    { name: 'Ananya Roy', email: 'ananya.roy@iimb.ac.in', mobile: '+91 98765 43213', collegeRollNo: 'IIMB-2025-MBA-1155' },
-  ]);
+  const [members, setMembers] = useState<Array<{ name: string; email: string; mobile: string; collegeRollNo: string }>>([]);
 
   // Payment Gateway State
   const [couponCode, setCouponCode] = useState('');
   const [discountApplied, setDiscountApplied] = useState(false);
   const [couponError, setCouponError] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'upi_qr' | 'upi_vpa' | 'card' | 'netbanking' | 'voucher'>('upi_qr');
-  const [upiId, setUpiId] = useState('aarav.singhania@okaxis');
+  const [upiId, setUpiId] = useState('');
   const [selectedBank, setSelectedBank] = useState('HDFC Bank');
-  const [cardNumber, setCardNumber] = useState('4532 8900 1234 5678');
-  const [cardExpiry, setCardExpiry] = useState('08/28');
-  const [cardCvv, setCardCvv] = useState('889');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [processingStage, setProcessingStage] = useState('');
 
