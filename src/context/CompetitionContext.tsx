@@ -56,6 +56,7 @@ import {
   saveProgramQuestions,
   createAndAssignQuestion,
   getLocalProgramQuestionsCache,
+  generateDefaultPassword,
 } from '../lib/supabase';
 import {
   sendRegistrationConfirmation,
@@ -3090,24 +3091,34 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       `Registered team "${formData.teamName}" (${teamMembers.length} members) from ${formData.instituteName}. Txn: ${transactionId}, Inv: ${invoiceNumber}`
     );
 
-    // Dispatch registration confirmation email to leader and team members
+    // Dispatch registration confirmation email to leader and team members with login credentials
     if (formData.leaderEmail) {
+      const leaderPassword = generateDefaultPassword(formData.leaderName, formData.leaderMobile || '');
       sendRegistrationConfirmation({
         toName: formData.leaderName,
         toEmail: formData.leaderEmail,
         registrationNumber: inviteCode,
         teamName: formData.teamName,
         instituteName: formData.instituteName,
+        username: formData.leaderEmail,
+        password: leaderPassword,
+        isIndividual: false,
+        roleInTeam: 'Team Leader',
       }).catch(e => console.warn('[Email] Leader registration email error:', e));
     }
     formData.members?.forEach(m => {
       if (m.email && m.email !== formData.leaderEmail) {
+        const memPassword = generateDefaultPassword(m.name, m.mobile || '');
         sendRegistrationConfirmation({
           toName: m.name,
           toEmail: m.email,
           registrationNumber: inviteCode,
           teamName: formData.teamName,
           instituteName: formData.instituteName,
+          username: m.email,
+          password: memPassword,
+          isIndividual: false,
+          roleInTeam: (m as any).roleInTeam || 'Team Member',
         }).catch(e => console.warn('[Email] Member registration email error:', e));
       }
     });
@@ -3218,12 +3229,16 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     // Dispatch registration confirmation to institute coordinator
     if (formData.coordinatorEmail) {
+      const coordPassword = generateDefaultPassword(formData.coordinatorName, formData.coordinatorMobile || '2026');
       sendRegistrationConfirmation({
         toName: formData.coordinatorName,
         toEmail: formData.coordinatorEmail,
         registrationNumber: voucherCode,
         teamName: formData.instituteName,
         instituteName: formData.instituteName,
+        username: formData.coordinatorEmail,
+        password: coordPassword,
+        roleInTeam: 'Faculty / Institutional Coordinator',
       }).catch(e => console.warn('[Email] Institute registration email error:', e));
     }
 
@@ -3325,29 +3340,64 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       console.warn('Supabase dynamic save error (cached locally):', err);
     });
 
-    // Dispatch registration confirmation email to coordinator and each nominee
+    // Dispatch registration confirmation email with login credentials
     try {
-      if (data.coordinator?.email) {
-        sendRegistrationConfirmation({
-          toName: data.coordinator.name || 'Coordinator',
-          toEmail: data.coordinator.email,
-          registrationNumber: data.registrationNumber,
-          teamName: data.organizationName,
-          instituteName: data.organizationName,
-        }).catch(e => console.warn('[Email] Coordinator confirmation email error:', e));
-      }
-      if (Array.isArray(data.nominees)) {
-        data.nominees.forEach(nominee => {
-          if (nominee.email && nominee.email !== data.coordinator?.email) {
-            sendRegistrationConfirmation({
-              toName: nominee.name,
-              toEmail: nominee.email,
-              registrationNumber: data.registrationNumber,
-              teamName: data.organizationName,
-              instituteName: data.organizationName,
-            }).catch(e => console.warn('[Email] Nominee confirmation email error:', e));
-          }
-        });
+      const isSolo = data.track === 'corporate_individual' || (Array.isArray(data.nominees) && data.nominees.length === 1);
+      
+      if (isSolo) {
+        // Solo / Individual registration -> send exactly one email to this solo person with credentials
+        const soloNominee = (Array.isArray(data.nominees) && data.nominees.length > 0)
+          ? data.nominees[0]
+          : { name: data.coordinator?.name || 'Participant', email: data.coordinator?.email, mobile: data.coordinator?.mobile };
+        
+        const soloEmail = soloNominee.email || data.coordinator?.email;
+        if (soloEmail) {
+          const soloPassword = (soloNominee as any).password || generateDefaultPassword(soloNominee.name, soloNominee.mobile || data.coordinator?.mobile || '');
+          sendRegistrationConfirmation({
+            toName: soloNominee.name,
+            toEmail: soloEmail,
+            registrationNumber: data.registrationNumber,
+            teamName: 'Solo / Individual Track',
+            instituteName: data.organizationName,
+            username: soloEmail,
+            password: soloPassword,
+            isIndividual: true,
+          }).catch(e => console.warn('[Email] Solo registration email error:', e));
+        }
+      } else {
+        // Team registration -> send email to EVERY team member with their own credentials
+        if (Array.isArray(data.nominees)) {
+          data.nominees.forEach((nominee, idx) => {
+            if (nominee.email) {
+              const memberPassword = nominee.password || generateDefaultPassword(nominee.name, nominee.mobile || '');
+              sendRegistrationConfirmation({
+                toName: nominee.name,
+                toEmail: nominee.email,
+                registrationNumber: data.registrationNumber,
+                teamName: data.organizationName,
+                instituteName: data.organizationName,
+                username: nominee.email,
+                password: memberPassword,
+                isIndividual: false,
+                roleInTeam: nominee.isTeamLeader || idx === 0 ? 'Team Leader' : 'Team Member',
+              }).catch(e => console.warn('[Email] Team member confirmation email error:', e));
+            }
+          });
+        }
+        // If there is a separate institutional coordinator who is not a competing team member, send them the coordinator confirmation
+        if (data.coordinator?.email && !data.nominees?.some(n => n.email?.toLowerCase() === data.coordinator?.email?.toLowerCase())) {
+          sendRegistrationConfirmation({
+            toName: data.coordinator.name || 'Coordinator',
+            toEmail: data.coordinator.email,
+            registrationNumber: data.registrationNumber,
+            teamName: data.organizationName,
+            instituteName: data.organizationName,
+            username: data.coordinator.email,
+            password: generateDefaultPassword(data.coordinator.name || 'Coordinator', data.coordinator.mobile || '2026'),
+            isIndividual: false,
+            roleInTeam: 'Faculty / Institutional Coordinator',
+          }).catch(e => console.warn('[Email] Coordinator confirmation email error:', e));
+        }
       }
     } catch (e) {
       console.warn('[Email] Error dispatching registration confirmation emails:', e);

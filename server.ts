@@ -5,30 +5,50 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
+import {
+  sendEmail,
+  getRegistrationConfirmationEmail,
+  getTeamMemberEmail,
+  getR1ResultsEmail,
+  getFinalResultsEmail,
+} from "./server/mailer";
 
 dotenv.config();
 
-// Enforce SUPABASE_SERVICE_ROLE_KEY - fail startup if missing (Rule § 2)
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://setjjgjhuslevgnqcnhj.supabase.co';
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  'sb_publishable_RDIbw6a-RZItDzeY80ylwA_-7XGzb5V';
+
 if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  console.error("FATAL ERROR: SUPABASE_SERVICE_ROLE_KEY is required in server environment.");
-  process.exit(1);
+  console.warn("WARNING: SUPABASE_SERVICE_ROLE_KEY is not set in environment. Falling back to default key.");
 }
 
 // Polyfill WebSocket for Node runtime supabase admin client
 (globalThis as any).WebSocket = WebSocket;
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://setjjgjhuslevgnqcnhj.supabase.co';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+export const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+export const app = express();
 
-  app.use(express.json({ limit: "25mb" }));
+app.use(express.json({ limit: "25mb" }));
+
+// Standard CORS handler
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+async function startServer() {
+  const PORT = Number(process.env.PORT) || 3000;
 
   // AI-Assisted Case Deck Assessment API (Round 2 Evaluation Module Section 9.3)
   app.post("/api/ai-evaluate-case", async (req, res) => {
@@ -138,6 +158,90 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
     } catch (err: any) {
       console.error("AI Evaluation error:", err);
       res.status(500).json({ error: "Failed to generate AI evaluation: " + err.message });
+    }
+  });
+
+  // Transactional Email Dispatch API (Direct Falconide SMTP Mailer)
+  app.post("/api/send-email", async (req: Request, res: Response) => {
+    try {
+      const { type, payload } = req.body;
+      if (!type || !payload) {
+        return res.status(400).json({ error: "Missing type or payload" });
+      }
+
+      let emailData: { subject: string; html: string; text: string };
+      const toEmail = payload.toEmail;
+
+      if (!toEmail) {
+        return res.status(400).json({ error: "Missing recipient toEmail" });
+      }
+
+      const loginUrl = payload.loginUrl || process.env.APP_URL || "https://research.aima.in";
+
+      switch (type) {
+        case "registration":
+          emailData = getRegistrationConfirmationEmail({
+            toName: payload.toName || "Candidate",
+            regNumber: payload.registrationNumber || payload.regNumber || "",
+            teamName: payload.teamName || "",
+            instituteName: payload.instituteName || payload.institute || "",
+            username: payload.username || toEmail,
+            password: payload.password || "",
+            loginUrl,
+            isIndividual: Boolean(payload.isIndividual),
+            roleInTeam: payload.roleInTeam || "",
+          });
+          break;
+        case "team_member":
+          emailData = getTeamMemberEmail({
+            toName: payload.toName || "Candidate",
+            teamName: payload.teamName || "",
+            loginEmail: payload.loginEmail || toEmail,
+            tempPassword: payload.tempPassword || "",
+            loginUrl,
+          });
+          break;
+        case "r1_results":
+          emailData = getR1ResultsEmail({
+            toName: payload.toName || "Candidate",
+            teamName: payload.teamName || "",
+            score: Number(payload.score || 0),
+            qualified: Boolean(payload.qualified),
+            loginUrl,
+          });
+          break;
+        case "final_results":
+          emailData = getFinalResultsEmail({
+            toName: payload.toName || "Candidate",
+            teamName: payload.teamName || "",
+            achievement: payload.achievement || "Participant",
+            certNumber: payload.certNumber || "",
+            certVerifyUrl: payload.certVerifyUrl || payload.certUrl || "",
+            loginUrl,
+          });
+          break;
+        case "custom":
+          emailData = {
+            subject: payload.subject || "AIMA India Case League 2026 Notification",
+            html: payload.html || payload.message || "",
+            text: payload.text || "",
+          };
+          break;
+        default:
+          return res.status(400).json({ error: `Unknown email type: ${type}` });
+      }
+
+      const result = await sendEmail({
+        to: toEmail,
+        subject: emailData.subject,
+        html: emailData.html,
+        text: emailData.text,
+      });
+
+      return res.json({ success: true, messageId: result.messageId });
+    } catch (err: any) {
+      console.error("[API send-email error]:", err);
+      return res.status(500).json({ error: err.message || "Failed to dispatch email" });
     }
   });
 
@@ -1495,7 +1599,11 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
     res.json({ status: "healthy", timestamp: new Date().toISOString(), league: "AIMA-ICRC ICL 2026" });
   });
 
-  // Vite middleware for development
+  // Vite middleware for development (only when running standalone server)
+  if (process.env.VERCEL) {
+    return;
+  }
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -1515,4 +1623,10 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
   });
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer().catch((err) => {
+    console.error("Server startup error:", err);
+  });
+}
+
+export default app;

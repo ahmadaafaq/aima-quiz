@@ -29,6 +29,10 @@
       "destination": "https://aima-payments-hub.vercel.app/api/v1/:path*"
     },
     {
+      "source": "/api/:path*",
+      "destination": "/api"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
