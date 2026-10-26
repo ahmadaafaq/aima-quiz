@@ -55,7 +55,7 @@ function wrapAimaLayout(title: string, bodyContent: string): string {
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f3f4f6; width: 100%;">
     <tr>
       <td align="center" style="padding: 24px 12px;">
-        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 620px; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb; box-shadow: 0 4px 14px rgba(0,0,0,0.06);">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 640px; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb; box-shadow: 0 4px 14px rgba(0,0,0,0.06);">
           <!-- Header Banner -->
           <tr>
             <td style="background-color: #0f2942; padding: 28px 32px; text-align: left;">
@@ -118,6 +118,17 @@ function getRegistrationConfirmationEmail(p: {
   const username = p.username || 'Your registered email';
   const password = p.password || 'Contact administrator';
   const participantName = p.toName || 'Participant';
+
+  // Google Calendar URL construction
+  const gcalTitle = encodeURIComponent('AIMA–ICRC India Case League 2026 – South Zone Student Case Competition');
+  const gcalDetails = encodeURIComponent(
+    `AIMA–ICRC India Case League 2026 – South Zone Student Case Competition in collaboration with ICFAI Business School (IBS), Bengaluru.\n\nParticipant Portal: ${loginPageUrl}\nUsername: ${username}\nReporting Time: 9:00 AM\nProgramme Duration: 9:00 AM – 6:00 PM`
+  );
+  const gcalLocation = encodeURIComponent(
+    'ICFAI Business School (IBS), Bengaluru, ICFAI Foundation for Higher Education (IFHE), #231, Near Check Post, Mysore Road, Kengeri, Bengaluru – 560060, Karnataka'
+  );
+  // Thursday, 29 October 2026, 9:00 AM to 6:00 PM IST (03:30 to 12:30 UTC)
+  const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${gcalTitle}&dates=20261029T033000Z/20261029T123000Z&details=${gcalDetails}&location=${gcalLocation}&sf=true&output=xml`;
 
   const html = wrapAimaLayout(
     subject,
@@ -226,7 +237,7 @@ function getRegistrationConfirmationEmail(p: {
     </table>
 
     <!-- Bulletproof CTA Button -->
-    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 28px 0;">
+    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 24px 0 28px;">
       <tr>
         <td align="center">
           <table border="0" cellspacing="0" cellpadding="0">
@@ -272,17 +283,142 @@ function getRegistrationConfirmationEmail(p: {
             #231, Near Check Post, Mysore Road,<br/>
             Kengeri, Bengaluru – 560060, Karnataka
           </div>
+
+          <!-- Google Calendar Button -->
+          <div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed #cbd5e1;">
+            <table cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="border-radius: 6px; background-color: #ffffff; border: 1.5px solid #2563eb;">
+                  <a href="${gcalUrl}" target="_blank" style="display: inline-block; padding: 7px 16px; color: #2563eb !important; font-size: 13px; font-weight: 700; text-decoration: none; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                    <span style="color: #2563eb !important;">📅 Add to Google Calendar</span>
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </div>
+
         </td>
       </tr>
     </table>
 
-    <p style="font-size: 13px; color: #64748b; margin-top: 20px; line-height: 1.5;">
-      Please ensure you log into the participant portal before the reporting date to review preparatory guidelines and check competition materials.
+    <!-- Tentative Programme Schedule -->
+    <div style="margin: 28px 0 12px;">
+      <div style="font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        🗓️ Tentative Programme Schedule
+      </div>
+
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; font-size: 13.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <tr style="background-color: #0f2942; color: #ffffff;">
+          <th style="padding: 10px 14px; text-align: left; font-weight: 700; width: 34%; color: #ffffff !important; border-bottom: 1px solid #0f2942;">Time</th>
+          <th style="padding: 10px 14px; text-align: left; font-weight: 700; width: 66%; color: #ffffff !important; border-bottom: 1px solid #0f2942;">Activity</th>
+        </tr>
+        <tr style="background-color: #ffffff;">
+          <td style="padding: 9px 14px; font-weight: 600; color: #0f172a; border-bottom: 1px solid #e2e8f0;">9:00 – 10:00 AM</td>
+          <td style="padding: 9px 14px; color: #334155; border-bottom: 1px solid #e2e8f0;">Registration and Welcome</td>
+        </tr>
+        <tr style="background-color: #f8fafc;">
+          <td style="padding: 9px 14px; font-weight: 600; color: #0f172a; border-bottom: 1px solid #e2e8f0;">10:00 – 10:30 AM</td>
+          <td style="padding: 9px 14px; color: #334155; border-bottom: 1px solid #e2e8f0;">Competition Briefing and Rules</td>
+        </tr>
+        <tr style="background-color: #ffffff;">
+          <td style="padding: 9px 14px; font-weight: 600; color: #0f172a; border-bottom: 1px solid #e2e8f0;">10:45 – 11:15 AM</td>
+          <td style="padding: 9px 14px; color: #334155; border-bottom: 1px solid #e2e8f0;"><strong style="color: #1e40af;">National Online Business &amp; Case Quiz</strong></td>
+        </tr>
+        <tr style="background-color: #f8fafc;">
+          <td style="padding: 9px 14px; font-weight: 600; color: #0f172a; border-bottom: 1px solid #e2e8f0;">11:30 – 11:40 AM</td>
+          <td style="padding: 9px 14px; color: #334155; border-bottom: 1px solid #e2e8f0;">Case Distribution and Instructions</td>
+        </tr>
+        <tr style="background-color: #ffffff;">
+          <td style="padding: 9px 14px; font-weight: 600; color: #0f172a; border-bottom: 1px solid #e2e8f0;">11:40 – 1:00 PM</td>
+          <td style="padding: 9px 14px; color: #334155; border-bottom: 1px solid #e2e8f0;">Case Preparation</td>
+        </tr>
+        <tr style="background-color: #fef3c7;">
+          <td style="padding: 9px 14px; font-weight: 700; color: #92400e; border-bottom: 1px solid #fde68a;">1:00 – 1:30 PM</td>
+          <td style="padding: 9px 14px; font-weight: 700; color: #92400e; border-bottom: 1px solid #fde68a;">🍽️ Lunch Break</td>
+        </tr>
+        <tr style="background-color: #ffffff;">
+          <td style="padding: 9px 14px; font-weight: 600; color: #0f172a; border-bottom: 1px solid #e2e8f0;">1:30 – 4:00 PM</td>
+          <td style="padding: 9px 14px; color: #334155; border-bottom: 1px solid #e2e8f0;">Case Analysis, Presentations and Jury Interaction</td>
+        </tr>
+        <tr style="background-color: #f8fafc;">
+          <td style="padding: 9px 14px; font-weight: 600; color: #0f172a;">4:15 – 5:30 PM</td>
+          <td style="padding: 9px 14px; font-weight: 700; color: #15803d;">🏆 Results and Felicitation</td>
+        </tr>
+      </table>
+
+      <p style="font-size: 12.5px; color: #64748b; font-style: italic; margin: 8px 0 20px; line-height: 1.5;">
+        The programme timings may be adjusted slightly by the organisers to facilitate the smooth conduct of the competition.
+      </p>
+    </div>
+
+    <!-- Important Instructions for Participants -->
+    <div style="background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px 22px; margin: 24px 0;">
+      <div style="font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 14px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        📌 Important Instructions for Participants
+      </div>
+
+      <ul style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.6; color: #334155;">
+        <li style="margin-bottom: 10px;">
+          <strong style="color: #0f172a;">Carry your laptop:</strong> Every participating team must bring laptops, preferably with fully charged batteries and charging adapters, for the quiz, case analysis and preparation of presentations.
+        </li>
+        <li style="margin-bottom: 10px;">
+          <strong style="color: #0f172a;">Carry your institute identity card:</strong> All participants must carry a valid student identity card issued by their respective institution for verification during registration.
+        </li>
+        <li style="margin-bottom: 10px;">
+          <strong style="color: #0f172a;">Report on time:</strong> Participants are requested to reach the venue by 9:00 AM to complete registration and attend the competition briefing.
+        </li>
+        <li style="margin-bottom: 10px;">
+          <strong style="color: #0f172a;">Full-day participation:</strong> This is a complete day-long competition. All participants are expected to remain available until the conclusion of the results and felicitation session at approximately 6:00 PM.
+        </li>
+        <li style="margin-bottom: 4px;">
+          <strong style="color: #0f172a;">Follow competition guidelines:</strong> Teams must adhere to the instructions communicated during the briefing, including the rules governing the use of case materials, preparation of presentations and interaction with the jury.
+        </li>
+      </ul>
+    </div>
+
+    <!-- Hospitality Arrangements -->
+    <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 5px solid #16a34a; border-radius: 8px; padding: 18px 20px; margin: 24px 0;">
+      <div style="font-size: 15px; font-weight: 700; color: #166534; margin-bottom: 6px;">
+        🍽️ Hospitality Arrangements
+      </div>
+      <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #14532d;">
+        Complimentary refreshments, snacks and lunch will be provided to all registered participants during the programme.
+      </p>
+    </div>
+
+    <p style="margin: 14px 0; font-size: 14px; line-height: 1.6; color: #334155;">
+      We encourage you to come prepared for a stimulating day of learning, teamwork, competition and interaction with fellow management students.
     </p>
+
+    <p style="margin: 14px 0; font-size: 14px; line-height: 1.6; color: #334155;">
+      We sincerely appreciate the support of <strong style="color: #0f172a;">ICFAI Business School, Bengaluru</strong>, in hosting the South Zone competition.
+    </p>
+
+    <p style="margin: 14px 0; font-size: 14px; line-height: 1.6; color: #334155;">
+      We wish you and your team a rewarding experience and look forward to welcoming you on <strong style="color: #0f172a;">29 October 2026</strong>.
+    </p>
+
+    <p style="margin: 22px 0 18px; font-size: 15px; font-weight: 700; color: #1e40af; font-style: italic;">
+      From Classrooms to Boardrooms. From Ideas to National Impact.
+    </p>
+
+    <!-- Sign-off -->
+    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; line-height: 1.6; color: #1e293b;">
+      <p style="margin: 0 0 6px;">Warm regards,</p>
+      <p style="margin: 0; font-weight: 700; color: #0f172a;">Team AIMA–ICRC</p>
+      <p style="margin: 0; color: #475569;">India Case Research Centre</p>
+      <p style="margin: 0; color: #475569;">All India Management Association (AIMA)</p>
+      <p style="margin: 0; color: #475569;">New Delhi</p>
+    </div>
+
+    <!-- Disclaimer -->
+    <div style="margin-top: 24px; padding-top: 12px; border-top: 1px dashed #cbd5e1; font-size: 11px; line-height: 1.5; color: #94a3b8;">
+      <strong>Disclaimer:</strong> This email is intended solely for the named recipient. If you received it by mistake, please inform the sender, delete it, and refrain from using, forwarding, or disclosing its contents or attachments.
+    </div>
     `
   );
 
-  const text = `Dear ${participantName},\n\nGreetings from AIMA–India Case Research Centre (ICRC)!\n\nWe are delighted to welcome you to the AIMA–ICRC India Case League 2026 – South Zone Student Case Competition, being organised in collaboration with ICFAI Business School (IBS), Bengaluru, on Thursday, 29 October 2026.\n\nThank you for registering for this exciting initiative. The India Case League aims to bring students together to apply classroom learning to real-world business challenges, demonstrate analytical and decision-making abilities, and present innovative solutions before an academic and industry jury.\n\nWe look forward to your enthusiastic participation in this day-long competition.\n\nYOUR PARTICIPANT PORTAL LOGIN CREDENTIALS:\nPortal Login Link: ${loginPageUrl}\nUsername / Email: ${username}\nPassword: ${password}\nRegistration Ref: ${p.regNumber}\n${isSolo ? 'Track: Solo / Individual' : 'Team: ' + p.teamName}\nInstitution: ${p.instituteName}\n\nVENUE AND REPORTING DETAILS:\nDate: Thursday, 29 October 2026\nReporting Time: 9:00 AM\nProgramme Duration: 9:00 AM – 6:00 PM\n\nVenue:\nICFAI Business School (IBS), Bengaluru\nICFAI Foundation for Higher Education (IFHE)\n#231, Near Check Post, Mysore Road,\nKengeri, Bengaluru – 560060, Karnataka\n\nAIMA Case Research Centre (ICRC)`;
+  const text = `Dear ${participantName},\n\nGreetings from AIMA–India Case Research Centre (ICRC)!\n\nWe are delighted to welcome you to the AIMA–ICRC India Case League 2026 – South Zone Student Case Competition, being organised in collaboration with ICFAI Business School (IBS), Bengaluru, on Thursday, 29 October 2026.\n\nThank you for registering for this exciting initiative. The India Case League aims to bring students together to apply classroom learning to real-world business challenges, demonstrate analytical and decision-making abilities, and present innovative solutions before an academic and industry jury.\n\nWe look forward to your enthusiastic participation in this day-long competition.\n\nYOUR PARTICIPANT PORTAL LOGIN CREDENTIALS:\nPortal Login Link: ${loginPageUrl}\nUsername / Email: ${username}\nPassword: ${password}\nRegistration Ref: ${p.regNumber}\n${isSolo ? 'Track: Solo / Individual' : 'Team: ' + p.teamName}\nInstitution: ${p.instituteName}\n${p.roleInTeam ? 'Role in Team: ' + p.roleInTeam + '\n' : ''}\nVENUE AND REPORTING DETAILS:\nDate: Thursday, 29 October 2026\nReporting Time: 9:00 AM\nProgramme Duration: 9:00 AM – 6:00 PM\n\nVenue:\nICFAI Business School (IBS), Bengaluru\nICFAI Foundation for Higher Education (IFHE)\n#231, Near Check Post, Mysore Road,\nKengeri, Bengaluru – 560060, Karnataka\n\nGoogle Calendar Link: ${gcalUrl}\n\nTENTATIVE PROGRAMME SCHEDULE:\n9:00 – 10:00 AM: Registration and Welcome\n10:00 – 10:30 AM: Competition Briefing and Rules\n10:45 – 11:15 AM: National Online Business & Case Quiz\n11:30 – 11:40 AM: Case Distribution and Instructions\n11:40 – 1:00 PM: Case Preparation\n1:00 – 1:30 PM: Lunch Break\n1:30 – 4:00 PM: Case Analysis, Presentations and Jury Interaction\n4:15 – 5:30 PM: Results and Felicitation\n(The programme timings may be adjusted slightly by the organisers to facilitate the smooth conduct of the competition.)\n\nIMPORTANT INSTRUCTIONS FOR PARTICIPANTS:\n- Carry your laptop: Every participating team must bring laptops, preferably with fully charged batteries and charging adapters, for the quiz, case analysis and preparation of presentations.\n- Carry your institute identity card: All participants must carry a valid student identity card issued by their respective institution for verification during registration.\n- Report on time: Participants are requested to reach the venue by 9:00 AM to complete registration and attend the competition briefing.\n- Full-day participation: This is a complete day-long competition. All participants are expected to remain available until the conclusion of the results and felicitation session at approximately 6:00 PM.\n- Follow competition guidelines: Teams must adhere to the instructions communicated during the briefing, including the rules governing the use of case materials, preparation of presentations and interaction with the jury.\n\nHOSPITALITY ARRANGEMENTS:\nComplimentary refreshments, snacks and lunch will be provided to all registered participants during the programme.\n\nWe encourage you to come prepared for a stimulating day of learning, teamwork, competition and interaction with fellow management students.\n\nWe sincerely appreciate the support of ICFAI Business School, Bengaluru, in hosting the South Zone competition.\n\nWe wish you and your team a rewarding experience and look forward to welcoming you on 29 October 2026.\n\nFrom Classrooms to Boardrooms. From Ideas to National Impact.\n\nWarm regards,\nTeam AIMA–ICRC\nIndia Case Research Centre\nAll India Management Association (AIMA)\nNew Delhi\n\nDisclaimer: This email is intended solely for the named recipient. If you received it by mistake, please inform the sender, delete it, and refrain from using, forwarding, or disclosing its contents or attachments.`;
 
   return { subject, html, text };
 }
