@@ -139,7 +139,7 @@ export const PublicHome: React.FC = () => {
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
-                    onClick={() => setActiveView('student_dashboard')}
+                    onClick={() => setActiveView('student')}
                     className="h-9 px-2.5 sm:px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-blue-500 text-slate-200 hover:text-white transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer shadow-xs text-xs font-bold shrink-0"
                     title="Go to Student Dashboard"
                   >

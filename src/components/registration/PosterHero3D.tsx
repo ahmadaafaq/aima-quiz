@@ -196,7 +196,7 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setActiveView('student_dashboard')}
+                  onClick={() => setActiveView('student')}
                   className="h-9 px-2.5 sm:px-3 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer shadow-xs text-xs font-bold shrink-0"
                   title="Go to Student Dashboard"
                 >

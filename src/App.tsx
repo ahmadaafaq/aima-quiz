@@ -74,6 +74,8 @@ const AppContent: React.FC = () => {
       case 'contact':
         return <ContactUsPage />;
       case 'student':
+      case 'student_dashboard':
+      case 'workspace':
         return <StudentDashboard />;
       case 'institute':
         return <InstitutePortal />;
@@ -132,6 +134,8 @@ const AppContent: React.FC = () => {
     activeView === 'participant_login' ||
     activeView === 'login' ||
     activeView === 'student' ||
+    activeView === 'student_dashboard' ||
+    activeView === 'workspace' ||
     activeView === 'institute' ||
     activeView === 'evaluator' ||
     activeView === 'regional_hub' ||
