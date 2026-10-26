@@ -871,10 +871,19 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     try {
       sessionStorage.removeItem(PARTICIPANT_SESSION_KEY);
       localStorage.removeItem(PARTICIPANT_SESSION_KEY);
+      sessionStorage.removeItem('AIMA_STUDENT_ACTIVE_SUBVIEW');
+      supabase.auth.signOut().catch(() => {});
     } catch {
       // ignore
     }
-    setActiveView('public');
+    setActiveView('participant_login');
+    if (typeof window !== 'undefined') {
+      try {
+        window.history.pushState({}, '', '/login');
+      } catch {
+        // ignore
+      }
+    }
   };
 
 

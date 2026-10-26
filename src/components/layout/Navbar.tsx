@@ -75,7 +75,9 @@ export const Navbar: React.FC = () => {
         { id: 'public', label: 'Home', fullTitle: 'India Case League 2026 - Home', icon: BookOpen },
         { id: 'registration', label: 'Registration', fullTitle: 'Registration & Participant Onboarding', icon: GraduationCap },
         { id: 'contact_us', label: 'Contact Us', fullTitle: 'AIMA Secretariat & Hub Contacts', icon: Phone },
-        { id: 'participant_login', label: 'Login', fullTitle: 'Participant Portal Login', icon: User },
+        ...(participantUser
+          ? [{ id: 'student', label: 'Workspace', fullTitle: 'Student Participant Workspace', icon: LayoutDashboard }]
+          : [{ id: 'participant_login', label: 'Login', fullTitle: 'Participant Portal Login', icon: User }]),
       ]
     : fullDemoNavItems;
 
@@ -221,41 +223,64 @@ export const Navbar: React.FC = () => {
               })}
             </nav>
 
-            {/* Right Controls: Demo Shortcuts + RoleSwitcher + Theme Toggle + Mobile Menu Button */}
+            {/* Right Controls: Participant Session + Demo Shortcuts + RoleSwitcher + Theme Toggle + Mobile Menu Button */}
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {!isLiveSite && (
-                <>
-                  <button
-                    onClick={() => setActiveView('admin')}
-                    className="h-8.5 hidden md:inline-flex items-center gap-1.5 px-2.5 rounded-xl text-xs font-bold text-red-700 dark:text-red-300 bg-red-50 hover:bg-red-100 dark:bg-red-950/50 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
-                    title="Open Admin Control Center"
+              {participantUser ? (
+                <div className="flex items-center gap-2">
+                  <div
+                    onClick={() => setActiveView('student')}
+                    className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 cursor-pointer transition-colors"
+                    title="Go to Student Workspace"
                   >
-                    <Shield className="w-3.5 h-3.5 text-red-500" />
-                    <span>Admin</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveView('requirements')}
-                    className="h-8.5 hidden lg:inline-flex items-center gap-1.5 px-2.5 rounded-xl text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/50 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
-                    title="View Requirement Specification (SRS)"
-                  >
-                    <FileCheck className="w-3.5 h-3.5 text-blue-500" />
-                    <span>SRS</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveView('participant_login')}
-                    className="h-8.5 hidden sm:inline-flex items-center gap-1.5 px-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
-                    title="Participant Login"
-                  >
-                    <User className="w-3.5 h-3.5 text-blue-500" />
-                    <span>Login</span>
-                  </button>
-
-                  <div className="hidden lg:block">
-                    <RoleSwitcher />
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="truncate max-w-[130px] font-bold text-[11px]">
+                      {participantUser.name || 'Candidate'}
+                    </span>
                   </div>
-                </>
+                  <button
+                    onClick={logoutParticipant}
+                    className="h-8.5 inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-bold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+                    title="Sign out of student account"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Logout</span>
+                  </button>
+                </div>
+              ) : (
+                !isLiveSite && (
+                  <>
+                    <button
+                      onClick={() => setActiveView('admin')}
+                      className="h-8.5 hidden md:inline-flex items-center gap-1.5 px-2.5 rounded-xl text-xs font-bold text-red-700 dark:text-red-300 bg-red-50 hover:bg-red-100 dark:bg-red-950/50 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+                      title="Open Admin Control Center"
+                    >
+                      <Shield className="w-3.5 h-3.5 text-red-500" />
+                      <span>Admin</span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveView('requirements')}
+                      className="h-8.5 hidden lg:inline-flex items-center gap-1.5 px-2.5 rounded-xl text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/50 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+                      title="View Requirement Specification (SRS)"
+                    >
+                      <FileCheck className="w-3.5 h-3.5 text-blue-500" />
+                      <span>SRS</span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveView('participant_login')}
+                      className="h-8.5 hidden sm:inline-flex items-center gap-1.5 px-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+                      title="Participant Login"
+                    >
+                      <User className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Login</span>
+                    </button>
+
+                    <div className="hidden lg:block">
+                      <RoleSwitcher />
+                    </div>
+                  </>
+                )
               )}
 
               {/* Theme Toggle */}
@@ -315,6 +340,21 @@ export const Navbar: React.FC = () => {
                 </button>
               );
             })}
+
+            {participantUser && (
+              <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  onClick={() => {
+                    logoutParticipant();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/20 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Logout ({participantUser.name || 'Participant'})</span>
+                </button>
+              </div>
+            )}
 
             {!isLiveSite && (
               <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-800 grid grid-cols-3 gap-2">

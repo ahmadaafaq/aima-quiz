@@ -48,7 +48,8 @@ import {
   Users,
   X,
   XCircle,
-  Zap
+  Zap,
+  LogOut,
 } from 'lucide-react';
 
 export const StudentDashboard: React.FC = () => {
@@ -72,6 +73,7 @@ export const StudentDashboard: React.FC = () => {
     setActiveVerifierModal,
     participantUser,
     loginParticipantSession,
+    logoutParticipant,
     questions,
     isQuizActive,
     setIsQuizActive,
@@ -657,6 +659,16 @@ export const StudentDashboard: React.FC = () => {
                 </span>
               </div>
             )}
+
+            {/* Candidate Logout Button */}
+            <button
+              onClick={logoutParticipant}
+              className="px-3.5 py-1.5 rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              title="Sign out of student workspace"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Logout</span>
+            </button>
           </div>
 
         </div>
