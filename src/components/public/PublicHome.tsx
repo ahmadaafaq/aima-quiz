@@ -28,10 +28,21 @@ import {
   Zap,
   Sun,
   Moon,
+  LogIn,
+  LogOut,
+  User,
 } from 'lucide-react';
 
 export const PublicHome: React.FC = () => {
-  const { setActiveView, theme, toggleTheme } = useCompetition();
+  const {
+    setActiveView,
+    theme,
+    toggleTheme,
+    currentUser,
+    participantUser,
+    logoutParticipantSession,
+  } = useCompetition();
+  const loggedInParticipant = participantUser || (currentUser && currentUser.role !== 'admin' ? currentUser : null);
 
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [showBrochureModal, setShowBrochureModal] = useState(false);
@@ -103,11 +114,11 @@ export const PublicHome: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
               <button
                 type="button"
                 onClick={() => setActiveView('registration')}
-                className="h-9 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-blue-500/20 cursor-pointer transition-all shrink-0"
+                className="h-9 px-3.5 sm:px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-blue-500/20 cursor-pointer transition-all shrink-0"
               >
                 <GraduationCap className="w-3.5 h-3.5" />
                 <span>Registration</span>
@@ -122,6 +133,46 @@ export const PublicHome: React.FC = () => {
               >
                 {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-300" />}
               </button>
+
+              {/* Top Right Corner Profile Avatar & Session Control */}
+              {loggedInParticipant ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setActiveView('student_dashboard')}
+                    className="h-9 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-blue-500 text-slate-200 hover:text-white transition-all flex items-center gap-2 cursor-pointer shadow-xs text-xs font-bold shrink-0"
+                    title="Go to Student Dashboard"
+                  >
+                    <div className="w-5 h-5 rounded-lg bg-blue-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">
+                      {loggedInParticipant.name ? loggedInParticipant.name.charAt(0).toUpperCase() : 'P'}
+                    </div>
+                    <span className="max-w-[130px] truncate">{loggedInParticipant.name || 'Dashboard'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      logoutParticipantSession();
+                      setActiveView('public');
+                    }}
+                    className="h-9 px-2.5 rounded-xl bg-red-950/40 hover:bg-red-900/60 border border-red-900/60 hover:border-red-700 text-red-400 hover:text-red-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs text-xs font-bold shrink-0"
+                    title="Logout session"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Logout</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setActiveView('participant_login')}
+                  className="h-9 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-blue-400 text-slate-200 hover:text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-xs text-xs font-bold shrink-0"
+                  title="Participant Login (/login)"
+                >
+                  <LogIn className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Login</span>
+                </button>
+              )}
             </div>
           </div>
 

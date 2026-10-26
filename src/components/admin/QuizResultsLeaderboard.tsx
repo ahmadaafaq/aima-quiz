@@ -580,6 +580,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       tabSwitches,
       isCompleted,
       isQualified,
+      submittedAt: attempt.submittedAt || (attempt as any).submitted_at || (attempt as any).completedAt || (attempt as any).createdAt,
       attemptData: attempt,
       userProfile: user,
     };
@@ -1155,6 +1156,12 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                           <div className="text-[10px] text-slate-400 font-mono mt-0.5">
                             {row.email}
                           </div>
+                          {row.submittedAt && (
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1 mt-0.5">
+                              <Clock className="w-3 h-3 text-red-500/80 dark:text-red-400/80 shrink-0" />
+                              <span>Submitted: {formatISTDateTime(row.submittedAt)}</span>
+                            </div>
+                          )}
                         </td>
 
                         {/* Team */}
@@ -1524,52 +1531,19 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                       <h3 className="text-sm font-black text-slate-900 dark:text-white tracking-tight">
                         {activeAttemptRow?.name || 'Candidate Attempt Review'}
                       </h3>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-md text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                        <GraduationCap className="w-3 h-3 text-slate-500 dark:text-slate-400" />
-                        {activeAttemptRow?.registrationNumber || selectedAttemptForReview.registrationNumber || 'AIMA-CL26-00000'}
-                      </span>
                       <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.2 rounded-md text-[10px] font-black uppercase tracking-wider ${activeAttemptRow?.isQualified
-                          ? 'bg-emerald-500 text-white'
-                          : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/35'
-                          }`}
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                          activeAttemptRow?.isQualified
+                            ? 'bg-emerald-500 text-white shadow-xs'
+                            : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/25'
+                        }`}
                       >
                         {activeAttemptRow?.isQualified ? (
-                          <span>
-                            Qualified R2 {activeAttemptRow?.isTeam && activeAttemptRow.teamAvgScore !== undefined ? `(Team Avg: ${activeAttemptRow.teamAvgScore}%)` : ''}
-                          </span>
+                          <span>✓ Passed</span>
                         ) : (
-                          <>
-                            <AlertCircle className="w-3 h-3 shrink-0" />
-                            Below Cutoff ({programCutoff}%) {activeAttemptRow?.isTeam && activeAttemptRow.teamAvgScore !== undefined ? `• Team Avg: ${activeAttemptRow.teamAvgScore}%` : ''}
-                          </>
+                          <span>✕ Failed</span>
                         )}
                       </span>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400 pt-0.5">
-                      <span className="flex items-center gap-1 text-slate-700 dark:text-slate-300 font-medium">
-                        <Building2 className="w-3 h-3 text-slate-400" />
-                        {activeAttemptRow?.instituteName}
-                      </span>
-                      <span className="text-slate-300 dark:text-slate-600">•</span>
-                      <span className="flex items-center gap-1">
-                        <Users className="w-3 h-3 text-slate-400" />
-                        Team: <strong className="text-slate-800 dark:text-slate-200 ml-0.5">{activeAttemptRow?.teamName}</strong>
-                      </span>
-                      <span className="text-slate-300 dark:text-slate-600">•</span>
-                      <span className="font-mono text-slate-500 dark:text-slate-400">
-                        {activeAttemptRow?.email}
-                      </span>
-                      {selectedAttemptForReview.submittedAt && (
-                        <>
-                          <span className="text-slate-300 dark:text-slate-600">•</span>
-                          <span className="flex items-center gap-1 text-slate-700 dark:text-slate-300 font-medium">
-                            <Clock className="w-3 h-3 text-red-500 dark:text-red-400" />
-                            Submitted: {formatISTDateTime(selectedAttemptForReview.submittedAt)} (IST)
-                          </span>
-                        </>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -1643,91 +1617,23 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
               {/* Row 3: Question Category Filters & View Density Mode */}
               <div className="px-5 py-2.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2 overflow-x-auto py-0.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0 mr-0.5">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
                     Filter:
                   </span>
-
-                  {/* All */}
-                  <button
-                    type="button"
-                    onClick={() => setModalFilter('all')}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${modalFilter === 'all'
-                      ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white shadow-2xs font-black'
-                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-800/90 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-750 dark:hover:text-white'
-                      }`}
-                  >
-                    <span>All</span>
-                    <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${modalFilter === 'all'
-                      ? 'bg-white/20 text-white dark:bg-slate-900/15 dark:text-slate-900'
-                      : 'bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
-                      }`}>
-                      {modalStats.total}
-                    </span>
-                  </button>
-
-                  {/* Correct */}
-                  <button
-                    type="button"
-                    onClick={() => setModalFilter('correct')}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${modalFilter === 'correct'
-                      ? 'bg-emerald-50 text-emerald-900 border-emerald-400 ring-1 ring-emerald-400/30 dark:bg-emerald-950/90 dark:text-emerald-100 dark:border-emerald-500/70 dark:ring-emerald-500/40 shadow-2xs'
-                      : 'bg-slate-50/80 text-slate-600 border-slate-200 hover:bg-emerald-50/50 hover:border-emerald-200 hover:text-emerald-800 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700/80 dark:hover:bg-emerald-950/30 dark:hover:border-emerald-800/50 dark:hover:text-emerald-200'
-                      }`}
-                  >
-                    <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${modalFilter === 'correct' ? 'text-emerald-600 dark:text-emerald-400' : 'text-emerald-500/80 dark:text-emerald-400/80'}`} />
-                    <span>Correct</span>
-                    <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${modalFilter === 'correct'
-                      ? 'bg-emerald-200/80 text-emerald-900 border border-emerald-300 dark:bg-emerald-500/30 dark:text-emerald-200 dark:border-emerald-500/40'
-                      : 'bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
-                      }`}>
-                      {modalStats.correct}
-                    </span>
-                    <span className={`text-[10px] font-medium ${modalFilter === 'correct' ? 'text-emerald-800 dark:text-emerald-200/80' : 'text-slate-400'}`}>
-                      ({modalStats.coreCorrect} Main + {modalStats.tieCorrect} Tie)
-                    </span>
-                  </button>
-
-                  {/* Incorrect */}
-                  <button
-                    type="button"
-                    onClick={() => setModalFilter('incorrect')}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${modalFilter === 'incorrect'
-                      ? 'bg-rose-50 text-rose-900 border-rose-300 ring-1 ring-rose-300/40 dark:bg-rose-950/90 dark:text-rose-100 dark:border-rose-500/70 dark:ring-rose-500/40 shadow-2xs'
-                      : 'bg-slate-50/80 text-slate-600 border-slate-200 hover:bg-rose-50/50 hover:border-rose-200 hover:text-rose-800 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700/80 dark:hover:bg-rose-950/30 dark:hover:border-rose-800/50 dark:hover:text-rose-200'
-                      }`}
-                  >
-                    <XCircle className={`w-3.5 h-3.5 shrink-0 ${modalFilter === 'incorrect' ? 'text-rose-500 dark:text-rose-400' : 'text-rose-400/80'}`} />
-                    <span>Incorrect</span>
-                    <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${modalFilter === 'incorrect'
-                      ? 'bg-rose-200/80 text-rose-900 border border-rose-300 dark:bg-rose-500/30 dark:text-rose-200 dark:border-rose-500/40'
-                      : 'bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
-                      }`}>
-                      {modalStats.incorrect}
-                    </span>
-                    <span className={`text-[10px] font-medium ${modalFilter === 'incorrect' ? 'text-rose-800 dark:text-rose-200/80' : 'text-slate-400'}`}>
-                      (0 Penalty)
-                    </span>
-                  </button>
-
-                  {/* Skipped */}
-                  <button
-                    type="button"
-                    onClick={() => setModalFilter('unattempted')}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${modalFilter === 'unattempted'
-                      ? 'bg-slate-200 text-slate-800 border-slate-300 dark:bg-slate-600 dark:text-white dark:border-slate-500 shadow-2xs font-black'
-                      : 'bg-slate-50/80 text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-800 dark:bg-slate-800/90 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-750 dark:hover:text-slate-200'
-                      }`}
-                  >
-                    <HelpCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span>Skipped</span>
-                    <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${modalFilter === 'unattempted'
-                      ? 'bg-slate-300 text-slate-800 dark:bg-white/20 dark:text-white'
-                      : 'bg-slate-200/80 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-                      }`}>
-                      {modalStats.unattempted}
-                    </span>
-                  </button>
+                  <div className="relative">
+                    <select
+                      value={modalFilter}
+                      onChange={(e) => setModalFilter(e.target.value as any)}
+                      className="px-3 py-1.5 pr-8 rounded-xl bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 transition shadow-2xs appearance-none"
+                    >
+                      <option value="all">All Questions ({modalStats.total})</option>
+                      <option value="correct">✓ Correct ({modalStats.correct})</option>
+                      <option value="incorrect">✕ Incorrect ({modalStats.incorrect})</option>
+                      <option value="unattempted">○ Skipped ({modalStats.unattempted})</option>
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
                 </div>
 
                 {/* View Density Switch: Compact vs Detailed */}

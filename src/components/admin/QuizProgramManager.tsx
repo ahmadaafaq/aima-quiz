@@ -968,25 +968,6 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                 </div>
               </div>
 
-              {/* Derived Cutoff & Score Info Banner (Decoupled from uniform per-question marks) */}
-              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-red-500/5 via-slate-50 to-slate-50 dark:from-red-950/20 dark:via-slate-800/80 dark:to-slate-800/80 border border-slate-200 dark:border-slate-700/60 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 flex-wrap">
-                  <span className="font-bold text-red-600 dark:text-red-400 flex items-center gap-1.5">
-                    <Award className="w-4 h-4 text-red-500" />
-                    Cutoff Threshold:
-                  </span>
-                  <span>
-                    Qualifying score = <strong className="text-slate-900 dark:text-white">
-                      {Math.round(Number(totalMarks) * (Number(cutoffScore) / 100))} marks
-                    </strong> ({cutoffScore}% of {totalMarks} pts)
-                  </span>
-                  <span className="text-slate-300 dark:text-slate-600 hidden sm:inline">•</span>
-                  <span className="text-slate-500 dark:text-slate-400">
-                    Target: <strong>{totalQuestions} questions</strong>
-                  </span>
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -1002,26 +983,6 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                       onChange={e => setStartDate(fromDateTimeLocal(e.target.value))}
                       className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white scheme-light dark:scheme-dark cursor-pointer font-mono font-medium focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition"
                     />
-                  </div>
-                  {/* Quick presets */}
-                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setStartDatePreset('now')}
-                      className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 cursor-pointer transition flex items-center gap-1"
-                      title="Set start window to current date and time"
-                    >
-                      <Clock className="w-2.5 h-2.5 text-slate-400" />
-                      Now
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStartDatePreset('tomorrow_morning')}
-                      className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 cursor-pointer transition"
-                      title="Set start window to tomorrow at 09:00 AM"
-                    >
-                      Tmrw 09:00
-                    </button>
                   </div>
                 </div>
 
@@ -1039,20 +1000,6 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                       onChange={e => setEndDate(fromDateTimeLocal(e.target.value))}
                       className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white scheme-light dark:scheme-dark cursor-pointer font-mono font-medium focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition"
                     />
-                  </div>
-                  {/* Quick presets */}
-                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                    {[3, 7, 14, 30].map(days => (
-                      <button
-                        key={days}
-                        type="button"
-                        onClick={() => setEndDatePreset(days)}
-                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 cursor-pointer transition"
-                        title={`Set end window to ${days} days from start window at 23:59`}
-                      >
-                        +{days}d
-                      </button>
-                    ))}
                   </div>
                 </div>
 
@@ -1072,8 +1019,8 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                 </div>
               </div>
 
-              {/* Anti-cheat and Review Toggles from School CRM */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60">
+              {/* Anti-cheat Toggle */}
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60">
                 <label className="flex items-start gap-2.5 cursor-pointer">
                   <input
                     type="checkbox"
@@ -1086,31 +1033,6 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                     <span className="text-[11px] text-slate-500 dark:text-slate-400">Randomize question order for each candidate (anti-cheat)</span>
                   </div>
                 </label>
-
-                <label className="flex items-start gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={allowReview}
-                    onChange={e => setAllowReview(e.target.checked)}
-                    className="mt-0.5 text-red-600 rounded focus:ring-red-500"
-                  />
-                  <div className="text-xs">
-                    <span className="font-bold text-slate-900 dark:text-white block">Allow Candidate Review</span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">Reveal solutions & rationale immediately after submission</span>
-                  </div>
-                </label>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Candidate Instructions
-                </label>
-                <textarea
-                  rows={2}
-                  value={instructions}
-                  onChange={e => setInstructions(e.target.value)}
-                  className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                />
               </div>
 
               <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
