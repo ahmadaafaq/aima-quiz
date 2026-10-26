@@ -191,7 +191,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     );
   };
 
-  // Toggle the jury presentation accordion for a candidate/team
+  // Toggle the jury presentation accordion for a candidate/team (only enabled when round 1 results published)
   const handleToggleJuryAccordion = (row: {
     userId: string;
     email?: string;
@@ -202,6 +202,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     userProfile?: UserProfile;
     score: number;
   }) => {
+    if (!isResultsPublished) {
+      return;
+    }
+
     if (expandedJuryUserId === row.userId) {
       setExpandedJuryUserId(null);
       return;
@@ -1080,9 +1084,8 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                     <React.Fragment key={row.userId}>
                       <tr
                         onClick={() => handleOpenReview(row.attemptData)}
-                        className={`cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition group ${
-                          isTop3 ? 'bg-amber-500/5 dark:bg-amber-500/5' : ''
-                        } ${isExpanded ? 'bg-red-50/40 dark:bg-red-950/20' : ''}`}
+                        className={`cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition group ${isTop3 ? 'bg-amber-500/5 dark:bg-amber-500/5' : ''
+                          } ${isExpanded ? 'bg-red-50/40 dark:bg-red-950/20' : ''}`}
                         title="Click anywhere on row to view candidate's attempted quiz details"
                       >
                         {/* Rank */}
@@ -1219,19 +1222,31 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                             </button>
 
                             <button
-                              onClick={() => handleToggleJuryAccordion(row)}
-                              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer border ${
-                                isExpanded
-                                  ? 'bg-red-600 text-white border-red-600 ring-2 ring-red-400/30'
+                              disabled={!isResultsPublished}
+                              onClick={() => {
+                                if (!isResultsPublished) return;
+                                handleToggleJuryAccordion(row);
+                              }}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs border ${
+                                !isResultsPublished
+                                  ? 'opacity-45 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700'
+                                  : isExpanded
+                                  ? 'bg-red-600 text-white border-red-600 ring-2 ring-red-400/30 cursor-pointer'
                                   : rowJuryResult?.livePresentationScore !== undefined
-                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
-                                  : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-900/40'
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 cursor-pointer'
+                                  : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer'
                               }`}
-                              title="Enter / Edit Offline Jury Case Study Presentation Scorecard"
+                              title={
+                                !isResultsPublished
+                                  ? 'Publish Round 1 Online Quiz Results first to enable Stage 2 Case Study Presentation Jury evaluation'
+                                  : 'Enter / Edit Offline Jury Case Study Presentation Scorecard'
+                              }
                             >
                               <Sliders className="w-3.5 h-3.5" />
                               <span>Jury</span>
-                              {isExpanded ? (
+                              {!isResultsPublished ? (
+                                <Lock className="w-3 h-3 text-slate-400" />
+                              ) : isExpanded ? (
                                 <ChevronUp className="w-3.5 h-3.5" />
                               ) : (
                                 <ChevronDown className="w-3.5 h-3.5" />
@@ -1281,11 +1296,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                       <span className="text-xs text-slate-400 font-semibold ml-0.5">/ 100</span>
                                     </div>
                                   </div>
-                                  <div className={`px-2.5 py-1 rounded-xl text-xs font-bold uppercase tracking-wider ${
-                                    liveFormTotal >= 60
+                                  <div className={`px-2.5 py-1 rounded-xl text-xs font-bold uppercase tracking-wider ${liveFormTotal >= 60
                                       ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
                                       : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
-                                  }`}>
+                                    }`}>
                                     {liveFormTotal >= 60 ? 'Passing / Qualified' : 'Below 60'}
                                   </div>
                                 </div>
@@ -1380,17 +1394,16 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                           onChange={(e) => setJuryFormData(prev => ({ ...prev, attendanceVerified: e.target.checked }))}
                                           className="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-slate-300"
                                         />
-                                        <span>Team Present in Offline Presentation Hall</span>
+                                        <span>Team Present in Presentation Hall</span>
                                       </label>
                                     </div>
 
                                     {/* Feedback Message */}
                                     {jurySaveFeedback && jurySaveFeedback.userId === row.userId && (
-                                      <div className={`text-xs font-bold mt-2 p-2 rounded-lg ${
-                                        jurySaveFeedback.isError
+                                      <div className={`text-xs font-bold mt-2 p-2 rounded-lg ${jurySaveFeedback.isError
                                           ? 'bg-red-500/10 text-red-600 border border-red-500/20'
                                           : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                                      }`}>
+                                        }`}>
                                         {jurySaveFeedback.msg}
                                       </div>
                                     )}
@@ -1671,11 +1684,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsCompactReview(true)}
-                    className={`px-3 py-1 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
-                      isCompactReview
+                    className={`px-3 py-1 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${isCompactReview
                         ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
                         : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
-                    }`}
+                      }`}
                   >
                     <span>Compact Mode</span>
                     <span className="px-1.5 py-0.2 text-[9px] font-black bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 rounded">
@@ -1685,11 +1697,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsCompactReview(false)}
-                    className={`px-3 py-1 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
-                      !isCompactReview
+                    className={`px-3 py-1 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${!isCompactReview
                         ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
                         : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
-                    }`}
+                      }`}
                   >
                     <span>Full 4-Option View</span>
                   </button>
