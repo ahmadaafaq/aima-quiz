@@ -2,7 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useCompetition } from '../../context/CompetitionContext';
 import { QuizAttempt, UserProfile, QuizQuestion } from '../../types';
 import { parseISTTimestamp, formatISTDateTime } from '../../lib/formatters';
-import { fetchQuizAttemptById, fetchProgramQuestionsOrdered, toggleQuizProgramPublication } from '../../lib/supabase';
+import {
+  fetchQuizAttemptById,
+  fetchProgramQuestionsOrdered,
+  toggleQuizProgramPublication,
+  saveJuryScorecardToDb,
+} from '../../lib/supabase';
 import {
   Trophy,
   Medal,
@@ -34,7 +39,65 @@ import {
   AlertCircle,
   GraduationCap,
   Lock,
+  ChevronDown,
+  ChevronUp,
+  Sliders,
+  Save,
+  FileText,
 } from 'lucide-react';
+
+export const CASE_STUDY_KPIS = [
+  {
+    id: 'problemIdentification',
+    label: 'Problem identification and root-cause analysis',
+    max: 15,
+    desc: 'Clarity of core strategic challenges, business drivers, and contextual diagnosing.',
+  },
+  {
+    id: 'caseQuestion1',
+    label: 'Answer to Case Question 1',
+    max: 15,
+    desc: 'Direct analytical response, depth of reasoning, and addressing prompt question 1.',
+  },
+  {
+    id: 'caseQuestion2',
+    label: 'Answer to Case Question 2',
+    max: 15,
+    desc: 'Structured logical frameworks, financial/operational implications for prompt question 2.',
+  },
+  {
+    id: 'caseQuestion3',
+    label: 'Answer to Case Question 3',
+    max: 15,
+    desc: 'Strategic recommendations, scenario considerations, and response to prompt question 3.',
+  },
+  {
+    id: 'strategicAlternatives',
+    label: 'Strategic alternatives and recommended strategy',
+    max: 20,
+    desc: 'Evaluation of competitive trade-offs, positioning, risk analysis, and cohesive strategy.',
+  },
+  {
+    id: 'executionPlan',
+    label: 'Execution plan and feasibility',
+    max: 15,
+    desc: 'Actionable timeline, milestones, resource allocation, change governance, and ROI viability.',
+  },
+  {
+    id: 'caseDataEvidence',
+    label: 'Use of case data, evidence and assumptions',
+    max: 5,
+    desc: 'Grounded in exhibit facts, data justification, and realistic business assumptions.',
+  },
+] as const;
+
+export const PRESENTATION_TRACKS = [
+  'General Management & Corporate Strategy',
+  'Marketing, Brand & Consumer Growth',
+  'Financial Strategy, Valuation & Risk Governance',
+  'Operations, Supply Chain & Logistics',
+  'Human Capital, Leadership & Organizational Transformation',
+];
 
 interface QuizResultsLeaderboardProps {
   initialProgramId?: string;
@@ -57,6 +120,8 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     config,
     updateConfig,
     addAuditLog,
+    offlineRoundResults,
+    recordOfflineResultsBulk,
   } = useCompetition();
 
   useEffect(() => {
@@ -75,6 +140,183 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   const [cutoffInput, setCutoffInput] = useState<string>('');
   const [isSavingCutoff, setIsSavingCutoff] = useState<boolean>(false);
   const [cutoffSaveSuccess, setCutoffSaveSuccess] = useState<boolean>(false);
+
+  // Case Study Presentation Jury Evaluation States
+  const [expandedJuryUserId, setExpandedJuryUserId] = useState<string | null>(null);
+  const [juryFormData, setJuryFormData] = useState<{
+    track: string;
+    evaluatorName: string;
+    problemIdentification: number | string;
+    caseQuestion1: number | string;
+    caseQuestion2: number | string;
+    caseQuestion3: number | string;
+    strategicAlternatives: number | string;
+    executionPlan: number | string;
+    caseDataEvidence: number | string;
+    notes: string;
+    attendanceVerified: boolean;
+  }>({
+    track: PRESENTATION_TRACKS[0],
+    evaluatorName: 'AIMA National Jury Panel',
+    problemIdentification: 0,
+    caseQuestion1: 0,
+    caseQuestion2: 0,
+    caseQuestion3: 0,
+    strategicAlternatives: 0,
+    executionPlan: 0,
+    caseDataEvidence: 0,
+    notes: '',
+    attendanceVerified: true,
+  });
+  const [isSavingJury, setIsSavingJury] = useState<boolean>(false);
+  const [jurySaveFeedback, setJurySaveFeedback] = useState<{ userId: string; msg: string; isError?: boolean } | null>(null);
+
+  // Helper to fetch jury evaluation for a specific candidate/team
+  const getRowJuryScorecard = (row: {
+    userId: string;
+    teamId?: string;
+    registrationNumber?: string;
+    teamName?: string;
+  }) => {
+    return offlineRoundResults.find(
+      r =>
+        (row.teamId && r.teamId === row.teamId) ||
+        (row.registrationNumber && (r as any).registrationNumber === row.registrationNumber) ||
+        (row.teamName && row.teamName !== 'Individual Entry' && r.teamName === row.teamName) ||
+        r.teamId === row.userId
+    );
+  };
+
+  // Toggle the jury presentation accordion for a candidate/team
+  const handleToggleJuryAccordion = (row: {
+    userId: string;
+    teamId?: string;
+    registrationNumber?: string;
+    teamName?: string;
+    instituteName?: string;
+    score: number;
+  }) => {
+    if (expandedJuryUserId === row.userId) {
+      setExpandedJuryUserId(null);
+      return;
+    }
+
+    const existing = getRowJuryScorecard(row);
+    if (existing) {
+      const kpis = (existing as any).kpiScores || (existing as any).kpi_scores || {};
+      setJuryFormData({
+        track: existing.trackName || PRESENTATION_TRACKS[0],
+        evaluatorName: existing.evaluatedBy || 'AIMA National Jury Panel',
+        problemIdentification: kpis.problemIdentification ?? (existing.livePresentationScore ? Math.round(existing.livePresentationScore * 0.15) : 0),
+        caseQuestion1: kpis.caseQuestion1 ?? (existing.livePresentationScore ? Math.round(existing.livePresentationScore * 0.15) : 0),
+        caseQuestion2: kpis.caseQuestion2 ?? (existing.livePresentationScore ? Math.round(existing.livePresentationScore * 0.15) : 0),
+        caseQuestion3: kpis.caseQuestion3 ?? (existing.qaDefenseScore ?? 0),
+        strategicAlternatives: kpis.strategicAlternatives ?? (existing.livePresentationScore ? Math.round(existing.livePresentationScore * 0.20) : 0),
+        executionPlan: kpis.executionPlan ?? (existing.livePresentationScore ? Math.round(existing.livePresentationScore * 0.15) : 0),
+        caseDataEvidence: kpis.caseDataEvidence ?? (existing.livePresentationScore ? Math.round(existing.livePresentationScore * 0.05) : 0),
+        notes: existing.notes || (existing as any).evaluatorPanelNotes || '',
+        attendanceVerified: existing.attendanceVerified !== false,
+      });
+    } else {
+      setJuryFormData({
+        track: PRESENTATION_TRACKS[0],
+        evaluatorName: 'AIMA National Jury Panel',
+        problemIdentification: 0,
+        caseQuestion1: 0,
+        caseQuestion2: 0,
+        caseQuestion3: 0,
+        strategicAlternatives: 0,
+        executionPlan: 0,
+        caseDataEvidence: 0,
+        notes: '',
+        attendanceVerified: true,
+      });
+    }
+    setExpandedJuryUserId(row.userId);
+  };
+
+  // Save the entered KPI scores for case study presentation
+  const handleSaveJuryEvaluation = async (row: {
+    userId: string;
+    teamId?: string;
+    registrationNumber?: string;
+    teamName?: string;
+    instituteName?: string;
+    score: number;
+  }) => {
+    setIsSavingJury(true);
+    try {
+      const pId = Math.min(15, Math.max(0, Number(juryFormData.problemIdentification) || 0));
+      const q1 = Math.min(15, Math.max(0, Number(juryFormData.caseQuestion1) || 0));
+      const q2 = Math.min(15, Math.max(0, Number(juryFormData.caseQuestion2) || 0));
+      const q3 = Math.min(15, Math.max(0, Number(juryFormData.caseQuestion3) || 0));
+      const strat = Math.min(20, Math.max(0, Number(juryFormData.strategicAlternatives) || 0));
+      const exec = Math.min(15, Math.max(0, Number(juryFormData.executionPlan) || 0));
+      const dataEv = Math.min(5, Math.max(0, Number(juryFormData.caseDataEvidence) || 0));
+
+      const total = pId + q1 + q2 + q3 + strat + exec + dataEv;
+
+      const kpiPayload = {
+        problemIdentification: pId,
+        caseQuestion1: q1,
+        caseQuestion2: q2,
+        caseQuestion3: q3,
+        strategicAlternatives: strat,
+        executionPlan: exec,
+        caseDataEvidence: dataEv,
+        totalScore: total,
+      };
+
+      const scorecardPayload = {
+        registrationNumber: row.registrationNumber || '',
+        teamId: row.teamId || row.userId,
+        teamName: row.teamName || 'Team Entry',
+        instituteName: row.instituteName || 'Management Institute',
+        round: 'round_2' as const,
+        trackName: juryFormData.track,
+        offlineQuizScore: row.score,
+        livePresentationScore: total,
+        presentationMaxMarks: 100,
+        qaDefenseScore: q3,
+        aggregateScore: Math.round(row.score * 0.4 + total * 0.6),
+        rank: 1,
+        attendanceVerified: juryFormData.attendanceVerified,
+        qualifiedNextRound: total >= 60,
+        notes: juryFormData.notes,
+        evaluatedBy: juryFormData.evaluatorName,
+        kpiScores: kpiPayload,
+      };
+
+      // 1. Persist to Supabase
+      await saveJuryScorecardToDb(scorecardPayload);
+
+      // 2. Persist to Context state so UI updates in real-time
+      recordOfflineResultsBulk('round_2', [scorecardPayload]);
+
+      addAuditLog(
+        'Case Presentation Evaluated',
+        'Evaluation',
+        `AIMA Coordinator recorded jury marks for "${row.teamName}" (${row.instituteName}): Total ${total}/100 pts [Track: ${juryFormData.track}] by ${juryFormData.evaluatorName}`
+      );
+
+      setJurySaveFeedback({
+        userId: row.userId,
+        msg: `✓ Evaluation for "${row.teamName}" saved successfully (${total}/100)!`,
+      });
+      setTimeout(() => {
+        setJurySaveFeedback(null);
+      }, 4000);
+    } catch (err: any) {
+      console.error('Error saving jury scorecard:', err);
+      setJurySaveFeedback({
+        userId: row.userId,
+        msg: `Failed to save evaluation: ${err.message}`,
+        isError: true,
+      });
+    } finally {
+      setIsSavingJury(false);
+    }
+  };
 
   // Authoritatively load full attempt row (with answers JSONB) & questions with answer keys
   const handleOpenReview = async (attempt: QuizAttempt) => {
@@ -477,20 +719,39 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   }, [attemptQuestions, selectedAttemptForReview, modalFilter]);
 
   const handleExportMeritList = () => {
-    const headers = ['Rank', 'Candidate ID', 'Name', 'Email', 'Institute', 'Team', 'Main Score (100)', 'Tie-Breaker Score (20)', 'Time Taken (s)', 'Tab Switches', 'Qualification Status'];
-    const rows = filteredList.map((r, idx) => [
-      idx + 1,
-      r.userId,
-      `"${r.name}"`,
-      r.email,
-      `"${r.instituteName}"`,
-      `"${r.teamName}"`,
-      r.score,
-      r.analyticalScore,
-      r.timeTaken,
-      r.tabSwitches,
-      r.isQualified ? 'QUALIFIED FOR STAGE 2' : 'BELOW CUTOFF',
-    ]);
+    const headers = [
+      'Rank',
+      'Candidate ID',
+      'Name',
+      'Email',
+      'Institute',
+      'Team',
+      'Screening Quiz Score (100)',
+      'Tie-Breaker Score (20)',
+      'Case Presentation (100)',
+      'Presentation Track',
+      'Time Taken (s)',
+      'Tab Switches',
+      'Qualification Status',
+    ];
+    const rows = filteredList.map((r, idx) => {
+      const jury = getRowJuryScorecard(r);
+      return [
+        idx + 1,
+        r.userId,
+        `"${r.name}"`,
+        r.email,
+        `"${r.instituteName}"`,
+        `"${r.teamName}"`,
+        r.score,
+        r.analyticalScore,
+        jury?.livePresentationScore !== undefined ? jury.livePresentationScore : 'Pending Jury',
+        jury?.trackName ? `"${jury.trackName}"` : 'Pending Selection',
+        r.timeTaken,
+        r.tabSwitches,
+        r.isQualified ? 'QUALIFIED FOR STAGE 2' : 'BELOW CUTOFF',
+      ];
+    });
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -501,7 +762,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     link.click();
     document.body.removeChild(link);
 
-    addAuditLog('Merit List Exported', 'Quiz', `Super Admin exported official leaderboard of ${filteredList.length} rankers`);
+    addAuditLog('Merit List Exported', 'Quiz', `Super Admin exported official leaderboard of ${filteredList.length} rankers with screening and presentation marks`);
   };
 
   return (
@@ -754,17 +1015,18 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                 <th className="py-3.5 px-4 text-center w-16">Rank</th>
                 <th className="py-3.5 px-4">Candidate & B-School</th>
                 <th className="py-3.5 px-4">Affiliated Team</th>
-                <th className="py-3.5 px-4 text-center">Total Score (100)</th>
+                <th className="py-3.5 px-4 text-center">Screening Quiz (100)</th>
+                <th className="py-3.5 px-4 text-center">Case Presentation (100)</th>
                 <th className="py-3.5 px-4 text-center">Time Taken</th>
                 <th className="py-3.5 px-4 text-center">Integrity Status</th>
                 <th className="py-3.5 px-4 text-center">Stage 2 Gate</th>
-                <th className="py-3.5 px-4 text-center w-28">Action</th>
+                <th className="py-3.5 px-4 text-center w-44">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400">
+                  <td colSpan={9} className="py-8 text-center text-slate-400">
                     {selectedProgram
                       ? `No evaluated attempts found for "${selectedProgram.title}".`
                       : 'No evaluated quiz attempts found matching criteria.'}
@@ -776,128 +1038,396 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                   const isTop3 = rank <= 3;
                   const minutes = Math.floor(row.timeTaken / 60);
                   const seconds = row.timeTaken % 60;
+                  const rowJuryResult = getRowJuryScorecard(row);
+                  const isExpanded = expandedJuryUserId === row.userId;
+
+                  const liveFormTotal =
+                    (Number(juryFormData.problemIdentification) || 0) +
+                    (Number(juryFormData.caseQuestion1) || 0) +
+                    (Number(juryFormData.caseQuestion2) || 0) +
+                    (Number(juryFormData.caseQuestion3) || 0) +
+                    (Number(juryFormData.strategicAlternatives) || 0) +
+                    (Number(juryFormData.executionPlan) || 0) +
+                    (Number(juryFormData.caseDataEvidence) || 0);
 
                   return (
-                    <tr
-                      key={row.userId}
-                      onClick={() => handleOpenReview(row.attemptData)}
-                      className={`cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition group ${isTop3 ? 'bg-amber-500/5 dark:bg-amber-500/5' : ''
-                        }`}
-                      title="Click anywhere on row to view candidate's attempted quiz details"
-                    >
-                      {/* Rank */}
-                      <td className="py-3.5 px-4 text-center">
-                        {rank === 1 ? (
-                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-400 text-slate-900 font-black text-xs shadow-xs">
-                            🥇 1
-                          </span>
-                        ) : rank === 2 ? (
-                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-300 text-slate-900 font-black text-xs shadow-xs">
-                            🥈 2
-                          </span>
-                        ) : rank === 3 ? (
-                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-700 text-white font-black text-xs shadow-xs">
-                            🥉 3
-                          </span>
-                        ) : (
-                          <span className="font-mono font-bold text-slate-500 text-sm">
-                            #{rank}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Candidate */}
-                      <td className="py-3.5 px-4">
-                        <div
-                          className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-red-600 transition"
-                        >
-                          <span className="group-hover:underline">{row.name}</span>
-                          {row.userProfile?.isTeamLeader && (
-                            <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                              Leader
+                    <React.Fragment key={row.userId}>
+                      <tr
+                        onClick={() => handleOpenReview(row.attemptData)}
+                        className={`cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition group ${
+                          isTop3 ? 'bg-amber-500/5 dark:bg-amber-500/5' : ''
+                        } ${isExpanded ? 'bg-red-50/40 dark:bg-red-950/20' : ''}`}
+                        title="Click anywhere on row to view candidate's attempted quiz details"
+                      >
+                        {/* Rank */}
+                        <td className="py-3.5 px-4 text-center">
+                          {rank === 1 ? (
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-400 text-slate-900 font-black text-xs shadow-xs">
+                              🥇 1
+                            </span>
+                          ) : rank === 2 ? (
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-300 text-slate-900 font-black text-xs shadow-xs">
+                              🥈 2
+                            </span>
+                          ) : rank === 3 ? (
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-700 text-white font-black text-xs shadow-xs">
+                              🥉 3
+                            </span>
+                          ) : (
+                            <span className="font-mono font-bold text-slate-500 text-sm">
+                              #{rank}
                             </span>
                           )}
-                          <Eye className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                        </div>
-                        <div className="text-[11px] text-slate-500">
-                          {row.instituteName} ({row.instituteCity})
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                          {row.email}
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Team */}
-                      <td className="py-3.5 px-4">
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">
-                          {row.teamName}
-                        </span>
-                      </td>
-
-                      {/* Total Score */}
-                      <td className="py-3.5 px-4 text-center">
-                        <div className="font-black text-base text-slate-900 dark:text-white">
-                          {row.score}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-semibold">
-                          out of 100
-                        </div>
-                        {((row.analyticalScore ?? (row.attemptData as any)?.analytical_score ?? 0) > 0) && (
-                          <div className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25 text-[10px] font-bold">
-                            <Sparkles className="w-2.5 h-2.5 shrink-0" />
-                            ⚡ {row.analyticalScore ?? (row.attemptData as any)?.analytical_score}/20
+                        {/* Candidate */}
+                        <td className="py-3.5 px-4">
+                          <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-red-600 transition">
+                            <span className="group-hover:underline">{row.name}</span>
+                            {row.userProfile?.isTeamLeader && (
+                              <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                Leader
+                              </span>
+                            )}
+                            <Eye className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                           </div>
-                        )}
-                      </td>
+                          <div className="text-[11px] text-slate-500">
+                            {row.instituteName} ({row.instituteCity})
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                            {row.email}
+                          </div>
+                        </td>
 
-                      {/* Time Taken */}
-                      <td className="py-3.5 px-4 text-center font-mono text-slate-600 dark:text-slate-300">
-                        {minutes}m {seconds < 10 ? '0' : ''}{seconds}s
-                      </td>
+                        {/* Team */}
+                        <td className="py-3.5 px-4">
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">
+                            {row.teamName}
+                          </span>
+                        </td>
 
-                      {/* Integrity */}
-                      <td className="py-3.5 px-4 text-center">
-                        {row.tabSwitches === 0 ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                            <ShieldCheck className="w-3 h-3" />
-                            Clean (0)
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-600 border border-red-500/20">
-                            <ShieldAlert className="w-3 h-3" />
-                            {row.tabSwitches} Switches
-                          </span>
-                        )}
-                      </td>
+                        {/* Screening Quiz Score */}
+                        <td className="py-3.5 px-4 text-center">
+                          <div className="font-black text-base text-slate-900 dark:text-white">
+                            {row.score}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-semibold">
+                            out of 100
+                          </div>
+                          {((row.analyticalScore ?? (row.attemptData as any)?.analytical_score ?? 0) > 0) && (
+                            <div className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25 text-[10px] font-bold">
+                              <Sparkles className="w-2.5 h-2.5 shrink-0" />
+                              ⚡ {row.analyticalScore ?? (row.attemptData as any)?.analytical_score}/20
+                            </div>
+                          )}
+                        </td>
 
-                      {/* Qualification */}
-                      <td className="py-3.5 px-4 text-center">
-                        {row.isQualified ? (
-                          <span className="inline-block px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-white shadow-xs">
-                            Qualified R2
-                          </span>
-                        ) : (
-                          <span className="inline-block px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500">
-                            Below Cutoff
-                          </span>
-                        )}
-                      </td>
+                        {/* Case Presentation (100) */}
+                        <td className="py-3.5 px-4 text-center">
+                          {rowJuryResult?.livePresentationScore !== undefined ? (
+                            <div>
+                              <div className="font-black text-base text-emerald-600 dark:text-emerald-400">
+                                {rowJuryResult.livePresentationScore}
+                                <span className="text-[10px] text-slate-400 font-semibold ml-0.5">/100</span>
+                              </div>
+                              <div
+                                className="text-[10px] text-slate-500 font-medium truncate max-w-[130px] mx-auto"
+                                title={rowJuryResult.trackName}
+                              >
+                                {rowJuryResult.trackName?.split('&')[0]?.trim() || 'Track Assigned'}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                              Pending Jury
+                            </span>
+                          )}
+                        </td>
 
-                      {/* Action: View Attempt */}
-                      <td className="py-3.5 px-4 text-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenReview(row.attemptData);
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 group-hover:bg-red-600 group-hover:text-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold transition shadow-2xs cursor-pointer border border-slate-200 dark:border-slate-700 group-hover:border-red-600"
-                          title="Inspect attempted questions & answers"
+                        {/* Time Taken */}
+                        <td className="py-3.5 px-4 text-center font-mono text-slate-600 dark:text-slate-300">
+                          {minutes}m {seconds < 10 ? '0' : ''}{seconds}s
+                        </td>
+
+                        {/* Integrity */}
+                        <td className="py-3.5 px-4 text-center">
+                          {row.tabSwitches === 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                              <ShieldCheck className="w-3 h-3" />
+                              Clean (0)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-600 border border-red-500/20">
+                              <ShieldAlert className="w-3 h-3" />
+                              {row.tabSwitches} Switches
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Qualification */}
+                        <td className="py-3.5 px-4 text-center">
+                          {row.isQualified ? (
+                            <span className="inline-block px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-white shadow-xs">
+                              Qualified R2
+                            </span>
+                          ) : (
+                            <span className="inline-block px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500">
+                              Below Cutoff
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Actions: View Attempt + Jury Score Accordion Toggle */}
+                        <td className="py-3.5 px-4 text-center">
+                          <div
+                            className="flex items-center justify-center gap-1.5"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onClick={() => handleOpenReview(row.attemptData)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition shadow-2xs cursor-pointer border border-slate-200 dark:border-slate-700"
+                              title="Inspect attempted questions & answers"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-slate-500" />
+                              <span>View</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleToggleJuryAccordion(row)}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer border ${
+                                isExpanded
+                                  ? 'bg-red-600 text-white border-red-600 ring-2 ring-red-400/30'
+                                  : rowJuryResult?.livePresentationScore !== undefined
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+                                  : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-900/40'
+                              }`}
+                              title="Enter / Edit Offline Jury Case Study Presentation Scorecard"
+                            >
+                              <Sliders className="w-3.5 h-3.5" />
+                              <span>Jury</span>
+                              {isExpanded ? (
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              ) : (
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Expandable Jury Presentation Evaluation Accordion */}
+                      {isExpanded && (
+                        <tr
+                          key={`${row.userId}_jury_accordion`}
+                          className="bg-slate-50/95 dark:bg-slate-900/95 border-b-2 border-red-500/40"
                         >
-                          <Eye className="w-3.5 h-3.5 text-red-600 group-hover:text-white transition-colors" />
-                          <span>View</span>
-                        </button>
-                      </td>
-                    </tr>
+                          <td colSpan={9} className="p-4 sm:p-6">
+                            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-md">
+                              {/* Accordion Header Banner */}
+                              <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 mb-4 border-b border-slate-200 dark:border-slate-700 gap-3">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="p-1.5 rounded-lg bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400">
+                                      <Sliders className="w-4 h-4" />
+                                    </span>
+                                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                                      Jury Scorecard: Evaluation of Case Study Presentation (100% Weightage)
+                                    </h4>
+                                  </div>
+                                  <p className="text-[11px] text-slate-500 mt-1">
+                                    Team: <strong className="text-slate-800 dark:text-slate-200">{row.teamName}</strong> | Candidate: <strong className="text-slate-800 dark:text-slate-200">{row.name}</strong> ({row.instituteName})
+                                  </p>
+                                </div>
+
+                                {/* Live Auto-calculated Total Badge */}
+                                <div className="flex items-center gap-3">
+                                  <div className="text-right">
+                                    <div className="text-[10px] uppercase font-bold text-slate-400">Calculated Total</div>
+                                    <div className="text-xl font-black text-slate-900 dark:text-white">
+                                      <span className={liveFormTotal >= 60 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
+                                        {liveFormTotal}
+                                      </span>
+                                      <span className="text-xs text-slate-400 font-semibold ml-0.5">/ 100</span>
+                                    </div>
+                                  </div>
+                                  <div className={`px-2.5 py-1 rounded-xl text-xs font-bold uppercase tracking-wider ${
+                                    liveFormTotal >= 60
+                                      ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                                      : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
+                                  }`}>
+                                    {liveFormTotal >= 60 ? 'Passing / Qualified' : 'Below 60'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Form Fields */}
+                              <div className="space-y-4">
+                                {/* Track Selection & Jury Evaluator */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                      Case Presentation Track *
+                                    </label>
+                                    <select
+                                      value={juryFormData.track}
+                                      onChange={(e) => setJuryFormData(prev => ({ ...prev, track: e.target.value }))}
+                                      className="w-full text-xs py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                                    >
+                                      {PRESENTATION_TRACKS.map(t => (
+                                        <option key={t} value={t}>{t}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                      Jury Panel / Evaluator Name
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={juryFormData.evaluatorName}
+                                      onChange={(e) => setJuryFormData(prev => ({ ...prev, evaluatorName: e.target.value }))}
+                                      placeholder="e.g. AIMA Academic & Industry Jury Panel"
+                                      className="w-full text-xs py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* 7 Official KPIs Grid */}
+                                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl p-4 border border-slate-200 dark:border-slate-700/80">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                                      Evaluation of Case Study Presentation (7 KPIs — Max 100 Marks)
+                                    </span>
+                                    <span className="text-[11px] font-mono font-bold text-slate-500">
+                                      Sum: {liveFormTotal} / 100
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                                    {CASE_STUDY_KPIS.map(kpi => {
+                                      const val = (juryFormData as any)[kpi.id] ?? 0;
+                                      return (
+                                        <div
+                                          key={kpi.id}
+                                          className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs"
+                                        >
+                                          <div className="flex items-center justify-between gap-2 mb-1">
+                                            <span
+                                              className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate"
+                                              title={kpi.label}
+                                            >
+                                              {kpi.label}
+                                            </span>
+                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 shrink-0">
+                                              Max {kpi.max}
+                                            </span>
+                                          </div>
+                                          <p className="text-[10px] text-slate-400 mb-2 line-clamp-1" title={kpi.desc}>
+                                            {kpi.desc}
+                                          </p>
+                                          <div className="flex items-center gap-2">
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              max={kpi.max}
+                                              value={val === 0 ? '' : val}
+                                              onChange={(e) => {
+                                                const parsed = e.target.value === ''
+                                                  ? 0
+                                                  : Math.min(kpi.max, Math.max(0, Number(e.target.value)));
+                                                setJuryFormData(prev => ({ ...prev, [kpi.id]: parsed }));
+                                              }}
+                                              placeholder="0"
+                                              className="w-full text-xs font-bold py-1.5 px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                                            />
+                                            <span className="text-xs font-bold text-slate-400 shrink-0">
+                                              / {kpi.max}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                {/* Qualitative Feedback & Attendance */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+                                  <div className="md:col-span-2">
+                                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                      Jury Qualitative Feedback & Defense Observations
+                                    </label>
+                                    <textarea
+                                      rows={2}
+                                      value={juryFormData.notes}
+                                      onChange={(e) => setJuryFormData(prev => ({ ...prev, notes: e.target.value }))}
+                                      placeholder="Enter jury observations, execution feasibility notes, or Q&A defense remarks..."
+                                      className="w-full text-xs py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                                    />
+                                  </div>
+
+                                  <div className="flex flex-col justify-between">
+                                    <div>
+                                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                        Attendance Verification
+                                      </label>
+                                      <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer mt-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={juryFormData.attendanceVerified}
+                                          onChange={(e) => setJuryFormData(prev => ({ ...prev, attendanceVerified: e.target.checked }))}
+                                          className="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-slate-300"
+                                        />
+                                        <span>Present in Presentation Hall</span>
+                                      </label>
+                                    </div>
+
+                                    {/* Feedback Message */}
+                                    {jurySaveFeedback && jurySaveFeedback.userId === row.userId && (
+                                      <div className={`text-xs font-bold mt-2 p-2 rounded-lg ${
+                                        jurySaveFeedback.isError
+                                          ? 'bg-red-500/10 text-red-600 border border-red-500/20'
+                                          : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                                      }`}>
+                                        {jurySaveFeedback.msg}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Form Action Buttons */}
+                                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedJuryUserId(null)}
+                                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isSavingJury}
+                                    onClick={() => handleSaveJuryEvaluation(row)}
+                                    className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-xs transition disabled:opacity-50 cursor-pointer"
+                                  >
+                                    {isSavingJury ? (
+                                      <>
+                                        <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        <span>Saving Scorecard...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Save className="w-3.5 h-3.5" />
+                                        <span>Save Evaluation ({liveFormTotal}/100)</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })
               )}

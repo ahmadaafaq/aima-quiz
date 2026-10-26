@@ -847,6 +847,7 @@ export async function saveJuryScorecardToDb(scorecard: {
   award?: string;
   notes?: string;
   evaluatedBy?: string;
+  kpiScores?: any;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const regNum = scorecard.registrationNumber || scorecard.teamId.replace('team_participant_', '').replace('team_', '');

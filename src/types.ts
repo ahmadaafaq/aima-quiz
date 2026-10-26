@@ -114,6 +114,17 @@ export interface DeadlineExtensionRequest {
   reviewerRemarks?: string;
 }
 
+export interface CaseStudyPresentationKPIs {
+  problemIdentification: number; // Max 15
+  caseQuestion1: number; // Max 15
+  caseQuestion2: number; // Max 15
+  caseQuestion3: number; // Max 15
+  strategicAlternatives: number; // Max 20
+  executionPlan: number; // Max 15
+  caseDataEvidence: number; // Max 5
+  totalScore: number; // Max 100
+}
+
 export interface OfflineRoundResult {
   id: string;
   round: 'round_2' | 'round_3' | 'round_4';
@@ -139,6 +150,7 @@ export interface OfflineRoundResult {
   evaluatedBy?: string;
   uploadedBy?: string;
   uploadedAt: string;
+  kpiScores?: CaseStudyPresentationKPIs;
 }
 
 export interface Team {

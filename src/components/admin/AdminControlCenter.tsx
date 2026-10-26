@@ -323,117 +323,29 @@ export const AdminControlCenter: React.FC = () => {
   };
   const activeStageBadge = stageBadgeMap[config.activeStage || 'round_2'] || 'Live R2';
 
-  const menuGroups: MenuGroup[] = [
+  const menuItems: MenuItem[] = [
     {
-      id: 'command_broadcast',
-      title: 'Registrations',
-      items: [
-        /* PHASE 2: control dashboard removed for now
-        {
-          id: 'overview',
-          label: 'Executive Command',
-          icon: LayoutDashboard,
-          roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
-        },
-        */
-        {
-          id: 'dynamic_registrations',
-          label: 'Dynamic Registrations (Supabase)',
-          icon: Database,
-          badge: `${csrRegistrations.length}`,
-          roles: ['admin', 'all', 'institute_coordinator'],
-        },
-        /* PHASE 2: Official Bulletins & Stages
-        {
-          id: 'announcements',
-          label: 'Official Bulletins',
-          icon: Radio,
-          badge: `${announcements.length}`,
-          roles: ['admin', 'all'],
-        },
-        {
-          id: 'stages',
-          label: 'Phase Progression Gates',
-          icon: Sliders,
-          badge: activeStageBadge,
-          roles: ['admin', 'all'],
-        },
-        */
-      ],
+      id: 'dynamic_registrations',
+      label: 'Dynamic Registrations (Supabase)',
+      icon: Database,
+      badge: `${csrRegistrations.length}`,
+      roles: ['admin', 'all', 'institute_coordinator'],
     },
     {
-      id: 'round1_quiz',
-      title: 'Round 1: Screening Quiz',
-      items: [
-        {
-          id: 'quiz_programs',
-          label: 'Quiz Programs & Events',
-          icon: Trophy,
-          badge: activeQuizProgramsCount > 0 ? `${activeQuizProgramsCount}` : undefined,
-          roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
-        },
-        /* PHASE 2: Quiz Question Bank
-        {
-          id: 'quiz_bank',
-          label: 'Quiz Question Bank',
-          icon: BookOpen,
-          badge: `${questions.length}`,
-          roles: ['admin', 'all', 'evaluator'],
-        },
-        */
-        {
-          id: 'quiz_results',
-          label: 'Quiz Results & Rankings',
-          icon: BarChart3,
-          badge: 'Live' as string | undefined,
-          roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
-        },
-      ],
+      id: 'quiz_programs',
+      label: 'Quiz Programs & Events',
+      icon: Trophy,
+      badge: activeQuizProgramsCount > 0 ? `${activeQuizProgramsCount}` : undefined,
+      roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
     },
-    /* PHASE 2: Round 2 Case Deck & AI
     {
-      id: 'round2_case',
-      title: 'Round 2: Case Deck & AI',
-      items: [
-        {
-          id: 'case_decks',
-          label: 'Case Decks & AI Review',
-          icon: FileCheck,
-          badge: `${allSubmissions.length}`,
-          roles: ['admin', 'evaluator', 'all'],
-        },
-        {
-          id: 'case_deadlines',
-          label: 'Deadlines & Extensions',
-          icon: Clock,
-          badge: teams.filter(t => t.extensionRequest?.status === 'PENDING').length > 0
-            ? `${teams.filter(t => t.extensionRequest?.status === 'PENDING').length} Pending`
-            : undefined,
-          roles: ['admin', 'all'],
-        },
-        {
-          id: 'evaluations',
-          label: 'Jury Bench & Rubric',
-          icon: Scale,
-          badge: `${evaluations.length}`,
-          roles: ['admin', 'evaluator', 'all'],
-        },
-      ],
+      id: 'quiz_results',
+      label: 'Quiz Results & Rankings',
+      icon: BarChart3,
+      badge: 'Live',
+      roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
     },
-    */
-    {
-      id: 'round34_offline',
-      title: 'Rounds 3 & 4: Offline Finals',
-      items: [
-        {
-          id: 'offline_rounds',
-          label: 'Offline Rounds Results',
-          icon: Award,
-          badge: offlineRoundResults.length > 0 ? `${offlineRoundResults.length}` : undefined,
-          roles: ['admin', 'all', 'regional_hub'],
-        },
-      ],
-    },
+  ];
     /* =========================================================================
      * PHASE 2 / 3 ROLLOUT: Ecosystem & Governance temporarily hidden
      * =========================================================================
@@ -489,9 +401,8 @@ export const AdminControlCenter: React.FC = () => {
           roles: ['admin', 'all'],
         },
       ],
-    },
     ========================================================================= */
-  ];
+
 
 if (!isAdminAuthed) {
   return <AdminLoginGate onAuthenticated={() => setIsAdminAuthed(true)} />;
@@ -585,67 +496,50 @@ return (
         </div>
       )}
 
-      {/* Grouped Navigation Item Links (Independently scrollable) */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-4 min-h-0 overscroll-contain">
-        {menuGroups.map(group => {
-          const visibleItems = group.items.filter(item => {
+      {/* Flat Navigation Item Links (Ungrouped - Single Day Event) */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-1.5 min-h-0 overscroll-contain">
+        {menuItems
+          .filter(item => {
             if (rolePerspective === 'admin' || rolePerspective === 'all') return true;
             return item.roles.includes(rolePerspective);
-          });
+          })
+          .map(item => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
 
-          if (visibleItems.length === 0) return null;
-
-          return (
-            <div key={group.id} className="space-y-1">
-              {/* Group Section Header */}
-              {!sidebarCollapsed ? (
-                <div className="px-2 pt-1 pb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  <span>{group.title}</span>
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id as any);
+                  setMobileSidebarOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer outline-none focus:outline-none focus:ring-0 focus-visible:outline-none select-none ${isActive
+                  ? 'bg-red-600 text-white font-bold shadow-md shadow-red-500/20'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
+                  } ${sidebarCollapsed ? 'lg:justify-center' : ''}`}
+                title={item.label}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                  <span className={`truncate ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+                    {item.label}
+                  </span>
                 </div>
-              ) : (
-                <div className="my-2 border-t border-slate-200 dark:border-slate-800" />
-              )}
 
-              {visibleItems.map(item => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.id;
-
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveTab(item.id as any);
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer outline-none focus:outline-none focus:ring-0 focus-visible:outline-none select-none ${isActive
-                      ? 'bg-red-600 text-white font-bold shadow-md shadow-red-500/20'
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
-                      } ${sidebarCollapsed ? 'lg:justify-center' : ''}`}
-                    title={item.label}
+                {item.badge && !sidebarCollapsed && (
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive
+                      ? 'bg-white/20 text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                      }`}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                      <span className={`truncate ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-                        {item.label}
-                      </span>
-                    </div>
-
-                    {item.badge && !sidebarCollapsed && (
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive
-                          ? 'bg-white/20 text-white'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                          }`}
-                      >
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          );
-        })}
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
       </div>
 
       {/* Sidebar Footer: Logout */}
