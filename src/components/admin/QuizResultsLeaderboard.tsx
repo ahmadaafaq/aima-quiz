@@ -171,6 +171,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   const [isSavingJury, setIsSavingJury] = useState<boolean>(false);
   const [jurySaveFeedback, setJurySaveFeedback] = useState<{ userId: string; msg: string; isError?: boolean } | null>(null);
 
+  // Review Modal Compact View Toggle
+  const [isCompactReview, setIsCompactReview] = useState<boolean>(true);
+  const [expandedExplanationQId, setExpandedExplanationQId] = useState<string | null>(null);
+
   // Helper to fetch jury evaluation for a specific candidate/team
   const getRowJuryScorecard = (row: {
     userId: string;
@@ -190,10 +194,12 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   // Toggle the jury presentation accordion for a candidate/team
   const handleToggleJuryAccordion = (row: {
     userId: string;
+    email?: string;
     teamId?: string;
     registrationNumber?: string;
     teamName?: string;
     instituteName?: string;
+    userProfile?: UserProfile;
     score: number;
   }) => {
     if (expandedJuryUserId === row.userId) {
@@ -202,10 +208,17 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     }
 
     const existing = getRowJuryScorecard(row);
+    const existingTrack =
+      row.userProfile?.selectedTrackId ||
+      (row.userProfile as any)?.trackName ||
+      (row as any).attemptData?.selectedTrackId ||
+      existing?.trackName ||
+      'General Management & Corporate Strategy';
+
     if (existing) {
       const kpis = (existing as any).kpiScores || (existing as any).kpi_scores || {};
       setJuryFormData({
-        track: existing.trackName || PRESENTATION_TRACKS[0],
+        track: existing.trackName || existingTrack,
         evaluatorName: existing.evaluatedBy || 'AIMA National Jury Panel',
         problemIdentification: kpis.problemIdentification ?? (existing.livePresentationScore ? Math.round(existing.livePresentationScore * 0.15) : 0),
         caseQuestion1: kpis.caseQuestion1 ?? (existing.livePresentationScore ? Math.round(existing.livePresentationScore * 0.15) : 0),
@@ -219,7 +232,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       });
     } else {
       setJuryFormData({
-        track: PRESENTATION_TRACKS[0],
+        track: existingTrack,
         evaluatorName: 'AIMA National Jury Panel',
         problemIdentification: 0,
         caseQuestion1: 0,
@@ -235,13 +248,15 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     setExpandedJuryUserId(row.userId);
   };
 
-  // Save the entered KPI scores for case study presentation
+  // Save the entered KPI scores for case study presentation to Database
   const handleSaveJuryEvaluation = async (row: {
     userId: string;
+    email?: string;
     teamId?: string;
     registrationNumber?: string;
     teamName?: string;
     instituteName?: string;
+    userProfile?: UserProfile;
     score: number;
   }) => {
     setIsSavingJury(true);
@@ -267,13 +282,21 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         totalScore: total,
       };
 
+      const resolvedTrack =
+        row.userProfile?.selectedTrackId ||
+        (row.userProfile as any)?.trackName ||
+        juryFormData.track ||
+        'General Management & Corporate Strategy';
+
       const scorecardPayload = {
         registrationNumber: row.registrationNumber || '',
+        candidateEmail: row.email,
+        userId: row.userId,
         teamId: row.teamId || row.userId,
         teamName: row.teamName || 'Team Entry',
         instituteName: row.instituteName || 'Management Institute',
         round: 'round_2' as const,
-        trackName: juryFormData.track,
+        trackName: resolvedTrack,
         offlineQuizScore: row.score,
         livePresentationScore: total,
         presentationMaxMarks: 100,
@@ -283,12 +306,15 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         attendanceVerified: juryFormData.attendanceVerified,
         qualifiedNextRound: total >= 60,
         notes: juryFormData.notes,
-        evaluatedBy: juryFormData.evaluatorName,
+        evaluatedBy: 'AIMA National Jury Panel',
         kpiScores: kpiPayload,
       };
 
-      // 1. Persist to Supabase
-      await saveJuryScorecardToDb(scorecardPayload);
+      // 1. Persist directly to Supabase Database
+      const dbRes = await saveJuryScorecardToDb(scorecardPayload);
+      if (!dbRes.success) {
+        throw new Error(dbRes.error || 'Failed to update database record');
+      }
 
       // 2. Persist to Context state so UI updates in real-time
       recordOfflineResultsBulk('round_2', [scorecardPayload]);
@@ -296,12 +322,12 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       addAuditLog(
         'Case Presentation Evaluated',
         'Evaluation',
-        `AIMA Coordinator recorded jury marks for "${row.teamName}" (${row.instituteName}): Total ${total}/100 pts [Track: ${juryFormData.track}] by ${juryFormData.evaluatorName}`
+        `AIMA Coordinator recorded jury marks for "${row.teamName}" (${row.instituteName}): Total ${total}/100 pts [Track: ${resolvedTrack}]`
       );
 
       setJurySaveFeedback({
         userId: row.userId,
-        msg: `✓ Evaluation for "${row.teamName}" saved successfully (${total}/100)!`,
+        msg: `✓ Evaluation for "${row.teamName}" saved to database (${total}/100 marks)!`,
       });
       setTimeout(() => {
         setJurySaveFeedback(null);
@@ -310,7 +336,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       console.error('Error saving jury scorecard:', err);
       setJurySaveFeedback({
         userId: row.userId,
-        msg: `Failed to save evaluation: ${err.message}`,
+        msg: `Failed to save evaluation to database: ${err.message}`,
         isError: true,
       });
     } finally {
@@ -1234,8 +1260,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                       Jury Scorecard: Evaluation of Case Study Presentation (100% Weightage)
                                     </h4>
                                   </div>
-                                  <p className="text-[11px] text-slate-500 mt-1">
-                                    Team: <strong className="text-slate-800 dark:text-slate-200">{row.teamName}</strong> | Candidate: <strong className="text-slate-800 dark:text-slate-200">{row.name}</strong> ({row.instituteName})
+                                  <p className="text-[11px] text-slate-500 mt-1 flex flex-wrap items-center gap-1.5">
+                                    <span>Team: <strong className="text-slate-800 dark:text-slate-200">{row.teamName}</strong></span>
+                                    <span>•</span>
+                                    <span>Candidate: <strong className="text-slate-800 dark:text-slate-200">{row.name}</strong> ({row.instituteName})</span>
+                                    <span className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold border border-blue-500/20 text-[10px]">
+                                      Track: {row.userProfile?.selectedTrackId || (row.userProfile as any)?.trackName || juryFormData.track || 'General Management & Corporate Strategy'}
+                                    </span>
                                   </p>
                                 </div>
 
@@ -1262,37 +1293,6 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
                               {/* Form Fields */}
                               <div className="space-y-4">
-                                {/* Track Selection & Jury Evaluator */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div>
-                                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                      Case Presentation Track *
-                                    </label>
-                                    <select
-                                      value={juryFormData.track}
-                                      onChange={(e) => setJuryFormData(prev => ({ ...prev, track: e.target.value }))}
-                                      className="w-full text-xs py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                                    >
-                                      {PRESENTATION_TRACKS.map(t => (
-                                        <option key={t} value={t}>{t}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-
-                                  <div>
-                                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                      Jury Panel / Evaluator Name
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={juryFormData.evaluatorName}
-                                      onChange={(e) => setJuryFormData(prev => ({ ...prev, evaluatorName: e.target.value }))}
-                                      placeholder="e.g. AIMA Academic & Industry Jury Panel"
-                                      className="w-full text-xs py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                                    />
-                                  </div>
-                                </div>
-
                                 {/* 7 Official KPIs Grid */}
                                 <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl p-4 border border-slate-200 dark:border-slate-700/80">
                                   <div className="flex items-center justify-between mb-3">
@@ -1367,17 +1367,20 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
                                   <div className="flex flex-col justify-between">
                                     <div>
-                                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                        Attendance Verification
+                                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-0.5">
+                                        Offline Presentation Attendance
                                       </label>
-                                      <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer mt-2">
+                                      <p className="text-[10px] text-slate-400 mb-1.5">
+                                        Confirms team was physically present at the venue to present before the jury
+                                      </p>
+                                      <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer font-medium bg-slate-50 dark:bg-slate-900/60 p-2 rounded-xl border border-slate-200 dark:border-slate-700">
                                         <input
                                           type="checkbox"
                                           checked={juryFormData.attendanceVerified}
                                           onChange={(e) => setJuryFormData(prev => ({ ...prev, attendanceVerified: e.target.checked }))}
                                           className="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-slate-300"
                                         />
-                                        <span>Present in Presentation Hall</span>
+                                        <span>Team Present in Offline Presentation Hall</span>
                                       </label>
                                     </div>
 
@@ -1574,97 +1577,128 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                 </div>
               </div>
 
-              {/* Row 3: Question Category Filters */}
-              <div className="px-5 py-2 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 overflow-x-auto">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0 mr-0.5">
-                  Filter:
-                </span>
+              {/* Row 3: Question Category Filters & View Density Mode */}
+              <div className="px-5 py-2.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0 mr-0.5">
+                    Filter:
+                  </span>
 
-                {/* All */}
-                <button
-                  type="button"
-                  onClick={() => setModalFilter('all')}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${modalFilter === 'all'
-                    ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white shadow-2xs font-black'
-                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-800/90 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-750 dark:hover:text-white'
-                    }`}
-                >
-                  <span>All</span>
-                  <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${modalFilter === 'all'
-                    ? 'bg-white/20 text-white dark:bg-slate-900/15 dark:text-slate-900'
-                    : 'bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
-                    }`}>
-                    {modalStats.total}
-                  </span>
-                </button>
+                  {/* All */}
+                  <button
+                    type="button"
+                    onClick={() => setModalFilter('all')}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${modalFilter === 'all'
+                      ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white shadow-2xs font-black'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-800/90 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-750 dark:hover:text-white'
+                      }`}
+                  >
+                    <span>All</span>
+                    <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${modalFilter === 'all'
+                      ? 'bg-white/20 text-white dark:bg-slate-900/15 dark:text-slate-900'
+                      : 'bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
+                      }`}>
+                      {modalStats.total}
+                    </span>
+                  </button>
 
-                {/* Correct */}
-                <button
-                  type="button"
-                  onClick={() => setModalFilter('correct')}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${modalFilter === 'correct'
-                    ? 'bg-emerald-50 text-emerald-900 border-emerald-400 ring-1 ring-emerald-400/30 dark:bg-emerald-950/90 dark:text-emerald-100 dark:border-emerald-500/70 dark:ring-emerald-500/40 shadow-2xs'
-                    : 'bg-slate-50/80 text-slate-600 border-slate-200 hover:bg-emerald-50/50 hover:border-emerald-200 hover:text-emerald-800 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700/80 dark:hover:bg-emerald-950/30 dark:hover:border-emerald-800/50 dark:hover:text-emerald-200'
-                    }`}
-                >
-                  <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${modalFilter === 'correct' ? 'text-emerald-600 dark:text-emerald-400' : 'text-emerald-500/80 dark:text-emerald-400/80'}`} />
-                  <span>Correct</span>
-                  <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${modalFilter === 'correct'
-                    ? 'bg-emerald-200/80 text-emerald-900 border border-emerald-300 dark:bg-emerald-500/30 dark:text-emerald-200 dark:border-emerald-500/40'
-                    : 'bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
-                    }`}>
-                    {modalStats.correct}
-                  </span>
-                  <span className={`text-[10px] font-medium ${modalFilter === 'correct' ? 'text-emerald-800 dark:text-emerald-200/80' : 'text-slate-400'}`}>
-                    ({modalStats.coreCorrect} Main + {modalStats.tieCorrect} Tie)
-                  </span>
-                </button>
+                  {/* Correct */}
+                  <button
+                    type="button"
+                    onClick={() => setModalFilter('correct')}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${modalFilter === 'correct'
+                      ? 'bg-emerald-50 text-emerald-900 border-emerald-400 ring-1 ring-emerald-400/30 dark:bg-emerald-950/90 dark:text-emerald-100 dark:border-emerald-500/70 dark:ring-emerald-500/40 shadow-2xs'
+                      : 'bg-slate-50/80 text-slate-600 border-slate-200 hover:bg-emerald-50/50 hover:border-emerald-200 hover:text-emerald-800 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700/80 dark:hover:bg-emerald-950/30 dark:hover:border-emerald-800/50 dark:hover:text-emerald-200'
+                      }`}
+                  >
+                    <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${modalFilter === 'correct' ? 'text-emerald-600 dark:text-emerald-400' : 'text-emerald-500/80 dark:text-emerald-400/80'}`} />
+                    <span>Correct</span>
+                    <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${modalFilter === 'correct'
+                      ? 'bg-emerald-200/80 text-emerald-900 border border-emerald-300 dark:bg-emerald-500/30 dark:text-emerald-200 dark:border-emerald-500/40'
+                      : 'bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
+                      }`}>
+                      {modalStats.correct}
+                    </span>
+                    <span className={`text-[10px] font-medium ${modalFilter === 'correct' ? 'text-emerald-800 dark:text-emerald-200/80' : 'text-slate-400'}`}>
+                      ({modalStats.coreCorrect} Main + {modalStats.tieCorrect} Tie)
+                    </span>
+                  </button>
 
-                {/* Incorrect */}
-                <button
-                  type="button"
-                  onClick={() => setModalFilter('incorrect')}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${modalFilter === 'incorrect'
-                    ? 'bg-rose-50 text-rose-900 border-rose-300 ring-1 ring-rose-300/40 dark:bg-rose-950/90 dark:text-rose-100 dark:border-rose-500/70 dark:ring-rose-500/40 shadow-2xs'
-                    : 'bg-slate-50/80 text-slate-600 border-slate-200 hover:bg-rose-50/50 hover:border-rose-200 hover:text-rose-800 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700/80 dark:hover:bg-rose-950/30 dark:hover:border-rose-800/50 dark:hover:text-rose-200'
-                    }`}
-                >
-                  <XCircle className={`w-3.5 h-3.5 shrink-0 ${modalFilter === 'incorrect' ? 'text-rose-500 dark:text-rose-400' : 'text-rose-400/80'}`} />
-                  <span>Incorrect</span>
-                  <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${modalFilter === 'incorrect'
-                    ? 'bg-rose-200/80 text-rose-900 border border-rose-300 dark:bg-rose-500/30 dark:text-rose-200 dark:border-rose-500/40'
-                    : 'bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
-                    }`}>
-                    {modalStats.incorrect}
-                  </span>
-                  <span className={`text-[10px] font-medium ${modalFilter === 'incorrect' ? 'text-rose-800 dark:text-rose-200/80' : 'text-slate-400'}`}>
-                    (0 Penalty)
-                  </span>
-                </button>
+                  {/* Incorrect */}
+                  <button
+                    type="button"
+                    onClick={() => setModalFilter('incorrect')}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${modalFilter === 'incorrect'
+                      ? 'bg-rose-50 text-rose-900 border-rose-300 ring-1 ring-rose-300/40 dark:bg-rose-950/90 dark:text-rose-100 dark:border-rose-500/70 dark:ring-rose-500/40 shadow-2xs'
+                      : 'bg-slate-50/80 text-slate-600 border-slate-200 hover:bg-rose-50/50 hover:border-rose-200 hover:text-rose-800 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700/80 dark:hover:bg-rose-950/30 dark:hover:border-rose-800/50 dark:hover:text-rose-200'
+                      }`}
+                  >
+                    <XCircle className={`w-3.5 h-3.5 shrink-0 ${modalFilter === 'incorrect' ? 'text-rose-500 dark:text-rose-400' : 'text-rose-400/80'}`} />
+                    <span>Incorrect</span>
+                    <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${modalFilter === 'incorrect'
+                      ? 'bg-rose-200/80 text-rose-900 border border-rose-300 dark:bg-rose-500/30 dark:text-rose-200 dark:border-rose-500/40'
+                      : 'bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
+                      }`}>
+                      {modalStats.incorrect}
+                    </span>
+                    <span className={`text-[10px] font-medium ${modalFilter === 'incorrect' ? 'text-rose-800 dark:text-rose-200/80' : 'text-slate-400'}`}>
+                      (0 Penalty)
+                    </span>
+                  </button>
 
-                {/* Skipped */}
-                <button
-                  type="button"
-                  onClick={() => setModalFilter('unattempted')}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${modalFilter === 'unattempted'
-                    ? 'bg-slate-200 text-slate-800 border-slate-300 dark:bg-slate-600 dark:text-white dark:border-slate-500 shadow-2xs font-black'
-                    : 'bg-slate-50/80 text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-800 dark:bg-slate-800/90 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-750 dark:hover:text-slate-200'
+                  {/* Skipped */}
+                  <button
+                    type="button"
+                    onClick={() => setModalFilter('unattempted')}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${modalFilter === 'unattempted'
+                      ? 'bg-slate-200 text-slate-800 border-slate-300 dark:bg-slate-600 dark:text-white dark:border-slate-500 shadow-2xs font-black'
+                      : 'bg-slate-50/80 text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-800 dark:bg-slate-800/90 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-750 dark:hover:text-slate-200'
+                      }`}
+                  >
+                    <HelpCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span>Skipped</span>
+                    <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${modalFilter === 'unattempted'
+                      ? 'bg-slate-300 text-slate-800 dark:bg-white/20 dark:text-white'
+                      : 'bg-slate-200/80 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                      }`}>
+                      {modalStats.unattempted}
+                    </span>
+                  </button>
+                </div>
+
+                {/* View Density Switch: Compact vs Detailed */}
+                <div className="flex items-center shrink-0 border border-slate-200 dark:border-slate-700 rounded-xl p-0.5 bg-slate-100 dark:bg-slate-800 text-[11px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setIsCompactReview(true)}
+                    className={`px-3 py-1 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                      isCompactReview
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
                     }`}
-                >
-                  <HelpCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>Skipped</span>
-                  <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${modalFilter === 'unattempted'
-                    ? 'bg-slate-300 text-slate-800 dark:bg-white/20 dark:text-white'
-                    : 'bg-slate-200/80 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-                    }`}>
-                    {modalStats.unattempted}
-                  </span>
-                </button>
+                  >
+                    <span>Compact Mode</span>
+                    <span className="px-1.5 py-0.2 text-[9px] font-black bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 rounded">
+                      Decluttered
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsCompactReview(false)}
+                    className={`px-3 py-1 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                      !isCompactReview
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+                    }`}
+                  >
+                    <span>Full 4-Option View</span>
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* Questions List (Scrollable) */}
-            <div className="flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-3.5 bg-slate-50/50 dark:bg-slate-950/40">
+            <div className="flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-3 bg-slate-50/50 dark:bg-slate-950/40">
               {filteredModalQuestions.length === 0 ? (
                 <div className="py-12 text-center text-slate-400 text-sm">
                   No questions found matching the "{modalFilter}" filter.
@@ -1679,13 +1713,19 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                   const displayQNo = q.orderIndex || q.qNo || (qIdx + 1);
                   const isReserveQuestion = displayQNo >= 26; // Q26 to Q30 are reserve tie-breaker questions
 
+                  const correctLetter = String.fromCharCode(65 + Number(q.correctAnswerIndex));
+                  const correctText = q.options[Number(q.correctAnswerIndex)];
+                  const studentLetter = isAttempted ? String.fromCharCode(65 + Number(studentSelectedOptIdx)) : '';
+                  const studentText = isAttempted ? q.options[Number(studentSelectedOptIdx)] : '';
+                  const isExplanationOpen = expandedExplanationQId === q.id;
+
                   return (
                     <div
                       key={q.id}
-                      className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-2.5 hover:border-slate-300 dark:hover:border-slate-700 transition"
+                      className="p-3 sm:p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-2 hover:border-slate-300 dark:hover:border-slate-700 transition"
                     >
                       {/* Question Header Strip */}
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-1.5">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="w-6 h-6 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-black text-xs flex items-center justify-center shadow-xs">
                             {displayQNo}
@@ -1736,83 +1776,188 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
                       {/* Caselet Snippet if any */}
                       {q.caseletSnippet && (
-                        <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border-l-4 border-slate-400 text-xs text-slate-600 dark:text-slate-300 italic leading-relaxed">
+                        <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border-l-4 border-slate-400 text-xs text-slate-600 dark:text-slate-300 italic leading-relaxed">
                           {q.caseletSnippet}
                         </div>
                       )}
 
                       {/* Question Text */}
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white leading-relaxed">
+                      <p className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white leading-relaxed">
                         {q.questionText}
                       </p>
 
-                      {/* Options List */}
-                      <div className="space-y-1.5 pt-0.5">
-                        {q.options.map((opt, optIdx) => {
-                          const isOptionCorrect = Number(optIdx) === Number(q.correctAnswerIndex);
-                          const isOptionStudentChosen = isAttempted && Number(optIdx) === Number(studentSelectedOptIdx);
-
-                          let optionStyles = 'border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 text-slate-700 dark:text-slate-300';
-                          let letterCircleStyles = 'bg-slate-200/80 dark:bg-slate-700 text-slate-600 dark:text-slate-300';
-                          let badgeEl: React.ReactNode = null;
-
-                          if (isOptionStudentChosen && isOptionCorrect) {
-                            // Student selected correct option
-                            optionStyles = 'border-2 border-emerald-500 bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-100 shadow-xs ring-1 ring-emerald-500/50';
-                            letterCircleStyles = 'bg-emerald-600 text-white font-black';
-                            badgeEl = (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white shadow-2xs shrink-0">
-                                <Check className="w-3 h-3" /> Candidate Selected (Correct • +4)
-                              </span>
-                            );
-                          } else if (isOptionStudentChosen && !isOptionCorrect) {
-                            // Student selected wrong option -> HIGHLIGHT IN RED / ROSE WITH CLEAR 0 PENALTY NOTE
-                            optionStyles = 'border-2 border-rose-500 bg-rose-500/10 dark:bg-rose-950/30 text-rose-950 dark:text-rose-100 shadow-xs ring-1 ring-rose-500/50';
-                            letterCircleStyles = 'bg-rose-600 text-white font-black';
-                            badgeEl = (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-600 text-white shadow-2xs shrink-0">
-                                <X className="w-3 h-3" /> Candidate Selected (Wrong Option{isNegativeMarking ? ` • -${negativeMarks}` : ' • 0 Penalty'})
-                              </span>
-                            );
-                          } else if (isOptionCorrect) {
-                            // The right option that student did not select
-                            optionStyles = 'border-2 border-emerald-500/70 bg-emerald-500/5 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100';
-                            letterCircleStyles = 'border-2 border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold';
-                            badgeEl = (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border border-emerald-500 text-emerald-600 dark:text-emerald-400 shrink-0">
-                                <Check className="w-3 h-3" /> Correct Answer
-                              </span>
-                            );
-                          }
-
-                          const optionLetter = String.fromCharCode(65 + optIdx); // A, B, C, D
-
-                          return (
-                            <div
-                              key={optIdx}
-                              className={`py-2 px-3 rounded-xl border text-xs flex items-center justify-between gap-2.5 transition ${optionStyles}`}
-                            >
-                              <div className="flex items-start gap-2.5 min-w-0">
-                                <span className={`w-5.5 h-5.5 rounded-lg flex items-center justify-center text-[11px] shrink-0 font-bold ${letterCircleStyles}`}>
-                                  {optionLetter}
+                      {/* --- COMPACT MODE (Streamlined & Decluttered) --- */}
+                      {isCompactReview ? (
+                        <div className="space-y-1.5 pt-1">
+                          {isCorrect ? (
+                            <div className="py-2 px-3 rounded-xl border border-emerald-400/50 bg-emerald-500/10 dark:bg-emerald-950/25 text-xs text-emerald-950 dark:text-emerald-100 flex items-center justify-between gap-2.5">
+                              <div className="flex items-start gap-2 min-w-0">
+                                <span className="w-5 h-5 rounded-md bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center shrink-0">
+                                  {studentLetter}
                                 </span>
-                                <span className="font-medium break-words leading-snug pt-0.5">
-                                  {opt}
+                                <span className="font-semibold break-words leading-tight pt-0.5">
+                                  {studentText}
                                 </span>
                               </div>
-                              {badgeEl}
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white shrink-0">
+                                <Check className="w-3 h-3" /> Selected • Correct (+4)
+                              </span>
                             </div>
-                          );
-                        })}
-                      </div>
+                          ) : isWrong ? (
+                            <div className="space-y-1.5">
+                              {/* Candidate Choice */}
+                              <div className="py-1.5 px-3 rounded-xl border border-rose-300 dark:border-rose-900/60 bg-rose-500/10 dark:bg-rose-950/25 text-xs text-rose-950 dark:text-rose-100 flex items-center justify-between gap-2.5">
+                                <div className="flex items-start gap-2 min-w-0">
+                                  <span className="w-5 h-5 rounded-md bg-rose-600 text-white font-black text-[11px] flex items-center justify-center shrink-0">
+                                    {studentLetter}
+                                  </span>
+                                  <span className="font-semibold break-words leading-tight pt-0.5">
+                                    {studentText}
+                                  </span>
+                                </div>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-600 text-white shrink-0">
+                                  <X className="w-3 h-3" /> Candidate Choice (0 penalty)
+                                </span>
+                              </div>
 
-                      {/* Explanation if present */}
-                      {q.explanation && (
-                        <div className="mt-2 p-2.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-900/40 text-xs text-blue-900 dark:text-blue-200 flex items-start gap-2 leading-relaxed">
-                          <BookOpen className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
-                          <div>
-                            <strong className="font-bold">Correct Answer Explanation:</strong> {q.explanation}
-                          </div>
+                              {/* Correct Choice */}
+                              <div className="py-1.5 px-3 rounded-xl border border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-950/15 text-xs text-emerald-950 dark:text-emerald-100 flex items-center justify-between gap-2.5">
+                                <div className="flex items-start gap-2 min-w-0">
+                                  <span className="w-5 h-5 rounded-md border-2 border-emerald-600 text-emerald-600 dark:text-emerald-400 font-black text-[11px] flex items-center justify-center shrink-0">
+                                    {correctLetter}
+                                  </span>
+                                  <span className="font-medium text-slate-800 dark:text-slate-200 break-words leading-tight pt-0.5">
+                                    {correctText}
+                                  </span>
+                                </div>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border border-emerald-500 text-emerald-600 dark:text-emerald-400 shrink-0">
+                                  <Check className="w-3 h-3" /> Correct Answer
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {/* Skipped */}
+                              <div className="py-1.5 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 text-xs text-slate-500 flex items-center justify-between gap-2">
+                                <span className="font-medium italic">
+                                  Candidate skipped this question without submitting an option
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-400 shrink-0">
+                                  0 Marks
+                                </span>
+                              </div>
+
+                              {/* Correct Answer */}
+                              <div className="py-1.5 px-3 rounded-xl border border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-950/15 text-xs text-emerald-950 dark:text-emerald-100 flex items-center justify-between gap-2.5">
+                                <div className="flex items-start gap-2 min-w-0">
+                                  <span className="w-5 h-5 rounded-md border-2 border-emerald-600 text-emerald-600 dark:text-emerald-400 font-black text-[11px] flex items-center justify-center shrink-0">
+                                    {correctLetter}
+                                  </span>
+                                  <span className="font-medium text-slate-800 dark:text-slate-200 break-words leading-tight pt-0.5">
+                                    {correctText}
+                                  </span>
+                                </div>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border border-emerald-500 text-emerald-600 dark:text-emerald-400 shrink-0">
+                                  <Check className="w-3 h-3" /> Correct Answer
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Toggleable Explanation in Compact Mode */}
+                          {q.explanation && (
+                            <div className="pt-1">
+                              <button
+                                type="button"
+                                onClick={() => setExpandedExplanationQId(isExplanationOpen ? null : q.id)}
+                                className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition cursor-pointer"
+                              >
+                                <BookOpen className="w-3 h-3" />
+                                <span>{isExplanationOpen ? 'Hide Explanation' : 'View Explanation'}</span>
+                                {isExplanationOpen ? (
+                                  <ChevronUp className="w-3 h-3" />
+                                ) : (
+                                  <ChevronDown className="w-3 h-3" />
+                                )}
+                              </button>
+
+                              {isExplanationOpen && (
+                                <div className="mt-1.5 p-2.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-900/40 text-xs text-blue-900 dark:text-blue-200 flex items-start gap-2 leading-relaxed">
+                                  <BookOpen className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                                  <div>
+                                    <strong className="font-bold">Correct Answer Explanation:</strong> {q.explanation}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        /* --- FULL 4-OPTION DETAILED VIEW --- */
+                        <div className="space-y-1.5 pt-0.5">
+                          {q.options.map((opt, optIdx) => {
+                            const isOptionCorrect = Number(optIdx) === Number(q.correctAnswerIndex);
+                            const isOptionStudentChosen = isAttempted && Number(optIdx) === Number(studentSelectedOptIdx);
+
+                            let optionStyles = 'border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 text-slate-700 dark:text-slate-300';
+                            let letterCircleStyles = 'bg-slate-200/80 dark:bg-slate-700 text-slate-600 dark:text-slate-300';
+                            let badgeEl: React.ReactNode = null;
+
+                            if (isOptionStudentChosen && isOptionCorrect) {
+                              optionStyles = 'border-2 border-emerald-500 bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-100 shadow-xs ring-1 ring-emerald-500/50';
+                              letterCircleStyles = 'bg-emerald-600 text-white font-black';
+                              badgeEl = (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white shadow-2xs shrink-0">
+                                  <Check className="w-3 h-3" /> Candidate Selected (Correct • +4)
+                                </span>
+                              );
+                            } else if (isOptionStudentChosen && !isOptionCorrect) {
+                              optionStyles = 'border-2 border-rose-500 bg-rose-500/10 dark:bg-rose-950/30 text-rose-950 dark:text-rose-100 shadow-xs ring-1 ring-rose-500/50';
+                              letterCircleStyles = 'bg-rose-600 text-white font-black';
+                              badgeEl = (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-600 text-white shadow-2xs shrink-0">
+                                  <X className="w-3 h-3" /> Candidate Selected (Wrong Option{isNegativeMarking ? ` • -${negativeMarks}` : ' • 0 Penalty'})
+                                </span>
+                              );
+                            } else if (isOptionCorrect) {
+                              optionStyles = 'border-2 border-emerald-500/70 bg-emerald-500/5 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100';
+                              letterCircleStyles = 'border-2 border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold';
+                              badgeEl = (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border border-emerald-500 text-emerald-600 dark:text-emerald-400 shrink-0">
+                                  <Check className="w-3 h-3" /> Correct Answer
+                                </span>
+                              );
+                            }
+
+                            const optionLetter = String.fromCharCode(65 + optIdx);
+
+                            return (
+                              <div
+                                key={optIdx}
+                                className={`py-2 px-3 rounded-xl border text-xs flex items-center justify-between gap-2.5 transition ${optionStyles}`}
+                              >
+                                <div className="flex items-start gap-2.5 min-w-0">
+                                  <span className={`w-5.5 h-5.5 rounded-lg flex items-center justify-center text-[11px] shrink-0 font-bold ${letterCircleStyles}`}>
+                                    {optionLetter}
+                                  </span>
+                                  <span className="font-medium break-words leading-snug pt-0.5">
+                                    {opt}
+                                  </span>
+                                </div>
+                                {badgeEl}
+                              </div>
+                            );
+                          })}
+
+                          {/* Always-visible Explanation in Detailed Mode */}
+                          {q.explanation && (
+                            <div className="mt-2 p-2.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-900/40 text-xs text-blue-900 dark:text-blue-200 flex items-start gap-2 leading-relaxed">
+                              <BookOpen className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                              <div>
+                                <strong className="font-bold">Correct Answer Explanation:</strong> {q.explanation}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

@@ -832,6 +832,8 @@ export async function saveParticipantTrackSelection(
 export async function saveJuryScorecardToDb(scorecard: {
   teamId: string;
   registrationNumber?: string;
+  candidateEmail?: string;
+  userId?: string;
   teamName: string;
   instituteName: string;
   round: 'round_2' | 'round_3' | 'round_4';
@@ -850,13 +852,42 @@ export async function saveJuryScorecardToDb(scorecard: {
   kpiScores?: any;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const regNum = scorecard.registrationNumber || scorecard.teamId.replace('team_participant_', '').replace('team_', '');
-    const { data: existingRows } = await supabase
-      .from('registrations')
-      .select('*')
-      .or(`registration_number.eq.${regNum},team_name.eq.${scorecard.teamName}`);
+    const regNum = scorecard.registrationNumber && scorecard.registrationNumber !== 'AIMA-CL26-00000'
+      ? scorecard.registrationNumber
+      : scorecard.teamId.replace('team_participant_', '').replace('team_', '');
 
-    const existing = existingRows?.[0];
+    let existing: any = null;
+
+    // 1. Try finding by registration_number
+    if (regNum && regNum !== 'AIMA-CL26-00000') {
+      const { data } = await supabase
+        .from('registrations')
+        .select('*')
+        .eq('registration_number', regNum)
+        .limit(1);
+      if (data && data.length > 0) existing = data[0];
+    }
+
+    // 2. Try finding by contact_email
+    if (!existing && scorecard.candidateEmail) {
+      const { data } = await supabase
+        .from('registrations')
+        .select('*')
+        .eq('contact_email', scorecard.candidateEmail.toLowerCase().trim())
+        .limit(1);
+      if (data && data.length > 0) existing = data[0];
+    }
+
+    // 3. Try finding by team_name (if not generic "Individual Entry")
+    if (!existing && scorecard.teamName && scorecard.teamName !== 'Individual Entry') {
+      const { data } = await supabase
+        .from('registrations')
+        .select('*')
+        .eq('team_name', scorecard.teamName)
+        .limit(1);
+      if (data && data.length > 0) existing = data[0];
+    }
+
     const now = new Date().toISOString();
     const rawData = existing?.raw_data || {};
     const prevOfflineResults = rawData.offlineRoundResults || [];
@@ -864,12 +895,16 @@ export async function saveJuryScorecardToDb(scorecard: {
     const updatedItem = {
       ...scorecard,
       id: `off_${scorecard.round}_${Date.now()}`,
-      registrationNumber: regNum,
+      registrationNumber: existing?.registration_number || regNum,
       uploadedAt: now,
     };
 
     const existingIdx = prevOfflineResults.findIndex(
-      (r: any) => r.round === scorecard.round && (r.teamId === scorecard.teamId || r.registrationNumber === regNum)
+      (r: any) =>
+        r.round === scorecard.round &&
+        ((scorecard.teamId && r.teamId === scorecard.teamId) ||
+          (regNum && r.registrationNumber === regNum) ||
+          (scorecard.candidateEmail && r.candidateEmail === scorecard.candidateEmail))
     );
 
     let newOfflineResults;
@@ -884,23 +919,67 @@ export async function saveJuryScorecardToDb(scorecard: {
       ...rawData,
       offlineRoundResults: newOfflineResults,
       latestJuryScorecard: updatedItem,
+      casePresentationScore: scorecard.livePresentationScore,
+      casePresentationAttendance: scorecard.attendanceVerified,
+      casePresentationTrack: scorecard.trackName,
+      casePresentationKpis: scorecard.kpiScores,
+      casePresentationNotes: scorecard.notes,
     };
 
     if (existing) {
       const { error: updErr } = await supabase
         .from('registrations')
-        .update({ raw_data: updatedRaw })
+        .update({
+          raw_data: updatedRaw,
+          updated_at: now,
+        })
         .eq('id', existing.id);
 
       if (updErr) {
         console.warn('Supabase jury scorecard update notice:', updErr.message);
       }
+    } else {
+      const newRegPayload = {
+        registration_number: regNum.startsWith('AIMA-') ? regNum : `AIMA-CL26-${Math.floor(10000 + Math.random() * 90000)}`,
+        team_name: scorecard.teamName || 'Individual Entry',
+        candidate_name: scorecard.teamName,
+        contact_email: scorecard.candidateEmail || '',
+        institution_name: scorecard.instituteName || 'Management Institute',
+        payment_status: 'paid',
+        payment_amount: 0,
+        raw_data: updatedRaw,
+        created_at: now,
+        updated_at: now,
+      };
+      await supabase.from('registrations').insert([newRegPayload]);
+    }
+
+    // Background sync to quiz_attempts if matching
+    try {
+      if (scorecard.candidateEmail) {
+        await supabase
+          .from('quiz_attempts')
+          .update({
+            raw_data: {
+              presentation_score: scorecard.livePresentationScore,
+              presentation_kpis: scorecard.kpiScores,
+              evaluated_at: now,
+            }
+          })
+          .eq('participant_email', scorecard.candidateEmail.toLowerCase().trim());
+      }
+    } catch {
+      // ignore
     }
 
     // Update local cache
     const cached = getLocalRegistrationsCache();
     const updated = cached.map((r) => {
-      if (r.registrationNumber === regNum || r.teamName === scorecard.teamName) {
+      if (
+        (regNum && r.registrationNumber === regNum) ||
+        (scorecard.candidateEmail && r.email === scorecard.candidateEmail) ||
+        (scorecard.teamName && r.teamName === scorecard.teamName)
+      ) {
         return {
           ...r,
           offlineRoundResults: newOfflineResults,
