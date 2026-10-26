@@ -174,36 +174,36 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
             <button
               type="button"
               onClick={toggleTheme}
-              className="h-9 px-3 rounded-xl bg-white dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-500 text-slate-800 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white transition-all flex items-center gap-2 cursor-pointer shadow-xs shrink-0"
+              className="h-9 px-2.5 sm:px-3 rounded-xl bg-white dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-500 text-slate-800 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer shadow-xs shrink-0"
               title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
               aria-label="Toggle Theme Mode"
             >
               {theme === 'dark' ? (
                 <>
                   <Sun className="w-4 h-4 text-amber-400" />
-                  <span className="text-xs font-bold text-slate-200">Light</span>
+                  <span className="hidden sm:inline text-xs font-bold text-slate-200">Light</span>
                 </>
               ) : (
                 <>
                   <Moon className="w-4 h-4 text-indigo-600" />
-                  <span className="text-xs font-bold text-slate-700">Dark</span>
+                  <span className="hidden sm:inline text-xs font-bold text-slate-700">Dark</span>
                 </>
               )}
             </button>
 
             {/* Top Right Corner Profile Avatar & Session Control */}
             {loggedInParticipant ? (
-              <>
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setActiveView('student_dashboard')}
-                  className="h-9 px-3 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 transition-all flex items-center gap-2 cursor-pointer shadow-xs text-xs font-bold shrink-0"
+                  className="h-9 px-2.5 sm:px-3 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer shadow-xs text-xs font-bold shrink-0"
                   title="Go to Student Dashboard"
                 >
                   <div className="w-5 h-5 rounded-lg bg-blue-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">
                     {loggedInParticipant.name ? loggedInParticipant.name.charAt(0).toUpperCase() : 'P'}
                   </div>
-                  <span className="max-w-[130px] truncate">{loggedInParticipant.name || 'Dashboard'}</span>
+                  <span className="max-w-[95px] sm:max-w-[130px] truncate">{loggedInParticipant.name || 'Dashboard'}</span>
                 </button>
 
                 <button
@@ -218,7 +218,7 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
                   <LogOut className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Logout</span>
                 </button>
-              </>
+              </div>
             ) : (
               <button
                 type="button"
