@@ -202,7 +202,10 @@ const LOCAL_STORAGE_REG_KEY = 'AIMA_SUPABASE_REGISTRATIONS_CACHE';
 export function getLocalRegistrationsCache(): CSRBootcampRegistration[] {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_REG_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter(r => r.registrationNumber !== 'AIMA_SYSTEM_QUIZ_CONFIG')
+      : [];
   } catch {
     return [];
   }
@@ -640,7 +643,9 @@ export async function fetchRegistrationsFromSupabase(): Promise<{
     }
 
     if (data && Array.isArray(data)) {
-      const converted = data.map((d: any) => mapSupabaseRowToAppReg(d));
+      const converted = data
+        .filter((d: any) => d.registration_number !== 'AIMA_SYSTEM_QUIZ_CONFIG')
+        .map((d: any) => mapSupabaseRowToAppReg(d));
       // Sync cache
       saveLocalRegistrationCache(converted);
       return {
