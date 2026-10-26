@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   Zap,
   Users,
+  User,
   Eye,
   ShieldCheck,
   ShieldAlert,
@@ -140,6 +141,24 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   const [cutoffInput, setCutoffInput] = useState<string>('');
   const [isSavingCutoff, setIsSavingCutoff] = useState<boolean>(false);
   const [cutoffSaveSuccess, setCutoffSaveSuccess] = useState<boolean>(false);
+
+  // Expandable Team Accordion State
+  const [expandedTeamIds, setExpandedTeamIds] = useState<Set<string>>(new Set());
+
+  const toggleTeamAccordion = (teamId: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setExpandedTeamIds(prev => {
+      const next = new Set(prev);
+      if (next.has(teamId)) {
+        next.delete(teamId);
+      } else {
+        next.add(teamId);
+      }
+      return next;
+    });
+  };
 
   // Case Study Presentation Jury Evaluation States
   const [expandedJuryUserId, setExpandedJuryUserId] = useState<string | null>(null);
@@ -519,103 +538,226 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     return a.programId === selectedProgramId;
   });
 
-  // 1b. Compute team cumulative score averages
-  // For teams, the complete team's cumulative average score must pass the given cutoff to move to the next round
-  const teamScoreMap = new Map<string, { totalScore: number; count: number; avg: number }>();
-  quizAttempts.filter(a => a.isCompleted).forEach(attempt => {
-    const user = users.find(
-      u => u.id === attempt.studentId || u.id === attempt.userId ||
-        (attempt.participantEmail && u.email.toLowerCase() === attempt.participantEmail.toLowerCase())
-    );
-    const userTeam = teams.find(t => t.id === attempt.teamId || (user && t.members.some(m => m.studentId === user.id)));
-    const teamId = userTeam?.id || attempt.teamId;
-    if (teamId) {
-      const current = teamScoreMap.get(teamId) || { totalScore: 0, count: 0, avg: 0 };
-      current.totalScore += (attempt.score ?? 0);
-      current.count += 1;
-      current.avg = Math.round(current.totalScore / current.count);
-      teamScoreMap.set(teamId, current);
-    }
-  });
+  // 2. Map relevant attempts to candidate and team data (individual attempt level)
+  const enrichedLeaderboard = useMemo(() => {
+    return relevantAttempts.map(attempt => {
+      const user = users.find(
+        u => u.id === attempt.studentId || u.id === attempt.userId ||
+          (attempt.participantEmail && u.email.toLowerCase() === attempt.participantEmail.toLowerCase())
+      );
+      const userTeam = teams.find(t => t.id === attempt.teamId || (user && t.members.some(m => m.studentId === user.id)));
+      const institute = institutions.find(i => i.id === user?.instituteId);
 
-  // 2. Map relevant attempts to candidate and team data
-  const enrichedLeaderboard = relevantAttempts.map(attempt => {
-    const user = users.find(
-      u => u.id === attempt.studentId || u.id === attempt.userId ||
-        (attempt.participantEmail && u.email.toLowerCase() === attempt.participantEmail.toLowerCase())
-    );
-    const userTeam = teams.find(t => t.id === attempt.teamId || (user && t.members.some(m => m.studentId === user.id)));
-    const institute = institutions.find(i => i.id === user?.instituteId);
+      const score = attempt.score ?? 0;
+      const analyticalScore = attempt.analyticalScore ?? (attempt as any).analytical_score ?? 0;
+      const timeTaken = attempt.timeTakenSeconds ?? 1800;
+      const tabSwitches = attempt.tabSwitchCount ?? 0;
 
-    const score = attempt.score ?? 0;
-    const analyticalScore = attempt.analyticalScore ?? (attempt as any).analytical_score ?? 0;
-    const timeTaken = attempt.timeTakenSeconds ?? 1800;
-    const tabSwitches = attempt.tabSwitchCount ?? 0;
-    const isCompleted = true;
+      const teamId = userTeam?.id || attempt.teamId;
+      const isTeam = !!teamId && userTeam?.name !== 'Individual Entry';
 
-    const teamId = userTeam?.id || attempt.teamId;
-    const isTeam = !!teamId && userTeam?.name !== 'Individual Entry';
-    const teamStats = teamId ? teamScoreMap.get(teamId) : null;
-    const teamAvgScore = teamStats ? teamStats.avg : score;
+      return {
+        userId: attempt.studentId || attempt.userId || attempt.attemptId,
+        name: user?.name || attempt.candidateName || 'Candidate #' + (attempt.studentId || '').slice(0, 8),
+        email: user?.email || attempt.participantEmail || 'N/A',
+        studentIdCardNumber: user?.studentIdCardNumber,
+        registrationNumber: attempt.registrationNumber || user?.studentIdCardNumber || 'AIMA-CL26-00000',
+        instituteName: user?.instituteName || institute?.name || attempt.instituteName || 'Independent B-School',
+        instituteCity: institute?.city || 'India',
+        teamName: userTeam?.name || 'Individual Entry',
+        teamId,
+        isTeam,
+        isTeamLeader: Boolean(user?.isTeamLeader || (userTeam && userTeam.leaderId === user?.id)),
+        score,
+        analyticalScore,
+        timeTaken,
+        tabSwitches,
+        isCompleted: true,
+        submittedAt: attempt.submittedAt || (attempt as any).submitted_at || (attempt as any).completedAt || (attempt as any).createdAt,
+        attemptData: attempt,
+        userProfile: user,
+      };
+    });
+  }, [relevantAttempts, users, teams, institutions]);
 
-    // Team cumulative score average must pass the given cutoff to qualify
-    const isQualified = isTeam ? (teamAvgScore >= effectiveCutoff) : (score >= effectiveCutoff);
+  // 3. Group Leaderboard into Team Entries and Solo Entries
+  const groupedLeaderboard = useMemo(() => {
+    const teamMap = new Map<string, {
+      id: string;
+      entryType: 'team';
+      isTeam: true;
+      teamId: string;
+      teamName: string;
+      instituteName: string;
+      instituteCity: string;
+      registrationNumber?: string;
+      userProfile?: UserProfile;
+      members: Array<{
+        userId: string;
+        name: string;
+        email: string;
+        studentIdCardNumber?: string;
+        registrationNumber?: string;
+        isTeamLeader: boolean;
+        score: number;
+        analyticalScore: number;
+        timeTaken: number;
+        tabSwitches: number;
+        submittedAt?: string;
+        attemptData: QuizAttempt;
+        userProfile?: UserProfile;
+      }>;
+      submittedAt?: string;
+    }>();
 
-    return {
-      userId: attempt.studentId || attempt.userId || attempt.attemptId,
-      name: user?.name || attempt.candidateName || 'Candidate #' + (attempt.studentId || '').slice(0, 8),
-      email: user?.email || attempt.participantEmail || 'N/A',
-      studentIdCardNumber: user?.studentIdCardNumber,
-      registrationNumber: attempt.registrationNumber || user?.studentIdCardNumber || 'AIMA-CL26-00000',
-      instituteName: user?.instituteName || institute?.name || attempt.instituteName || 'Independent B-School',
-      instituteCity: institute?.city || 'India',
-      teamName: userTeam?.name || 'Individual Entry',
-      teamId,
-      isTeam,
-      teamAvgScore,
-      teamAttemptsCount: teamStats?.count ?? (isTeam ? 1 : 0),
-      score,
-      analyticalScore,
-      timeTaken,
-      tabSwitches,
-      isCompleted,
-      isQualified,
-      submittedAt: attempt.submittedAt || (attempt as any).submitted_at || (attempt as any).completedAt || (attempt as any).createdAt,
-      attemptData: attempt,
-      userProfile: user,
-    };
-  });
+    const soloList: Array<any> = [];
+
+    enrichedLeaderboard.forEach(item => {
+      if (item.isTeam && item.teamId) {
+        let teamEntry = teamMap.get(item.teamId);
+        if (!teamEntry) {
+          teamEntry = {
+            id: item.teamId,
+            entryType: 'team',
+            isTeam: true,
+            teamId: item.teamId,
+            teamName: item.teamName,
+            instituteName: item.instituteName,
+            instituteCity: item.instituteCity,
+            registrationNumber: item.registrationNumber,
+            userProfile: item.userProfile,
+            members: [],
+            submittedAt: item.submittedAt,
+          };
+          teamMap.set(item.teamId, teamEntry);
+        }
+
+        teamEntry.members.push({
+          userId: item.userId,
+          name: item.name,
+          email: item.email,
+          studentIdCardNumber: item.studentIdCardNumber,
+          registrationNumber: item.registrationNumber,
+          isTeamLeader: item.isTeamLeader,
+          score: item.score,
+          analyticalScore: item.analyticalScore,
+          timeTaken: item.timeTaken,
+          tabSwitches: item.tabSwitches,
+          submittedAt: item.submittedAt,
+          attemptData: item.attemptData,
+          userProfile: item.userProfile,
+        });
+
+        if (item.submittedAt && (!teamEntry.submittedAt || new Date(item.submittedAt) > new Date(teamEntry.submittedAt))) {
+          teamEntry.submittedAt = item.submittedAt;
+        }
+      } else {
+        soloList.push({
+          id: item.userId,
+          entryType: 'solo',
+          isTeam: false,
+          teamId: undefined,
+          teamName: 'Individual Entry',
+          instituteName: item.instituteName,
+          instituteCity: item.instituteCity,
+          userId: item.userId,
+          name: item.name,
+          email: item.email,
+          registrationNumber: item.registrationNumber,
+          userProfile: item.userProfile,
+          attemptData: item.attemptData,
+          score: item.score,
+          analyticalScore: item.analyticalScore,
+          timeTaken: item.timeTaken,
+          tabSwitches: item.tabSwitches,
+          isQualified: item.score >= effectiveCutoff,
+          submittedAt: item.submittedAt,
+          members: [],
+        });
+      }
+    });
+
+    // Format teams with aggregated scores
+    const teamEntries = Array.from(teamMap.values()).map(t => {
+      const count = t.members.length;
+      const totalScore = t.members.reduce((acc, m) => acc + m.score, 0);
+      const avgScore = count > 0 ? Math.round(totalScore / count) : 0;
+      const totalAnalytical = t.members.reduce((acc, m) => acc + m.analyticalScore, 0);
+      const avgAnalytical = count > 0 ? Math.round(totalAnalytical / count) : 0;
+      const totalTime = t.members.reduce((acc, m) => acc + m.timeTaken, 0);
+      const avgTime = count > 0 ? Math.round(totalTime / count) : 0;
+      const totalTabSwitches = t.members.reduce((acc, m) => acc + m.tabSwitches, 0);
+
+      // Leader member if any
+      const leader = t.members.find(m => m.isTeamLeader) || t.members[0];
+
+      return {
+        id: t.id,
+        entryType: 'team' as const,
+        isTeam: true as const,
+        teamId: t.teamId,
+        teamName: t.teamName,
+        instituteName: t.instituteName,
+        instituteCity: t.instituteCity,
+        userId: t.teamId, // Use teamId for Jury mapping
+        name: t.teamName,
+        email: leader?.email || '',
+        registrationNumber: leader?.registrationNumber || t.registrationNumber,
+        userProfile: leader?.userProfile || t.userProfile,
+        attemptData: leader?.attemptData,
+        score: avgScore, // Cumulative average score
+        analyticalScore: avgAnalytical,
+        timeTaken: avgTime,
+        tabSwitches: totalTabSwitches,
+        isQualified: avgScore >= effectiveCutoff,
+        submittedAt: t.submittedAt,
+        members: t.members,
+      };
+    });
+
+    return [...teamEntries, ...soloList];
+  }, [enrichedLeaderboard, effectiveCutoff]);
 
   // Official Ranking Sorting:
   // 1. Total Score (desc)
   // 2. Reserve Tie-Breaker Score (desc - Q26 to Q30)
   // 3. Lowest Time Taken (asc)
   // 4. Lowest Tab Switches (asc)
-  const sortedLeaderboard = [...enrichedLeaderboard].sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    const aTie = a.analyticalScore ?? 0;
-    const bTie = b.analyticalScore ?? 0;
-    if (bTie !== aTie) return bTie - aTie;
-    if (a.timeTaken !== b.timeTaken) return a.timeTaken - b.timeTaken;
-    return a.tabSwitches - b.tabSwitches;
-  });
+  const sortedLeaderboard = useMemo(() => {
+    return [...groupedLeaderboard].sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const aTie = a.analyticalScore ?? 0;
+      const bTie = b.analyticalScore ?? 0;
+      if (bTie !== aTie) return bTie - aTie;
+      if (a.timeTaken !== b.timeTaken) return a.timeTaken - b.timeTaken;
+      return a.tabSwitches - b.tabSwitches;
+    });
+  }, [groupedLeaderboard]);
 
   // Filtered by Search & Status
-  const filteredList = sortedLeaderboard.filter((row) => {
-    const matchesSearch =
-      row.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      row.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      row.instituteName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      row.teamName.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredList = useMemo(() => {
+    return sortedLeaderboard.filter((row) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch = !q ||
+        row.teamName.toLowerCase().includes(q) ||
+        row.instituteName.toLowerCase().includes(q) ||
+        (row.name && row.name.toLowerCase().includes(q)) ||
+        (row.email && row.email.toLowerCase().includes(q)) ||
+        row.members.some((m: any) =>
+          m.name.toLowerCase().includes(q) ||
+          m.email.toLowerCase().includes(q) ||
+          (m.registrationNumber && m.registrationNumber.toLowerCase().includes(q))
+        );
 
-    const matchesStatus =
-      filterStatus === 'all' ||
-      (filterStatus === 'qualified' && row.isQualified) ||
-      (filterStatus === 'disqualified' && !row.isQualified) ||
-      (filterStatus === 'violations' && row.tabSwitches > 0);
+      const matchesStatus =
+        filterStatus === 'all' ||
+        (filterStatus === 'qualified' && row.isQualified) ||
+        (filterStatus === 'disqualified' && !row.isQualified) ||
+        (filterStatus === 'violations' && row.tabSwitches > 0);
 
-    return matchesSearch && matchesStatus;
-  });
+      return matchesSearch && matchesStatus;
+    });
+  }, [sortedLeaderboard, searchQuery, filterStatus]);
 
   // Telemetry Aggregates
   const totalSubmissions = sortedLeaderboard.length;
@@ -623,6 +765,9 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   const avgScore = totalSubmissions > 0 ? Math.round(sortedLeaderboard.reduce((a, b) => a + b.score, 0) / totalSubmissions) : 0;
   const qualifiedCount = sortedLeaderboard.filter(r => r.isQualified).length;
   const passRate = totalSubmissions > 0 ? Math.round((qualifiedCount / totalSubmissions) * 100) : 0;
+  const totalTeamEntries = sortedLeaderboard.filter(r => r.isTeam).length;
+  const totalSoloEntries = sortedLeaderboard.filter(r => !r.isTeam).length;
+  const totalCandidateAttempts = enrichedLeaderboard.length;
   const enrolledCount = selectedProgram
     ? (selectedProgram.enrolledCount || 0)
     : (quizPrograms.reduce((acc, p) => acc + (p.enrolledCount || 0), 0) || users.length || 76);
@@ -781,12 +926,14 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   const handleExportMeritList = () => {
     const headers = [
       'Rank',
-      'Candidate ID',
+      'Entry Type',
+      'Candidate / Team ID',
       'Name',
       'Email',
       'Institute',
-      'Team',
-      'Screening Quiz Score (100)',
+      'Affiliated Team',
+      'Team Members Count',
+      'Screening Quiz Score (Avg/Total)',
       'Tie-Breaker Score (20)',
       'Case Presentation (100)',
       'Presentation Track',
@@ -798,11 +945,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       const jury = getRowJuryScorecard(r);
       return [
         idx + 1,
-        r.userId,
+        r.isTeam ? 'Team Entry' : 'Solo Entry',
+        r.id,
         `"${r.name}"`,
         r.email,
         `"${r.instituteName}"`,
         `"${r.teamName}"`,
+        r.isTeam ? r.members.length : 1,
         r.score,
         r.analyticalScore,
         jury?.livePresentationScore !== undefined ? jury.livePresentationScore : 'Pending Jury',
@@ -869,7 +1018,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-            <span>Top Candidate Score</span>
+            <span>Top Score (Team / Solo)</span>
             <Medal className="w-4 h-4 text-amber-500" />
           </div>
           <div className="text-2xl font-black text-slate-900 dark:text-white mt-2">
@@ -902,7 +1051,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
             {totalSubmissions > 0 ? `${passRate}%` : '0%'}
           </div>
           <div className="text-xs text-emerald-600 font-medium mt-1">
-            {qualifiedCount} qualified of {totalSubmissions} evaluated ({enrolledCount} enrolled in DB)
+            {qualifiedCount} qualified of {totalSubmissions} entries ({totalTeamEntries} teams • {totalSoloEntries} solo • {totalCandidateAttempts} attempts)
           </div>
         </div>
       </div>
@@ -1073,14 +1222,14 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-bold uppercase tracking-wider">
                 <th className="py-3.5 px-4 text-center w-16">Rank</th>
-                <th className="py-3.5 px-4">Candidate & B-School</th>
-                <th className="py-3.5 px-4">Affiliated Team</th>
+                <th className="py-3.5 px-4">Candidate / Team & B-School</th>
+                <th className="py-3.5 px-4">Affiliated Squad / Entry</th>
                 <th className="py-3.5 px-4 text-center">Screening Quiz (100)</th>
                 <th className="py-3.5 px-4 text-center">Case Presentation (100)</th>
                 <th className="py-3.5 px-4 text-center">Time Taken</th>
                 <th className="py-3.5 px-4 text-center">Integrity Status</th>
                 <th className="py-3.5 px-4 text-center">Stage 2 Gate</th>
-                <th className="py-3.5 px-4 text-center w-44">Action</th>
+                <th className="py-3.5 px-4 text-center w-48">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1099,7 +1248,8 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                   const minutes = Math.floor(row.timeTaken / 60);
                   const seconds = row.timeTaken % 60;
                   const rowJuryResult = getRowJuryScorecard(row);
-                  const isExpanded = expandedJuryUserId === row.userId;
+                  const isExpanded = expandedJuryUserId === row.id;
+                  const isTeamExpanded = expandedTeamIds.has(row.id);
 
                   const liveFormTotal =
                     (Number(juryFormData.problemIdentification) || 0) +
@@ -1111,12 +1261,25 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                     (Number(juryFormData.caseDataEvidence) || 0);
 
                   return (
-                    <React.Fragment key={row.userId}>
+                    <React.Fragment key={row.id}>
                       <tr
-                        onClick={() => handleOpenReview(row.attemptData)}
-                        className={`cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition group ${isTop3 ? 'bg-amber-500/5 dark:bg-amber-500/5' : ''
-                          } ${isExpanded ? 'bg-red-50/40 dark:bg-red-950/20' : ''}`}
-                        title="Click anywhere on row to view candidate's attempted quiz details"
+                        onClick={() => {
+                          if (row.isTeam) {
+                            toggleTeamAccordion(row.id);
+                          } else if (row.attemptData) {
+                            handleOpenReview(row.attemptData);
+                          }
+                        }}
+                        className={`cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition group ${
+                          isTop3 ? 'bg-amber-500/5 dark:bg-amber-500/5' : ''
+                        } ${isExpanded ? 'bg-red-50/40 dark:bg-red-950/20' : ''} ${
+                          isTeamExpanded ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''
+                        }`}
+                        title={
+                          row.isTeam
+                            ? 'Click to expand / collapse squad member attempts'
+                            : "Click anywhere on row to view candidate's attempted quiz details"
+                        }
                       >
                         {/* Rank */}
                         <td className="py-3.5 px-4 text-center">
@@ -1139,41 +1302,77 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                           )}
                         </td>
 
-                        {/* Candidate */}
+                        {/* Candidate / Team & B-School */}
                         <td className="py-3.5 px-4">
-                          <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-red-600 transition">
-                            <span className="group-hover:underline">{row.name}</span>
-                            {row.userProfile?.isTeamLeader && (
-                              <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                                Leader
-                              </span>
-                            )}
-                            <Eye className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            {row.instituteName} ({row.instituteCity})
-                          </div>
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            {row.email}
-                          </div>
-                          {row.submittedAt && (
-                            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1 mt-0.5">
-                              <Clock className="w-3 h-3 text-red-500/80 dark:text-red-400/80 shrink-0" />
-                              <span>Submitted: {formatISTDateTime(row.submittedAt)}</span>
+                          {row.isTeam ? (
+                            <div>
+                              <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-red-600 transition">
+                                <span className="group-hover:underline">{row.teamName}</span>
+                                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 shrink-0 flex items-center gap-1">
+                                  <Users className="w-2.5 h-2.5" />
+                                  Team ({row.members.length} {row.members.length === 1 ? 'member' : 'members'})
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-500">
+                                {row.instituteName} ({row.instituteCity})
+                              </div>
+                              {row.submittedAt && (
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1 mt-0.5">
+                                  <Clock className="w-3 h-3 text-red-500/80 dark:text-red-400/80 shrink-0" />
+                                  <span>Latest: {formatISTDateTime(row.submittedAt)}</span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-red-600 transition">
+                                <span className="group-hover:underline">{row.name}</span>
+                                <span className="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700 shrink-0">
+                                  Solo Entry
+                                </span>
+                                <Eye className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                              </div>
+                              <div className="text-[11px] text-slate-500">
+                                {row.instituteName} ({row.instituteCity})
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                {row.email}
+                              </div>
+                              {row.submittedAt && (
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1 mt-0.5">
+                                  <Clock className="w-3 h-3 text-red-500/80 dark:text-red-400/80 shrink-0" />
+                                  <span>Submitted: {formatISTDateTime(row.submittedAt)}</span>
+                                </div>
+                              )}
                             </div>
                           )}
                         </td>
 
-                        {/* Team */}
+                        {/* Affiliated Squad / Entry */}
                         <td className="py-3.5 px-4">
-                          <span className="font-semibold text-slate-800 dark:text-slate-200">
-                            {row.teamName}
-                          </span>
-                          {row.isTeam && row.teamAvgScore !== undefined && (
-                            <div className="text-[10px] text-slate-500 font-mono mt-0.5 flex items-center gap-1">
-                              <span className="font-bold text-slate-700 dark:text-slate-300">Team Avg: {row.teamAvgScore}/100</span>
-                              <span className="text-[9px] text-slate-400">({row.teamAttemptsCount} {row.teamAttemptsCount === 1 ? 'attempt' : 'attempts'})</span>
+                          {row.isTeam ? (
+                            <div>
+                              <button
+                                type="button"
+                                onClick={(e) => toggleTeamAccordion(row.id, e)}
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition border cursor-pointer ${
+                                  isTeamExpanded
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                                }`}
+                              >
+                                <Users className="w-3.5 h-3.5" />
+                                <span>{isTeamExpanded ? 'Hide Squad' : `Show ${row.members.length} Members`}</span>
+                                {isTeamExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              </button>
+                              <div className="text-[10px] text-slate-400 mt-1 truncate max-w-[150px]" title={row.members.map((m: any) => m.name).join(', ')}>
+                                {row.members.map((m: any) => m.name.split(' ')[0]).join(', ')}
+                              </div>
                             </div>
+                          ) : (
+                            <span className="font-mono text-slate-400 text-xs">
+                              Individual Entry
+                            </span>
                           )}
                         </td>
 
@@ -1182,13 +1381,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                           <div className="font-black text-base text-slate-900 dark:text-white">
                             {row.score}
                           </div>
-                          <div className="text-[10px] text-slate-400 font-semibold">
-                            out of 100
+                          <div className={`text-[10px] font-bold uppercase tracking-wider ${row.isTeam ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>
+                            {row.isTeam ? 'Team Avg / 100' : 'out of 100'}
                           </div>
-                          {((row.analyticalScore ?? (row.attemptData as any)?.analytical_score ?? 0) > 0) && (
+                          {row.analyticalScore > 0 && (
                             <div className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25 text-[10px] font-bold">
                               <Sparkles className="w-2.5 h-2.5 shrink-0" />
-                              ⚡ {row.analyticalScore ?? (row.attemptData as any)?.analytical_score}/20
+                              ⚡ {row.analyticalScore}/20 {row.isTeam ? 'Avg' : ''}
                             </div>
                           )}
                         </td>
@@ -1217,7 +1416,14 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
                         {/* Time Taken */}
                         <td className="py-3.5 px-4 text-center font-mono text-slate-600 dark:text-slate-300">
-                          {minutes}m {seconds < 10 ? '0' : ''}{seconds}s
+                          <div>
+                            {minutes}m {seconds < 10 ? '0' : ''}{seconds}s
+                          </div>
+                          {row.isTeam && (
+                            <div className="text-[9px] text-slate-400 font-semibold mt-0.5">
+                              Avg / Member
+                            </div>
+                          )}
                         </td>
 
                         {/* Integrity */}
@@ -1233,6 +1439,11 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                               {row.tabSwitches} Switches
                             </span>
                           )}
+                          {row.isTeam && (
+                            <div className="text-[9px] text-slate-400 mt-0.5">
+                              Team Total
+                            </div>
+                          )}
                         </td>
 
                         {/* Qualification */}
@@ -1244,7 +1455,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                               </span>
                               {row.isTeam && (
                                 <div className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
-                                  Team Avg: {row.teamAvgScore}% (≥{effectiveCutoff}%)
+                                  Team Avg: {row.score}% (≥{effectiveCutoff}%)
                                 </div>
                               )}
                             </div>
@@ -1255,27 +1466,43 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                               </span>
                               {row.isTeam && (
                                 <div className="text-[9px] text-red-500 font-semibold mt-0.5">
-                                  Team Avg: {row.teamAvgScore}% (&lt;{effectiveCutoff}%)
+                                  Team Avg: {row.score}% (&lt;{effectiveCutoff}%)
                                 </div>
                               )}
                             </div>
                           )}
                         </td>
 
-                        {/* Actions: View Attempt + Jury Score Accordion Toggle */}
+                        {/* Actions: View / Members Accordion + Jury Score Accordion Toggle */}
                         <td className="py-3.5 px-4 text-center">
                           <div
                             className="flex items-center justify-center gap-1.5"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <button
-                              onClick={() => handleOpenReview(row.attemptData)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition shadow-2xs cursor-pointer border border-slate-200 dark:border-slate-700"
-                              title="Inspect attempted questions & answers"
-                            >
-                              <Eye className="w-3.5 h-3.5 text-slate-500" />
-                              <span>View</span>
-                            </button>
+                            {row.isTeam ? (
+                              <button
+                                onClick={(e) => toggleTeamAccordion(row.id, e)}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs border cursor-pointer ${
+                                  isTeamExpanded
+                                    ? 'bg-blue-600 text-white border-blue-600'
+                                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                                }`}
+                                title="Expand / collapse individual team member attempts"
+                              >
+                                <Users className="w-3.5 h-3.5" />
+                                <span>Members ({row.members.length})</span>
+                                {isTeamExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => row.attemptData && handleOpenReview(row.attemptData)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition shadow-2xs cursor-pointer border border-slate-200 dark:border-slate-700"
+                                title="Inspect attempted questions & answers"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-slate-500" />
+                                <span>View</span>
+                              </button>
+                            )}
 
                             <button
                               disabled={!isResultsPublished}
@@ -1312,10 +1539,136 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                         </td>
                       </tr>
 
+                      {/* Expandable Squad Members Accordion (For Teams) */}
+                      {row.isTeam && isTeamExpanded && (
+                        <tr
+                          key={`${row.id}_team_members`}
+                          className="bg-slate-50/90 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800"
+                        >
+                          <td colSpan={9} className="p-3 sm:p-5">
+                            <div className="bg-white dark:bg-slate-800/95 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-4 sm:p-5 shadow-xs">
+                              {/* Accordion Header */}
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-3 border-b border-slate-100 dark:border-slate-700/60 gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
+                                    <Users className="w-4 h-4" />
+                                  </span>
+                                  <div>
+                                    <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                                      <span>{row.teamName} — Squad Member Submissions</span>
+                                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                        {row.members.length} Completed {row.members.length === 1 ? 'Attempt' : 'Attempts'}
+                                      </span>
+                                    </h4>
+                                    <p className="text-[11px] text-slate-500 mt-0.5">
+                                      Stage 2 Gate governed by team cumulative average: <strong className={row.score >= effectiveCutoff ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}>{row.score}%</strong> (Cutoff Threshold: {effectiveCutoff}%)
+                                    </p>
+                                  </div>
+                                </div>
+                                
+                                <button
+                                  type="button"
+                                  onClick={(e) => toggleTeamAccordion(row.id, e)}
+                                  className="self-end sm:self-auto text-[11px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition flex items-center gap-1 cursor-pointer"
+                                >
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                  <span>Collapse Squad</span>
+                                </button>
+                              </div>
+
+                              {/* Members Grid */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {row.members.map((member: any, mIdx: number) => (
+                                  <div
+                                    key={member.userId || mIdx}
+                                    className="bg-slate-50/80 dark:bg-slate-900/60 rounded-xl p-3.5 border border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600 transition flex flex-col justify-between gap-3 shadow-2xs"
+                                  >
+                                    <div>
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-red-500 to-amber-500 text-white font-black text-xs flex items-center justify-center shrink-0 uppercase shadow-2xs">
+                                            {member.name.slice(0, 2)}
+                                          </div>
+                                          <div className="min-w-0">
+                                            <div className="text-xs font-bold text-slate-900 dark:text-white truncate flex items-center gap-1.5">
+                                              <span title={member.name}>{member.name}</span>
+                                              {member.isTeamLeader && (
+                                                <span className="text-[8px] font-black uppercase px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 shrink-0">
+                                                  Leader
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="text-[10px] text-slate-400 font-mono truncate" title={member.email}>
+                                              {member.email}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Individual Marks & Stats */}
+                                      <div className="grid grid-cols-3 gap-1.5 mt-3 p-2 rounded-lg bg-white dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/50 text-center">
+                                        <div>
+                                          <div className="text-[9px] uppercase font-bold text-slate-400">Score</div>
+                                          <div className="text-xs font-black text-slate-900 dark:text-white mt-0.5">
+                                            {member.score}<span className="text-[9px] text-slate-400 font-normal">/100</span>
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <div className="text-[9px] uppercase font-bold text-slate-400">Tie-Breaker</div>
+                                          <div className="text-xs font-bold text-amber-600 dark:text-amber-400 mt-0.5">
+                                            ⚡ {member.analyticalScore}<span className="text-[9px] text-slate-400 font-normal">/20</span>
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <div className="text-[9px] uppercase font-bold text-slate-400">Time</div>
+                                          <div className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 mt-0.5">
+                                            {Math.floor(member.timeTaken / 60)}m {member.timeTaken % 60}s
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Integrity & Submitted timestamp */}
+                                      <div className="flex items-center justify-between text-[10px] text-slate-500 mt-2.5 px-0.5">
+                                        <div>
+                                          {member.tabSwitches === 0 ? (
+                                            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
+                                              <ShieldCheck className="w-3 h-3" /> Clean
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center gap-1 text-red-500 font-bold">
+                                              <ShieldAlert className="w-3 h-3" /> {member.tabSwitches} switches
+                                            </span>
+                                          )}
+                                        </div>
+                                        {member.submittedAt && (
+                                          <div className="text-slate-400 text-[10px]">
+                                            {formatISTDateTime(member.submittedAt)}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* View Attempt Button */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenReview(member.attemptData)}
+                                      className="w-full py-1.5 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200 dark:border-slate-600"
+                                    >
+                                      <Eye className="w-3.5 h-3.5 text-slate-500" />
+                                      <span>View Member Attempt</span>
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+
                       {/* Expandable Jury Presentation Evaluation Accordion */}
                       {isExpanded && (
                         <tr
-                          key={`${row.userId}_jury_accordion`}
+                          key={`${row.id}_jury_accordion`}
                           className="bg-slate-50/95 dark:bg-slate-900/95 border-b-2 border-red-500/40"
                         >
                           <td colSpan={9} className="p-4 sm:p-6">
@@ -1455,7 +1808,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                     </div>
 
                                     {/* Feedback Message */}
-                                    {jurySaveFeedback && jurySaveFeedback.userId === row.userId && (
+                                    {jurySaveFeedback && (jurySaveFeedback.userId === row.userId || jurySaveFeedback.userId === row.id) && (
                                       <div className={`text-xs font-bold mt-2 p-2 rounded-lg ${jurySaveFeedback.isError
                                           ? 'bg-red-500/10 text-red-600 border border-red-500/20'
                                           : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
