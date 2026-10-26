@@ -219,6 +219,23 @@ export const StudentDashboard: React.FC = () => {
       };
     }
 
+    if (status === 'completed') {
+      return {
+        isOpen: false,
+        label: 'Assessment Window Closed',
+        reason: 'This assessment round has concluded.',
+      };
+    }
+
+    // Explicit live status activated by Admin makes the quiz accessible immediately
+    if (status === 'live' || status === 'active') {
+      return {
+        isOpen: true,
+        label: 'Start Round 1 Quiz',
+        reason: null,
+      };
+    }
+
     const now = Date.now();
     const startMs = parseISTTimestamp(sDate);
     const endMs = parseISTTimestamp(eDate);
@@ -314,10 +331,12 @@ export const StudentDashboard: React.FC = () => {
     refreshQuizPrograms();
   }, []);
 
-  // Dynamic Results Published determination strictly from quiz_programs table
+  // Dynamic Results Published determination strictly from quiz_programs table & competition config
   const isResultsPublished = Boolean(
     stage1Program?.isResultsPublished ??
     (stage1Program as any)?.is_results_published ??
+    config?.isResultsPublishedR1 ??
+    config?.isPublicResultsPublished ??
     false
   );
 

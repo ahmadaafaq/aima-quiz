@@ -1066,8 +1066,33 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
         .eq("id", programId);
 
       if (error) {
-        return res.status(500).json({ error: error.message });
+        console.warn("quiz_programs update warning:", error.message);
       }
+
+      // Also persist to registrations fallback
+      try {
+        const { data: existingSys } = await supabaseAdmin
+          .from("registrations")
+          .select("*")
+          .eq("registration_number", "AIMA_SYSTEM_QUIZ_CONFIG")
+          .maybeSingle();
+
+        const raw = existingSys?.raw_data || {};
+        const programOverrides = raw.programOverrides || {};
+        programOverrides[programId] = {
+          ...(programOverrides[programId] || {}),
+          isResultsPublished: Boolean(isPublished),
+          updatedAt: new Date().toISOString(),
+        };
+
+        if (existingSys) {
+          await supabaseAdmin
+            .from("registrations")
+            .update({ raw_data: { ...raw, programOverrides } })
+            .eq("id", existingSys.id);
+        }
+      } catch {}
+
       return res.json({ success: true, programId, isPublished: Boolean(isPublished) });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });

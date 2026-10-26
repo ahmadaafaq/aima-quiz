@@ -112,9 +112,13 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
   const [allowReview, setAllowReview] = useState<boolean>(true);
   const [isSavingProgram, setIsSavingProgram] = useState<boolean>(false);
 
-  // Helper to normalize program status strictly depending on schedule window
+  // Helper to normalize program status: explicit admin status takes precedence over date checks
   const getNormalizedStatus = (progStatus: string, startDate?: string, endDate?: string): 'active' | 'upcoming' | 'completed' | 'draft' | 'paused' => {
     if (progStatus === 'draft') return 'draft';
+    if (progStatus === 'live' || progStatus === 'active') return 'active';
+    if (progStatus === 'completed') return 'completed';
+    if (progStatus === 'upcoming') return 'upcoming';
+    if (progStatus === 'paused') return 'paused';
 
     const now = Date.now();
     const s = parseISTTimestamp(startDate);
@@ -125,9 +129,31 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
     if (!isNaN(s) && !isNaN(e) && now >= s && now <= e) return 'active';
     if (!isNaN(s) && now >= s) return 'active';
 
-    if (progStatus === 'live' || progStatus === 'active') return 'active';
-    if (progStatus === 'completed') return 'completed';
     return 'upcoming';
+  };
+
+  const [statusChangeFeedback, setStatusChangeFeedback] = useState<{ id: string; status: string } | null>(null);
+
+  const handleDirectStatusChange = async (prog: QuizProgram, newStatus: 'upcoming' | 'live' | 'completed') => {
+    setStatusChangeFeedback({ id: prog.id, status: newStatus });
+    setTimeout(() => setStatusChangeFeedback(null), 3500);
+
+    const isPub = prog.isResultsPublished !== undefined ? prog.isResultsPublished : (prog as any).is_results_published;
+    updateQuizProgram(prog.id, {
+      status: newStatus,
+      isResultsPublished: isPub,
+      is_results_published: isPub,
+    });
+
+    addAuditLog(
+      'Quiz Status Updated',
+      'Quiz',
+      `Super Admin changed status of "${prog.title}" to ${newStatus.toUpperCase()}`
+    );
+
+    try {
+      await refreshQuizPrograms();
+    } catch {}
   };
 
   const openCreateModal = () => {
@@ -258,6 +284,8 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
         startTime: startDate,
         endTime: endDate,
         status: status as any,
+        isResultsPublished: editingProgram ? Boolean(editingProgram.isResultsPublished ?? (editingProgram as any).is_results_published) : false,
+        is_results_published: editingProgram ? Boolean(editingProgram.isResultsPublished ?? (editingProgram as any).is_results_published) : false,
         proctoringMode,
         proctoringStrictness: proctoringMode === 'strict_lockdown' ? 'High (Webcam + Fullscreen + Tab Lock)' : 'Standard',
         instructions: instructions.split('\n').filter(Boolean),
@@ -563,20 +591,54 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                       <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">
                         {prog.code || 'AIMA-QZ'}
                       </span>
-                      <span
-                        className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${normStatus === 'active'
-                          ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                          : normStatus === 'paused'
-                            ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
-                            : normStatus === 'upcoming'
-                              ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20'
-                              : normStatus === 'completed'
-                                ? 'bg-purple-500/10 text-purple-600 border border-purple-500/20'
-                                : 'bg-slate-500/10 text-slate-500 border border-slate-500/20'
+                      {/* Direct One-Click Status Controls */}
+                      <div className="inline-flex items-center p-0.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs">
+                        <button
+                          type="button"
+                          onClick={() => handleDirectStatusChange(prog, 'upcoming')}
+                          className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                            normStatus === 'upcoming'
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'text-slate-500 hover:text-blue-600 dark:hover:text-blue-400'
                           }`}
-                      >
-                        {normStatus.toUpperCase()}
-                      </span>
+                          title="Set status to UPCOMING"
+                        >
+                          Upcoming
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDirectStatusChange(prog, 'live')}
+                          className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 ${
+                            normStatus === 'active' || prog.status === 'live'
+                              ? 'bg-emerald-600 text-white shadow-xs'
+                              : 'text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400'
+                          }`}
+                          title="Set status to LIVE (Accessible immediately to candidates)"
+                        >
+                          {(normStatus === 'active' || prog.status === 'live') && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                          )}
+                          <span>Live</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDirectStatusChange(prog, 'completed')}
+                          className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                            normStatus === 'completed' || prog.status === 'completed'
+                              ? 'bg-purple-600 text-white shadow-xs'
+                              : 'text-slate-500 hover:text-purple-600 dark:hover:text-purple-400'
+                          }`}
+                          title="Set status to COMPLETED"
+                        >
+                          Completed
+                        </button>
+                      </div>
+
+                      {statusChangeFeedback?.id === prog.id && (
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                          ✓ Set to {statusChangeFeedback.status.toUpperCase()}
+                        </span>
+                      )}
                       <span className="text-[10px] font-bold text-slate-400 uppercase">
                         {(prog.stage || 'round_1').replace('_', ' ')}
                       </span>

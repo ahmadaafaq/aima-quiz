@@ -111,7 +111,6 @@ export default async function handler(req: any, res: any) {
             .from('registrations')
             .update({
               raw_data: { ...raw, programOverrides },
-              updated_at: now,
             })
             .eq('id', existingSys.id);
         } else {

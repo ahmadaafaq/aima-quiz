@@ -1424,25 +1424,24 @@ export async function fetchQuizPrograms(): Promise<QuizProgram[]> {
 
     if (data && Array.isArray(data)) {
       const dbPrograms = data.map(row => {
-        const prog = mapSupabaseRowToQuizProgram(row);
-        const override = sysOverrides[prog.id];
-        const localProg = localCached.find(p => p.id === prog.id);
+        // Dynamic admin overrides (from registrations system config) take precedence
+        if (override && override.isResultsPublished !== undefined) {
+          prog.isResultsPublished = Boolean(override.isResultsPublished);
+          (prog as any).is_results_published = Boolean(override.isResultsPublished);
+        } else if (row.is_results_published !== undefined && row.is_results_published !== null) {
+          prog.isResultsPublished = Boolean(row.is_results_published);
+          (prog as any).is_results_published = Boolean(row.is_results_published);
+        }
 
-        if (override) {
-          if (override.isResultsPublished !== undefined) {
-            prog.isResultsPublished = override.isResultsPublished;
-            (prog as any).is_results_published = override.isResultsPublished;
-          }
-          if (override.cutoffScore !== undefined) {
-            prog.cutoffScore = override.cutoffScore;
-            (prog as any).cutoff_score = override.cutoffScore;
-          }
-        } else if (localProg) {
-          // If local cache had a recent toggle, preserve it
-          if (localProg.isResultsPublished !== undefined) {
-            prog.isResultsPublished = localProg.isResultsPublished;
-            (prog as any).is_results_published = localProg.isResultsPublished;
-          }
+        if (override && override.status) {
+          prog.status = override.status;
+        } else if (row.status) {
+          prog.status = row.status;
+        }
+
+        if (override && override.cutoffScore !== undefined) {
+          prog.cutoffScore = override.cutoffScore;
+          (prog as any).cutoff_score = override.cutoffScore;
         }
         return prog;
       });
@@ -1509,7 +1508,8 @@ export async function upsertQuizProgram(program: QuizProgram): Promise<boolean> 
     programOverrides[program.id] = {
       ...(programOverrides[program.id] || {}),
       cutoffScore: program.cutoffScore,
-      isResultsPublished: program.isResultsPublished,
+      isResultsPublished: Boolean(program.isResultsPublished !== undefined ? program.isResultsPublished : (program as any).is_results_published),
+      status: program.status,
       updatedAt: now,
     };
 
@@ -1518,7 +1518,6 @@ export async function upsertQuizProgram(program: QuizProgram): Promise<boolean> 
         .from('registrations')
         .update({
           raw_data: { ...raw, programOverrides },
-          updated_at: now,
         })
         .eq('id', existingSys.id);
     } else {
@@ -1614,7 +1613,6 @@ export async function toggleQuizProgramPublication(programId: string, isPublishe
         .from('registrations')
         .update({
           raw_data: { ...raw, programOverrides },
-          updated_at: now,
         })
         .eq('id', existingSys.id);
     } else {
