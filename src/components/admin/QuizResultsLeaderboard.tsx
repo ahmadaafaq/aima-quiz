@@ -519,6 +519,25 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     return a.programId === selectedProgramId;
   });
 
+  // 1b. Compute team cumulative score averages
+  // For teams, the complete team's cumulative average score must pass the given cutoff to move to the next round
+  const teamScoreMap = new Map<string, { totalScore: number; count: number; avg: number }>();
+  quizAttempts.filter(a => a.isCompleted).forEach(attempt => {
+    const user = users.find(
+      u => u.id === attempt.studentId || u.id === attempt.userId ||
+        (attempt.participantEmail && u.email.toLowerCase() === attempt.participantEmail.toLowerCase())
+    );
+    const userTeam = teams.find(t => t.id === attempt.teamId || (user && t.members.some(m => m.studentId === user.id)));
+    const teamId = userTeam?.id || attempt.teamId;
+    if (teamId) {
+      const current = teamScoreMap.get(teamId) || { totalScore: 0, count: 0, avg: 0 };
+      current.totalScore += (attempt.score ?? 0);
+      current.count += 1;
+      current.avg = Math.round(current.totalScore / current.count);
+      teamScoreMap.set(teamId, current);
+    }
+  });
+
   // 2. Map relevant attempts to candidate and team data
   const enrichedLeaderboard = relevantAttempts.map(attempt => {
     const user = users.find(
@@ -533,7 +552,14 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     const timeTaken = attempt.timeTakenSeconds ?? 1800;
     const tabSwitches = attempt.tabSwitchCount ?? 0;
     const isCompleted = true;
-    const isQualified = score >= effectiveCutoff;
+
+    const teamId = userTeam?.id || attempt.teamId;
+    const isTeam = !!teamId && userTeam?.name !== 'Individual Entry';
+    const teamStats = teamId ? teamScoreMap.get(teamId) : null;
+    const teamAvgScore = teamStats ? teamStats.avg : score;
+
+    // Team cumulative score average must pass the given cutoff to qualify
+    const isQualified = isTeam ? (teamAvgScore >= effectiveCutoff) : (score >= effectiveCutoff);
 
     return {
       userId: attempt.studentId || attempt.userId || attempt.attemptId,
@@ -544,7 +570,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       instituteName: user?.instituteName || institute?.name || attempt.instituteName || 'Independent B-School',
       instituteCity: institute?.city || 'India',
       teamName: userTeam?.name || 'Individual Entry',
-      teamId: userTeam?.id || attempt.teamId,
+      teamId,
+      isTeam,
+      teamAvgScore,
+      teamAttemptsCount: teamStats?.count ?? (isTeam ? 1 : 0),
       score,
       analyticalScore,
       timeTaken,
@@ -1133,6 +1162,12 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                           <span className="font-semibold text-slate-800 dark:text-slate-200">
                             {row.teamName}
                           </span>
+                          {row.isTeam && row.teamAvgScore !== undefined && (
+                            <div className="text-[10px] text-slate-500 font-mono mt-0.5 flex items-center gap-1">
+                              <span className="font-bold text-slate-700 dark:text-slate-300">Team Avg: {row.teamAvgScore}/100</span>
+                              <span className="text-[9px] text-slate-400">({row.teamAttemptsCount} {row.teamAttemptsCount === 1 ? 'attempt' : 'attempts'})</span>
+                            </div>
+                          )}
                         </td>
 
                         {/* Screening Quiz Score */}
@@ -1196,13 +1231,27 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                         {/* Qualification */}
                         <td className="py-3.5 px-4 text-center">
                           {row.isQualified ? (
-                            <span className="inline-block px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-white shadow-xs">
-                              Qualified R2
-                            </span>
+                            <div>
+                              <span className="inline-block px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-white shadow-xs">
+                                Qualified R2
+                              </span>
+                              {row.isTeam && (
+                                <div className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                                  Team Avg: {row.teamAvgScore}% (≥{effectiveCutoff}%)
+                                </div>
+                              )}
+                            </div>
                           ) : (
-                            <span className="inline-block px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500">
-                              Below Cutoff
-                            </span>
+                            <div>
+                              <span className="inline-block px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                Below Cutoff
+                              </span>
+                              {row.isTeam && (
+                                <div className="text-[9px] text-red-500 font-semibold mt-0.5">
+                                  Team Avg: {row.teamAvgScore}% (&lt;{effectiveCutoff}%)
+                                </div>
+                              )}
+                            </div>
                           )}
                         </td>
 
@@ -1486,11 +1535,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                           }`}
                       >
                         {activeAttemptRow?.isQualified ? (
-                          'Qualified R2'
+                          <span>
+                            Qualified R2 {activeAttemptRow?.isTeam && activeAttemptRow.teamAvgScore !== undefined ? `(Team Avg: ${activeAttemptRow.teamAvgScore}%)` : ''}
+                          </span>
                         ) : (
                           <>
                             <AlertCircle className="w-3 h-3 shrink-0" />
-                            Below Cutoff ({programCutoff}%)
+                            Below Cutoff ({programCutoff}%) {activeAttemptRow?.isTeam && activeAttemptRow.teamAvgScore !== undefined ? `• Team Avg: ${activeAttemptRow.teamAvgScore}%` : ''}
                           </>
                         )}
                       </span>

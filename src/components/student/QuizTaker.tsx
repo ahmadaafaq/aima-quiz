@@ -544,9 +544,9 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Analytical / DI Score</span>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Analytical Performance</span>
                   <span className="text-2xl font-black text-amber-600 dark:text-amber-400">{displayAttempt.analyticalScore ?? 0} pts</span>
-                  <span className="text-[10px] text-slate-500 block mt-0.5">Tie-Breaker Primary</span>
+                  <span className="text-[10px] text-slate-500 block mt-0.5">Sectional Score</span>
                 </div>
               </>
             )}
@@ -725,7 +725,7 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
                 {quizTitle}
               </h1>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                Multiple-choice screening round | 25 scored questions + 5 reserve / tie-breaker questions
+                Official Screening Round | 30 Multiple-Choice Questions (MCQs)
               </p>
             </div>
 
@@ -743,7 +743,7 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
               <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 block">
                 {totalQCount} MCQs
               </span>
-              <span className="text-[10px] text-slate-500 block mt-0.5">25 Scored + 5 Reserve</span>
+              <span className="text-[10px] text-slate-500 block mt-0.5">30 Questions Total</span>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800">
@@ -759,7 +759,7 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
               <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 block">
                 100 Marks
               </span>
-              <span className="text-[10px] text-slate-500 block mt-0.5">120 with Reserve Tie-Breakers</span>
+              <span className="text-[10px] text-slate-500 block mt-0.5">Full Assessment Scale</span>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800">
@@ -815,7 +815,7 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
                   <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono">10 Questions</span>
                 </div>
                 <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
-                  Brand trivia, unicorn valuations, VC terms, plus Q26–Q30 tie-breaker reserve questions.
+                  Brand trivia, unicorn valuations, venture capital concepts, and strategic corporate scenarios.
                 </p>
               </div>
             </div>
@@ -1005,18 +1005,6 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
                 Question {currentIndex + 1} of {questions.length}
               </span>
 
-              {/* Reserve Tie-breaker Badge (Q26-Q30) vs Core Scored Badge (Q1-Q25) */}
-              {(currentQ?.orderIndex || currentQ?.qNo || (currentIndex + 1)) >= 26 ? (
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1 shadow-2xs">
-                  <Sparkles className="w-3 h-3 text-amber-500" />
-                  Reserve Tie-Breaker (Q26–Q30)
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                  Core Scored (Q1–Q25)
-                </span>
-              )}
-
               <span className="text-[11px] px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 font-semibold border border-amber-300/40">
                 {currentQ?.category || 'General Business'}
               </span>
@@ -1026,11 +1014,7 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
             </div>
 
             <div className="flex items-center gap-2 text-xs font-semibold">
-              {(currentQ?.orderIndex || currentQ?.qNo || (currentIndex + 1)) >= 26 ? (
-                <span className="text-amber-600 dark:text-amber-400 font-mono">+{currentQ?.marks || 4} marks (Tie-Breaker)</span>
-              ) : (
-                <span className="text-emerald-600 dark:text-emerald-400 font-mono">+{currentQ?.marks || 4} marks</span>
-              )}
+              <span className="text-emerald-600 dark:text-emerald-400 font-mono">+{currentQ?.marks || 4} marks</span>
               {config.r1NegativeMarking && (
                 <span className="text-rose-600 dark:text-rose-400">-{currentQ?.negativeMarks || 0} penalty</span>
               )}
@@ -1196,15 +1180,6 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
 
               return (
                 <React.Fragment key={q.id}>
-                  {/* Visual divider for Tie-Breaker questions (Q26 to Q30) */}
-                  {idx === 25 && questions.length > 25 && (
-                    <div className="col-span-5 pt-2 pb-0.5">
-                      <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider py-1 px-1.5 rounded-md bg-amber-500/10 border border-amber-500/20">
-                        <Sparkles className="w-3 h-3 text-amber-500" />
-                        <span>Tie-Breaker Reserve (Q26–Q30)</span>
-                      </div>
-                    </div>
-                  )}
 
                   <button
                     onClick={() => setCurrentIndex(idx)}

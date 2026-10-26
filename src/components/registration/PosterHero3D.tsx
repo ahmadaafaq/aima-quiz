@@ -16,6 +16,8 @@ import {
   Moon,
   Award,
   LogIn,
+  LogOut,
+  User,
   Phone,
   FileText,
 } from 'lucide-react';
@@ -27,7 +29,8 @@ interface PosterHero3DProps {
 }
 
 export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOpenFeeModal }) => {
-  const { theme, toggleTheme, setActiveView } = useCompetition();
+  const { theme, toggleTheme, setActiveView, currentUser, participantUser, logoutParticipantSession } = useCompetition();
+  const loggedInParticipant = participantUser || (currentUser && currentUser.role !== 'admin' ? currentUser : null);
   const stages = [
     {
       step: '01-02',
@@ -142,15 +145,44 @@ export const PosterHero3D: React.FC<PosterHero3DProps> = ({ onScrollToForm, onOp
               <span>Home</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveView('participant_login')}
-              className="h-9 px-3 rounded-xl bg-white dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 hover:border-blue-400 text-slate-800 dark:text-slate-200 hover:text-blue-600 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs text-xs font-bold shrink-0"
-              title="Participant Login (/login)"
-            >
-              <LogIn className="w-3.5 h-3.5 text-blue-500" />
-              <span>Login</span>
-            </button>
+            {loggedInParticipant ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveView('student_dashboard')}
+                  className="h-9 px-3 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 transition-all flex items-center gap-2 cursor-pointer shadow-xs text-xs font-bold shrink-0"
+                  title="Go to Student Dashboard"
+                >
+                  <div className="w-5 h-5 rounded-lg bg-blue-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">
+                    {loggedInParticipant.name ? loggedInParticipant.name.charAt(0).toUpperCase() : 'P'}
+                  </div>
+                  <span className="max-w-[130px] truncate">{loggedInParticipant.name || 'Dashboard'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    logoutParticipantSession();
+                    setActiveView('public');
+                  }}
+                  className="h-9 px-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs text-xs font-bold shrink-0"
+                  title="Logout session"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Logout</span>
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setActiveView('participant_login')}
+                className="h-9 px-3 rounded-xl bg-white dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 hover:border-blue-400 text-slate-800 dark:text-slate-200 hover:text-blue-600 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs text-xs font-bold shrink-0"
+                title="Participant Login (/login)"
+              >
+                <LogIn className="w-3.5 h-3.5 text-blue-500" />
+                <span>Login</span>
+              </button>
+            )}
 
             <button
               type="button"

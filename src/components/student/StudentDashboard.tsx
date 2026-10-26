@@ -320,7 +320,38 @@ export const StudentDashboard: React.FC = () => {
     (stage1Program as any)?.is_results_published ??
     false
   );
-  const isPassedCutoff = myAttempt ? myAttempt.score >= (stage1Program?.cutoffScore ?? 60) : false;
+
+  // Team Cumulative Score Calculation
+  const isTeam = Boolean(!isSoloCandidate && currentTeam && (currentTeam.members?.length > 1 || liveRegistration?.teamName));
+  const teamMemberEmails = useMemo(() => {
+    return (currentTeam?.members || []).map((m: any) => m.email?.toLowerCase().trim()).filter(Boolean);
+  }, [currentTeam?.members]);
+  const teamMemberStudentIds = useMemo(() => {
+    return (currentTeam?.members || []).map((m: any) => m.studentId || m.id).filter(Boolean);
+  }, [currentTeam?.members]);
+
+  const teamAttempts = useMemo(() => {
+    if (!isTeam || !currentTeam) return [];
+    return quizAttempts.filter(a => {
+      if (!a.isCompleted) return false;
+      if (currentTeam.id && a.teamId === currentTeam.id) return true;
+      if (a.participantEmail && teamMemberEmails.includes(a.participantEmail.toLowerCase().trim())) return true;
+      if (a.studentId && teamMemberStudentIds.includes(a.studentId)) return true;
+      return false;
+    });
+  }, [isTeam, currentTeam, quizAttempts, teamMemberEmails, teamMemberStudentIds]);
+
+  const teamAttemptCount = teamAttempts.length;
+  const teamCumulativeScore = useMemo(() => {
+    return teamAttempts.reduce((acc, a) => acc + (a.score ?? 0), 0);
+  }, [teamAttempts]);
+  const teamAverageScore = teamAttemptCount > 0 ? Math.round(teamCumulativeScore / teamAttemptCount) : (myAttempt?.score ?? 0);
+
+  const activeCutoffScore = stage1Program?.cutoffScore ?? 40;
+  // If team, the complete team's cumulative score average must pass cutoff; if solo, individual score
+  const isPassedCutoff = isTeam
+    ? (teamAttemptCount > 0 ? teamAverageScore >= activeCutoffScore : false)
+    : (myAttempt ? myAttempt.score >= activeCutoffScore : false);
   const isQualifiedForRound2 = Boolean(isResultsPublished && isPassedCutoff);
 
   // Load questions for student review modal when opened
@@ -750,7 +781,9 @@ export const StudentDashboard: React.FC = () => {
                     ? 'Locked • Round 1 Pending'
                     : !isResultsPublished
                       ? 'Locked • Results Under Review'
-                      : `Locked • Cutoff Not Met (${myAttempt.score}%)`}
+                      : isTeam
+                        ? `Locked • Team Avg (${teamAverageScore}%) Below Cutoff`
+                        : `Locked • Cutoff Not Met (${myAttempt.score}%)`}
                 </span>
               </div>
             )}
@@ -799,21 +832,37 @@ export const StudentDashboard: React.FC = () => {
                   Team Roster (Section 5.2)
                 </h3>
               </div>
-              {currentTeam && (
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                  currentTeam.members.length >= (currentTeam.maxMembers || 4)
-                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
-                    : currentTeam.isLocked
-                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-700'
-                      : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700'
-                }`}>
-                  {currentTeam.members.length >= (currentTeam.maxMembers || 4)
-                    ? `Roster Complete (${currentTeam.members.length}/${currentTeam.maxMembers || 4})`
-                    : currentTeam.isLocked
-                      ? 'Roster Locked'
-                      : `Open for Member (${currentTeam.members.length}/${currentTeam.maxMembers || 4})`}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {currentTeam && (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                    currentTeam.members.length >= (currentTeam.maxMembers || 4)
+                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                      : currentTeam.isLocked
+                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-700'
+                        : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700'
+                  }`}>
+                    {currentTeam.members.length >= (currentTeam.maxMembers || 4)
+                      ? `Roster Complete (${currentTeam.members.length}/${currentTeam.maxMembers || 4})`
+                      : currentTeam.isLocked
+                        ? 'Roster Locked'
+                        : `Open for Member (${currentTeam.members.length}/${currentTeam.maxMembers || 4})`}
+                  </span>
+                )}
+                {isTeamLeader && currentTeam && currentTeam.members.length < (currentTeam.maxMembers || 4) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddMemberFeedback(null);
+                      setShowAddMemberModal(true);
+                    }}
+                    className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
+                    title="Add teammate to roster"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Member</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {currentTeam ? (
@@ -825,19 +874,6 @@ export const StudentDashboard: React.FC = () => {
                   <div className="text-base font-bold text-slate-900 dark:text-slate-100">
                     {currentTeam.name || liveRegistration?.teamName || 'Team Delegation'}
                   </div>
-                  <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 pt-1">
-                    <span>Invite Code: <strong className="font-mono text-amber-600 select-all">{currentTeam.inviteCode}</strong></span>
-                    <button
-                      onClick={handleCopyInvite}
-                      className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
-                      title="Copy Invite Code"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  {copiedCode && (
-                    <span className="text-[10px] text-emerald-600 font-semibold block">✓ Code copied to clipboard</span>
-                  )}
 
                   {/* Dynamic Financial Overview */}
                   <div className="pt-2 mt-2 border-t border-amber-200/50 dark:border-amber-900/40 text-[11px] space-y-1">
@@ -917,6 +953,23 @@ export const StudentDashboard: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Team Leader Add Member Button when roster < 4 */}
+                {isTeamLeader && currentTeam.members.length < (currentTeam.maxMembers || 4) && (
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddMemberFeedback(null);
+                        setShowAddMemberModal(true);
+                      }}
+                      className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Member to Team ({currentTeam.members.length}/4 Members)</span>
+                    </button>
+                  </div>
+                )}
+
                 <div className="pt-2 text-[11px] text-slate-500 leading-relaxed">
                   {isInstituteReg
                     ? `Institutional Cohort: ${currentTeam.members.length} student nominees registered by ${currentTeam.instituteName || 'Institution'}. Fees settled at institutional level.`
@@ -928,20 +981,14 @@ export const StudentDashboard: React.FC = () => {
                 <Users className="w-10 h-10 text-slate-400 mx-auto" />
                 <div>
                   <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">No Team Formed Yet</h4>
-                  <p className="text-xs text-slate-500 mt-1">Create a new team as leader or join your peers via invite code.</p>
+                  <p className="text-xs text-slate-500 mt-1">Create a new team as Team Leader to onboard your teammates.</p>
                 </div>
-                <div className="flex flex-col gap-2">
+                <div>
                   <button
                     onClick={() => setShowCreateTeamModal(true)}
-                    className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                    className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs"
                   >
-                    Create New Team (As Leader)
-                  </button>
-                  <button
-                    onClick={() => setShowJoinTeamModal(true)}
-                    className="w-full py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold hover:bg-slate-200 transition-colors cursor-pointer"
-                  >
-                    Join via Invite Code
+                    Create New Team (As Team Leader)
                   </button>
                 </div>
               </div>
@@ -975,7 +1022,7 @@ export const StudentDashboard: React.FC = () => {
                   ID / Username: <strong className="font-mono text-slate-800 dark:text-slate-200">{currentUser.email}</strong>
                 </div>
                 <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 pt-1 border-t border-amber-200/50 dark:border-amber-900/40">
-                  <span>Registration Ref: <strong className="font-mono text-amber-600 select-all">{currentUser.registrationNumber || liveRegistration?.registrationNumber || currentTeam?.inviteCode || 'AIMA-CL26'}</strong></span>
+                  <span>Registration Ref: <strong className="font-mono text-amber-600 select-all">{currentUser.registrationNumber || liveRegistration?.registrationNumber || 'AIMA-CL26'}</strong></span>
                   <button
                     onClick={handleCopyInvite}
                     className="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
@@ -1127,29 +1174,29 @@ export const StudentDashboard: React.FC = () => {
                     : `Live Assessment Window (${stage1Program?.totalQuestions || 30} questions total). No negative marking applies.`}
               </p>
 
-              {/* Dedicated Question Distribution Stat Pills (Main Scored vs Reserve Tie-Breakers) */}
+              {/* Question Distribution Stat Pill */}
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                {/* Main Questions (Q1-Q25) */}
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 shadow-2xs text-xs text-slate-800 dark:text-slate-100">
                   <Trophy className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    Main Questions (Q1–Q25)
+                    Assessment Questions
                   </span>
                   <span className="text-[10px] font-bold text-emerald-700 bg-emerald-500/15 border border-emerald-500/25 dark:text-emerald-300 dark:bg-emerald-500/20 dark:border-emerald-500/30 px-1.5 py-0.2 rounded font-mono">
-                    25 MCQs • 100 Marks
+                    30 MCQs • 100 Marks
                   </span>
                 </div>
 
-                {/* Reserve Tie-Breaker (Q26-Q30) */}
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-300/70 dark:border-amber-500/35 text-amber-900 dark:text-amber-200 text-xs shadow-2xs">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">
-                    ⚡ Tie-Breakers (Q26–Q30)
-                  </span>
-                  <span className="text-[10px] font-bold text-amber-800 bg-amber-500/20 border border-amber-500/35 dark:text-amber-300 dark:bg-amber-500/20 px-1.5 py-0.2 rounded font-mono">
-                    5 MCQs • Reserve
-                  </span>
-                </div>
+                {isTeam && teamAttemptCount > 0 && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 text-xs shadow-2xs">
+                    <Users className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">
+                      Team Cumulative Avg:
+                    </span>
+                    <span className="text-[10px] font-mono font-black text-blue-900 dark:text-blue-100">
+                      {teamAverageScore}/100 ({teamAttemptCount}/{currentTeam?.members?.length || 2} Attempted)
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1871,34 +1918,30 @@ export const StudentDashboard: React.FC = () => {
                 </button>
               </div>
 
-              {/* Row 2: Official Scoring & Tie-Breaker Breakdown */}
+              {/* Row 2: Official Scoring Breakdown */}
               <div className="px-5 py-2 bg-slate-50/90 dark:bg-slate-950/70 border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  {/* Main Questions (Q1-Q25) */}
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 shadow-2xs text-xs text-slate-800 dark:text-slate-100">
                     <Trophy className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Main Questions (Q1–Q25)</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Score</span>
                     <span className="font-mono font-black text-slate-900 dark:text-white text-sm">
-                      {myAttempt.score ?? studentModalStats.coreScore}
+                      {myAttempt.score}
                     </span>
                     <span className="text-[10px] font-semibold text-slate-400">/100</span>
                     <span className="text-[10px] font-bold text-emerald-700 bg-emerald-500/15 border border-emerald-500/25 dark:text-emerald-300 dark:bg-emerald-500/20 dark:border-emerald-500/30 px-1.5 py-0.2 rounded ml-0.5">
-                      {studentModalStats.coreCorrect}/25 Scored
+                      {studentModalStats.correct}/{studentModalStats.total} Correct
                     </span>
                   </div>
 
-                  {/* Reserve Tie-Breaker (Q26-Q30) */}
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-300/70 dark:border-amber-500/35 text-amber-900 dark:text-amber-200 text-xs shadow-2xs">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">⚡ Tie-Breaker (Q26–Q30)</span>
-                    <span className="font-mono font-black text-amber-900 dark:text-amber-200 text-sm">
-                      {myAttempt.analyticalScore ?? (myAttempt as any).analytical_score ?? studentModalStats.tieBreakerScore}
-                    </span>
-                    <span className="text-[10px] font-bold text-amber-700/80 dark:text-amber-400/80">/20</span>
-                    <span className="text-[10px] font-bold text-amber-800 bg-amber-500/20 border border-amber-500/35 dark:text-amber-300 dark:bg-amber-500/20 px-1.5 py-0.2 rounded ml-0.5">
-                      {studentModalStats.tieCorrect}/5 Scored
-                    </span>
-                  </div>
+                  {isTeam && (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 text-xs shadow-2xs">
+                      <Users className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">Team Cumulative Avg:</span>
+                      <span className="font-mono font-black text-blue-900 dark:text-blue-100 text-sm">
+                        {teamAverageScore}/100
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Duration & Integrity */}
@@ -2049,18 +2092,6 @@ export const StudentDashboard: React.FC = () => {
                             {q.category}
                           </span>
 
-                          {/* Reserve / Tie-breaker Badge vs Core Scored Badge */}
-                          {isReserveQuestion ? (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                              <Sparkles className="w-3 h-3 text-amber-500" />
-                              Reserve Tie-Breaker (Q26–Q30)
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                              Core Scored (Q1–Q25)
-                            </span>
-                          )}
-
                           <span className="text-[11px] font-medium text-slate-400">
                             • +{q.marks || 4} Marks (No Negative Marking)
                           </span>
@@ -2071,7 +2102,7 @@ export const StudentDashboard: React.FC = () => {
                           {isCorrect && (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-500/10 text-emerald-600 border border-emerald-500/25">
                               <CheckCircle2 className="w-3.5 h-3.5" />
-                              {isReserveQuestion ? `Correct (+${q.marks || 4} Tie-Break)` : `Correct (+${q.marks || 4})`}
+                              Correct (+{q.marks || 4})
                             </span>
                           )}
                           {isWrong && (
