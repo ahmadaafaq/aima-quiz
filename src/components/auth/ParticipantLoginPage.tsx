@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Mail,
   KeyRound,
@@ -14,6 +14,9 @@ import {
   User,
   ShieldCheck,
   Scale,
+  RefreshCw,
+  Volume2,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   signInWithEmailPassword,
@@ -26,6 +29,8 @@ interface ParticipantLoginPageProps {
   onLoginSuccess?: (participant: SupabaseParticipantRow) => void;
 }
 
+const CAPTCHA_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+
 export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLoginSuccess }) => {
   const { setActiveView, loginParticipantSession } = useCompetition();
   const [email, setEmail] = useState('');
@@ -35,15 +40,190 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
   const [error, setError] = useState<string>('');
   const [loggedInProfile, setLoggedInProfile] = useState<UserProfileRow | null>(null);
 
+  // Bot Protection & CAPTCHA states
+  const [captchaCode, setCaptchaCode] = useState<string>('');
+  const [userCaptcha, setUserCaptcha] = useState<string>('');
+  const [captchaError, setCaptchaError] = useState<string>('');
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [honeypot, setHoneypot] = useState<string>('');
+  const [failedAttempts, setFailedAttempts] = useState<number>(0);
+  const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
+  const formLoadTimestamp = useRef<number>(Date.now());
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Generate a random 6-character alphanumeric CAPTCHA
+  const generateCaptcha = useCallback(() => {
+    setIsRefreshing(true);
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+      code += CAPTCHA_CHARS.charAt(Math.floor(Math.random() * CAPTCHA_CHARS.length));
+    }
+    setCaptchaCode(code);
+    setUserCaptcha('');
+    setCaptchaError('');
+    formLoadTimestamp.current = Date.now();
+    setTimeout(() => setIsRefreshing(false), 300);
+  }, []);
+
+  // Draw the CAPTCHA canvas with noise lines, speckles, and rotated characters
+  const drawCaptchaCanvas = useCallback((code: string) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Handle high-DPI crisp rendering
+    const dpr = window.devicePixelRatio || 1;
+    const width = 170;
+    const height = 44;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+
+    // Gradient background
+    const grad = ctx.createLinearGradient(0, 0, width, height);
+    grad.addColorStop(0, '#f1f5f9');
+    grad.addColorStop(1, '#e2e8f0');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Random background dots / speckles
+    for (let i = 0; i < 35; i++) {
+      ctx.fillStyle = `rgba(${Math.floor(Math.random() * 140)}, ${Math.floor(Math.random() * 140)}, ${Math.floor(Math.random() * 200)}, 0.3)`;
+      ctx.beginPath();
+      ctx.arc(Math.random() * width, Math.random() * height, Math.random() * 2 + 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Random noise lines
+    for (let i = 0; i < 4; i++) {
+      ctx.strokeStyle = `rgba(${Math.floor(Math.random() * 160)}, ${Math.floor(Math.random() * 160)}, ${Math.floor(Math.random() * 220)}, 0.5)`;
+      ctx.lineWidth = Math.random() * 1.5 + 1;
+      ctx.beginPath();
+      ctx.moveTo(Math.random() * 20, Math.random() * height);
+      ctx.bezierCurveTo(
+        Math.random() * width,
+        Math.random() * height,
+        Math.random() * width,
+        Math.random() * height,
+        width - Math.random() * 20,
+        Math.random() * height
+      );
+      ctx.stroke();
+    }
+
+    // High-contrast character palette
+    const colors = ['#1e3a8a', '#1e40af', '#0f766e', '#b91c1c', '#6d28d9', '#4338ca', '#0369a1'];
+    const charSpacing = width / (code.length + 0.6);
+
+    for (let i = 0; i < code.length; i++) {
+      const char = code[i];
+      ctx.save();
+      const x = charSpacing * (i + 0.8);
+      const y = height / 2 + (Math.random() * 6 - 3);
+      ctx.translate(x, y);
+
+      // Random rotation
+      const angle = (Math.random() - 0.5) * 0.35;
+      ctx.rotate(angle);
+
+      ctx.font = `bold ${Math.floor(Math.random() * 3 + 21)}px monospace`;
+      ctx.fillStyle = colors[i % colors.length];
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0,0,0,0.18)';
+      ctx.shadowBlur = 2;
+      ctx.fillText(char, 0, 0);
+      ctx.restore();
+    }
+  }, []);
+
+  // Initial generation
+  useEffect(() => {
+    generateCaptcha();
+  }, [generateCaptcha]);
+
+  // Redraw when code changes
+  useEffect(() => {
+    if (captchaCode) {
+      drawCaptchaCanvas(captchaCode);
+    }
+  }, [captchaCode, drawCaptchaCanvas]);
+
+  // Rate-limiting cooldown countdown
+  useEffect(() => {
+    if (cooldownRemaining > 0) {
+      const timer = setInterval(() => {
+        setCooldownRemaining(prev => Math.max(0, prev - 1));
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [cooldownRemaining]);
+
+  // Audio challenge accessibility
+  const handleSpeakCaptcha = () => {
+    if (!('speechSynthesis' in window) || !captchaCode) return;
+    window.speechSynthesis.cancel();
+    const spelled = captchaCode.split('').join(', ');
+    const utterance = new SpeechSynthesisUtterance(`Security verification code is: ${spelled}`);
+    utterance.rate = 0.85;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setIsLoading(true);
+    setCaptchaError('');
 
+    // 1. Honeypot Bot Trap: Reject if hidden bot input was filled
+    if (honeypot.trim()) {
+      setError('Automated submission detected. Bot logins are prohibited.');
+      return;
+    }
+
+    // 2. Cooldown Rate-Limit check
+    if (cooldownRemaining > 0) {
+      setError(`Too many failed attempts. Please wait ${cooldownRemaining}s before retrying.`);
+      return;
+    }
+
+    // 3. Automated Sub-Second Bot Timing Trap
+    const timeTaken = Date.now() - formLoadTimestamp.current;
+    if (timeTaken < 600) {
+      setError('Suspicious fast automated input detected. Please retry in a moment.');
+      generateCaptcha();
+      return;
+    }
+
+    // 4. CAPTCHA Validation
+    const cleanUserCaptcha = userCaptcha.trim().toUpperCase();
+    if (!cleanUserCaptcha) {
+      setCaptchaError('Please enter the security verification code.');
+      return;
+    }
+
+    if (cleanUserCaptcha !== captchaCode.toUpperCase()) {
+      const newFails = failedAttempts + 1;
+      setFailedAttempts(newFails);
+      setCaptchaError('Incorrect security code. Please enter the new code shown.');
+      generateCaptcha();
+
+      if (newFails >= 5) {
+        setCooldownRemaining(45);
+      } else if (newFails >= 3) {
+        setCooldownRemaining(15);
+      }
+      return;
+    }
+
+    // 5. Credentials Verification with Supabase
+    setIsLoading(true);
     const result = await signInWithEmailPassword(email.trim(), password);
     setIsLoading(false);
 
     if (result.success && result.profile) {
+      setFailedAttempts(0);
       const prof = result.profile;
       setLoggedInProfile(prof);
 
@@ -75,7 +255,16 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
         onLoginSuccess?.(participantRow);
       }
     } else {
+      const newFails = failedAttempts + 1;
+      setFailedAttempts(newFails);
+      generateCaptcha();
       setError(result.error || 'Authentication failed. Please check your credentials and try again.');
+
+      if (newFails >= 5) {
+        setCooldownRemaining(45);
+      } else if (newFails >= 3) {
+        setCooldownRemaining(15);
+      }
     }
   };
 
@@ -261,17 +450,126 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
               </p>
             </div>
 
+            {/* Hidden honeypot field for bot trapping */}
+            <div
+              style={{
+                position: 'absolute',
+                opacity: 0,
+                zIndex: -1,
+                pointerEvents: 'none',
+                height: 0,
+                width: 0,
+                overflow: 'hidden',
+              }}
+              aria-hidden="true"
+            >
+              <input
+                type="text"
+                name="bot_trap_honey"
+                value={honeypot}
+                onChange={(e) => setHoneypot(e.target.value)}
+                tabIndex={-1}
+                autoComplete="off"
+              />
+            </div>
+
+            {/* Anti-Bot Security CAPTCHA */}
+            <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between">
+                <label className="block font-bold text-slate-700 dark:text-slate-300">
+                  Security Verification (CAPTCHA)
+                </label>
+                <span className="text-[10px] text-slate-400 font-medium">Case-insensitive</span>
+              </div>
+
+              {/* Captcha Canvas & Control Actions */}
+              <div className="flex items-center gap-2">
+                <div
+                  onClick={generateCaptcha}
+                  className="relative rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex items-center justify-center select-none shadow-inner shrink-0 cursor-pointer group"
+                  title="Click image to refresh verification code"
+                >
+                  <canvas
+                    ref={canvasRef}
+                    style={{ width: '170px', height: '44px' }}
+                    className="block"
+                  />
+                  <div className="absolute inset-0 bg-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] font-bold text-blue-700 dark:text-blue-300">
+                    Click to refresh
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={generateCaptcha}
+                    className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
+                    title="Generate new verification code"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  </button>
+
+                  {'speechSynthesis' in window && (
+                    <button
+                      type="button"
+                      onClick={handleSpeakCaptcha}
+                      className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
+                      title="Audio challenge: read out code aloud"
+                    >
+                      <Volume2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Captcha Text Input */}
+              <div className="relative">
+                <input
+                  id="participant-login-captcha"
+                  type="text"
+                  value={userCaptcha}
+                  onChange={(e) => {
+                    setUserCaptcha(e.target.value.toUpperCase());
+                    if (captchaError) setCaptchaError('');
+                  }}
+                  placeholder="Enter the 6-character code shown above"
+                  maxLength={6}
+                  required
+                  autoComplete="off"
+                  spellCheck="false"
+                  className={`w-full pl-10 pr-4 py-2.5 rounded-xl border font-mono tracking-widest uppercase font-bold text-xs focus:ring-2 focus:ring-blue-500 focus:outline-hidden ${
+                    captchaError
+                      ? 'border-red-400 bg-red-50/50 dark:bg-red-950/20 text-red-900 dark:text-red-200'
+                      : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white'
+                  }`}
+                />
+                <ShieldAlert className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              </div>
+
+              {captchaError && (
+                <p className="text-[11px] text-red-600 dark:text-red-400 font-semibold flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{captchaError}</span>
+                </p>
+              )}
+            </div>
+
             {/* Submit */}
             <button
               type="submit"
               id="participant-login-submit"
-              disabled={isLoading}
+              disabled={isLoading || cooldownRemaining > 0}
               className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-600/25 disabled:opacity-60"
             >
               {isLoading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   <span>Verifying...</span>
+                </>
+              ) : cooldownRemaining > 0 ? (
+                <>
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Rate Limited ({cooldownRemaining}s)</span>
                 </>
               ) : (
                 <>
