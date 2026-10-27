@@ -11,6 +11,7 @@ import {
   getR1ResultsEmail,
   getFinalResultsEmail,
 } from "./server/mailer";
+import { broadcastWelcomeEmails, collectRecipients } from "./scripts/broadcastWelcomeEmails";
 
 dotenv.config();
 
@@ -241,6 +242,150 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
     } catch (err: any) {
       console.error("[API send-email error]:", err);
       return res.status(500).json({ error: err.message || "Failed to dispatch email" });
+    }
+  });
+
+  // Welcome Email Broadcast API
+  app.post("/api/admin/broadcast-welcome-emails", async (req: Request, res: Response) => {
+    try {
+      const { dryRun = false, delayMs = 250 } = req.body || {};
+      console.log(`[Admin API] Triggering welcome emails broadcast (dryRun=${dryRun}, delayMs=${delayMs})...`);
+      const results = await broadcastWelcomeEmails({
+        dryRun: Boolean(dryRun),
+        delayMs: Number(delayMs) || 250,
+      });
+      return res.json({ success: true, ...results });
+    } catch (err: any) {
+      console.error("[Admin API Broadcast Error]:", err);
+      return res.status(500).json({ error: err.message || "Failed to broadcast welcome emails" });
+    }
+  });
+
+  // Single Registration Resend Welcome Email API
+  app.post("/api/admin/resend-welcome-email", async (req: Request, res: Response) => {
+    try {
+      const { registrationId, registrationNumber, targetEmail } = req.body || {};
+      if (!registrationNumber && !registrationId) {
+        return res.status(400).json({ error: "Missing registrationNumber or registrationId" });
+      }
+
+      let query = supabaseAdmin.from("registrations").select("*");
+      if (registrationNumber) {
+        query = query.eq("registration_number", registrationNumber);
+      } else {
+        query = query.eq("id", registrationId);
+      }
+
+      const { data: reg, error } = await query.maybeSingle();
+      if (error || !reg) {
+        return res.status(404).json({ error: "Registration record not found" });
+      }
+
+      const rawData = reg.raw_data || {};
+      const defaultPassword = rawData.participantPassword || "AIMA2026";
+      const instName =
+        reg.institute_name ||
+        rawData.organizationName ||
+        rawData.instituteName ||
+        "AIMA Registered Institute";
+      const isIndividual =
+        reg.registration_mode === "individual" ||
+        rawData.track === "corporate_individual" ||
+        !reg.team_name;
+      const teamName =
+        reg.team_name ||
+        rawData.teamName ||
+        (isIndividual ? "Individual Entry" : "Team Entry");
+
+      let nominees =
+        Array.isArray(reg.nominees) && reg.nominees.length > 0
+          ? reg.nominees
+          : Array.isArray(rawData.nominees) && rawData.nominees.length > 0
+          ? rawData.nominees
+          : [];
+
+      const loginUrl = `${(process.env.APP_URL || "https://research.aima.in").replace(/\/$/, "")}/login`;
+
+      let targets: any[] = [];
+      if (nominees.length === 0) {
+        const cEmail =
+          reg.candidate_email ||
+          rawData.candidate_email ||
+          rawData.coordinator?.email;
+        const cName =
+          reg.candidate_name ||
+          rawData.candidate_name ||
+          rawData.coordinator?.name ||
+          "Participant";
+        if (cEmail) {
+          targets.push({
+            name: cName,
+            email: cEmail.trim().toLowerCase(),
+            password: defaultPassword,
+            role: "Individual Candidate",
+          });
+        }
+      } else {
+        for (const nom of nominees) {
+          const email = (nom.email || "").trim().toLowerCase();
+          if (!email) continue;
+          if (targetEmail && email !== targetEmail.toLowerCase().trim()) continue;
+          targets.push({
+            name: nom.name || "Participant",
+            email,
+            password: nom.password || defaultPassword,
+            role: nom.isTeamLeader ? "Team Leader" : isIndividual ? "Candidate" : "Team Member",
+          });
+        }
+      }
+
+      if (targets.length === 0) {
+        return res.status(400).json({ error: "No recipient found matching criteria" });
+      }
+
+      const dispatchResults: any[] = [];
+      for (const t of targets) {
+        const emailContent = getRegistrationConfirmationEmail({
+          toName: t.name,
+          regNumber: reg.registration_number,
+          teamName,
+          instituteName: instName,
+          username: t.email,
+          password: t.password,
+          loginUrl,
+          isIndividual,
+          roleInTeam: t.role,
+        });
+
+        await sendEmail({
+          to: t.email,
+          subject: emailContent.subject,
+          html: emailContent.html,
+          text: emailContent.text,
+        });
+
+        dispatchResults.push({ name: t.name, email: t.email, success: true });
+      }
+
+      // Update Supabase audit
+      const updatedRaw = {
+        ...rawData,
+        welcomeEmailSentAt: new Date().toISOString(),
+        welcomeEmailSentCount: (rawData.welcomeEmailSentCount || 0) + 1,
+      };
+      await supabaseAdmin
+        .from("registrations")
+        .update({ raw_data: updatedRaw })
+        .eq("id", reg.id);
+
+      return res.json({
+        success: true,
+        sentCount: dispatchResults.length,
+        recipients: dispatchResults,
+      });
+    } catch (err: any) {
+      console.error("[Admin API Resend Error]:", err);
+      return res.status(500).json({ error: err.message || "Failed to resend welcome email" });
     }
   });
 

@@ -39,7 +39,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Mail
 } from 'lucide-react';
 
 interface DynamicRegistrationsManagerProps {
@@ -122,6 +123,78 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
   const [editTxnId, setEditTxnId] = useState<string>('');
   const [isSavingPayment, setIsSavingPayment] = useState<boolean>(false);
   const [paymentError, setPaymentError] = useState<string>('');
+
+  // Email Broadcast & Resend States
+  const [showBroadcastModal, setShowBroadcastModal] = useState<boolean>(false);
+  const [isBroadcasting, setIsBroadcasting] = useState<boolean>(false);
+  const [broadcastProgress, setBroadcastProgress] = useState<string>('');
+  const [broadcastSummary, setBroadcastSummary] = useState<any>(null);
+  const [resendingRegId, setResendingRegId] = useState<string | null>(null);
+  const [emailToast, setEmailToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const handleResendSingle = async (reg: CSRBootcampRegistration) => {
+    setResendingRegId(reg.id);
+    try {
+      const res = await fetch('/api/admin/resend-welcome-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          registrationId: reg.id,
+          registrationNumber: reg.registrationNumber,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to resend welcome email');
+      }
+      setEmailToast({
+        message: `Welcome email sent successfully to ${data.sentCount || 1} participant(s) for ${reg.registrationNumber}!`,
+        type: 'success',
+      });
+      addAuditLog?.(
+        'Welcome Email Resent',
+        'Communications',
+        `Resent login credentials email to ${reg.registrationNumber} (${reg.organizationName || (reg as any).institute_name || 'Individual'})`
+      );
+    } catch (err: any) {
+      setEmailToast({
+        message: `Failed to resend email: ${err.message}`,
+        type: 'error',
+      });
+    } finally {
+      setResendingRegId(null);
+      setTimeout(() => setEmailToast(null), 5000);
+    }
+  };
+
+  const handleBroadcastWelcomeEmails = async (dryRun: boolean = false) => {
+    setIsBroadcasting(true);
+    setBroadcastProgress(dryRun ? 'Running dry run verification...' : 'Dispatching welcome emails via Falconide SMTP...');
+    setBroadcastSummary(null);
+
+    try {
+      const res = await fetch('/api/admin/broadcast-welcome-emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun, delayMs: 200 }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to complete broadcast');
+      }
+      setBroadcastSummary(data);
+      addAuditLog?.(
+        dryRun ? 'Email Broadcast Dry Run' : 'Email Broadcast Dispatched',
+        'Communications',
+        `Processed ${data.totalRecipients || 0} participants across ${data.totalRegistrations || 0} registrations (Sent: ${data.sentCount || 0}, Failed: ${data.failCount || 0})`
+      );
+    } catch (err: any) {
+      setBroadcastSummary({ error: err.message });
+    } finally {
+      setIsBroadcasting(false);
+      setBroadcastProgress('');
+    }
+  };
 
   // Load from Supabase on mount
   const loadSupabaseData = async () => {
@@ -441,7 +514,19 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => {
+              setBroadcastSummary(null);
+              setShowBroadcastModal(true);
+            }}
+            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-sm shadow-blue-600/20"
+          >
+            <Mail className="w-4 h-4 text-white" />
+            <span>Broadcast Welcome Emails</span>
+          </button>
+
           <button
             type="button"
             onClick={handleExportExcel}
@@ -452,6 +537,33 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
           </button>
         </div>
       </div>
+
+      {/* Floating or Embedded Toast for Single Email Dispatches */}
+      {emailToast && (
+        <div
+          className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-3 animate-in fade-in ${
+            emailToast.type === 'success'
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+              : 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {emailToast.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+            )}
+            <span className="font-semibold">{emailToast.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEmailToast(null)}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold text-xs"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Supabase Status Banner */}
       {!tableExists && (
@@ -785,6 +897,20 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                             title="View Quiz Login Credentials"
                           >
                             <KeyRound className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleResendSingle(reg)}
+                            disabled={resendingRegId === reg.id}
+                            className="p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/50 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer disabled:opacity-50"
+                            title="Resend Welcome Email & Login Credentials"
+                          >
+                            {resendingRegId === reg.id ? (
+                              <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                            ) : (
+                              <Mail className="w-4 h-4" />
+                            )}
                           </button>
 
                           <button
@@ -1172,6 +1298,176 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                 {isSavingPayment ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                 <span>{isSavingPayment ? 'Updating...' : 'Save Payment Status'}</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: BROADCAST WELCOME EMAILS */}
+      {showBroadcastModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="p-5 bg-gradient-to-r from-blue-900 to-indigo-900 text-white flex items-center justify-between border-b border-blue-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-blue-600/40 text-blue-300">
+                  <Mail className="w-5 h-5 text-blue-200" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm tracking-tight text-white">Broadcast Welcome & Login Credentials</h3>
+                  <p className="text-[11px] text-blue-200">
+                    AIMA–ICRC India Case League 2026 • Official Participant Onboarding
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isBroadcasting) setShowBroadcastModal(false);
+                }}
+                disabled={isBroadcasting}
+                className="p-1.5 rounded-xl text-blue-300 hover:text-white cursor-pointer disabled:opacity-30"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-4 text-xs">
+              {/* Context Notice */}
+              <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-blue-900 dark:text-blue-300">
+                  <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <span>Participant Onboarding Queue</span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Sends the high-contrast official welcome email with login portal credentials, registration number, institute details, and Google Calendar event to all registered participants who enrolled before the automated email trigger was active.
+                </p>
+              </div>
+
+              {/* Recipient Scope Breakdown */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 block font-semibold">Total Registrations</span>
+                  <span className="text-xl font-black text-slate-900 dark:text-white">{stats.totalRegs}</span>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 block font-semibold">Total Nominees</span>
+                  <span className="text-xl font-black text-blue-600 dark:text-blue-400">{stats.totalCandidates}</span>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 block font-semibold">SMTP Relay</span>
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Falconide
+                  </span>
+                </div>
+              </div>
+
+              {/* Email Content Checklist */}
+              <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2.5">
+                <span className="font-bold text-slate-900 dark:text-white block">Email Dispatch Specifications:</span>
+                <ul className="space-y-1.5 text-slate-600 dark:text-slate-300">
+                  <li className="flex items-center gap-2">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span><strong>Sender:</strong> AIMA Case Research Centre &lt;sjames@aima.in&gt;</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span><strong>Portal Link:</strong> <code className="font-mono text-[11px] text-blue-600">https://research.aima.in/login</code></span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span><strong>Credentials:</strong> Each nominee's exact stored email &amp; encrypted password</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span><strong>Pacing:</strong> 200ms rate-limited delay per email to prevent spam blocking</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Status / Live Progress */}
+              {isBroadcasting && (
+                <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/50 border border-blue-300 dark:border-blue-800 flex items-center gap-3">
+                  <RefreshCw className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin shrink-0" />
+                  <div>
+                    <span className="font-bold text-blue-900 dark:text-blue-200 block">Dispatch in progress...</span>
+                    <span className="text-[11px] text-blue-700 dark:text-blue-300">{broadcastProgress}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Results Summary */}
+              {broadcastSummary && !isBroadcasting && (
+                <div className={`p-4 rounded-2xl border ${
+                  broadcastSummary.error
+                    ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200'
+                    : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                }`}>
+                  {broadcastSummary.error ? (
+                    <div className="flex items-center gap-2 font-bold">
+                      <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                      <span>Broadcast Error: {broadcastSummary.error}</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 font-bold text-emerald-900 dark:text-emerald-200 text-sm">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span>Broadcast Complete!</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-xs">
+                        <div>Total: <strong>{broadcastSummary.totalRecipients}</strong></div>
+                        <div className="text-emerald-700 dark:text-emerald-300">Sent: <strong>{broadcastSummary.sentCount}</strong></div>
+                        <div className={broadcastSummary.failCount > 0 ? 'text-rose-600' : 'text-slate-500'}>
+                          Failed: <strong>{broadcastSummary.failCount}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 text-xs">
+              <button
+                type="button"
+                onClick={() => setShowBroadcastModal(false)}
+                disabled={isBroadcasting}
+                className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold cursor-pointer disabled:opacity-40"
+              >
+                Close
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleBroadcastWelcomeEmails(true)}
+                  disabled={isBroadcasting}
+                  className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold transition-all cursor-pointer disabled:opacity-40"
+                >
+                  Dry Run Test
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleBroadcastWelcomeEmails(false)}
+                  disabled={isBroadcasting}
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all cursor-pointer shadow-md shadow-blue-600/20 flex items-center gap-2 disabled:opacity-40"
+                >
+                  {isBroadcasting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Sending Emails...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-3.5 h-3.5" />
+                      <span>Dispatch Welcome Emails</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

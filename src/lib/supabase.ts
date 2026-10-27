@@ -982,7 +982,7 @@ export async function saveJuryScorecardToDb(scorecard: {
     const updated = cached.map((r) => {
       if (
         (regNum && r.registrationNumber === regNum) ||
-        (scorecard.candidateEmail && r.email === scorecard.candidateEmail) ||
+        (scorecard.candidateEmail && ((r as any).email === scorecard.candidateEmail || (r as any).candidate_email === scorecard.candidateEmail || r.coordinator?.email === scorecard.candidateEmail)) ||
         (scorecard.teamName && r.teamName === scorecard.teamName)
       ) {
         return {
@@ -1429,6 +1429,8 @@ export async function fetchQuizPrograms(): Promise<QuizProgram[]> {
 
     if (data && Array.isArray(data)) {
       const dbPrograms = data.map(row => {
+        const prog = mapSupabaseRowToQuizProgram(row);
+        const override = sysOverrides[row.id];
         // Dynamic admin overrides (from registrations system config) take precedence
         if (override && override.isResultsPublished !== undefined) {
           prog.isResultsPublished = Boolean(override.isResultsPublished);

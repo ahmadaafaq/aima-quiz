@@ -56,6 +56,7 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
     programQuestionMappings,
     csrRegistrations,
     config,
+    addAuditLog,
   } = useCompetition();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
