@@ -35,7 +35,9 @@ import {
   fetchParticipantsByRegistration,
   getLocalRegistrationsCache,
   saveParticipantTrackSelection,
+  fetchParticipantTrackSelection,
   saveJuryScorecardToDb,
+  fetchJuryEvaluationsFromDb,
   addMemberToRegistrationInSupabase,
   getLocalConfigCache,
   saveLocalConfigCache,
@@ -45,6 +47,8 @@ import {
   fetchQuizPrograms,
   upsertQuizProgram,
   deleteQuizProgramFromDb,
+  getLocalQuizProgramsCache,
+  saveLocalQuizProgramsCache,
   fetchQuizQuestionsPublic,
   fetchQuizQuestionsAdmin,
   upsertQuizQuestion,
@@ -95,10 +99,10 @@ interface CompetitionContextType {
   switchRole: (role: UserRole) => void;
   activeView: string;
   setActiveView: (view: string) => void;
-  
+
   config: CompetitionConfig;
   updateConfig: (newConfig: Partial<CompetitionConfig>) => void;
-  
+
   // User Registry & Candidate Management
   users: UserProfile[];
   addUser: (user: Omit<UserProfile, 'id'>) => UserProfile;
@@ -132,16 +136,16 @@ interface CompetitionContextType {
   }) => { success: boolean; message: string };
   reviewDeadlineExtension: (teamId: string, decision: 'APPROVED' | 'REJECTED', remarks?: string, customNewDeadline?: string) => void;
   updateTeamDeadline: (teamId: string, newDeadline: string) => void;
-  
+
   // Registration & Payment
   updateUserProfile: (data: Partial<UserProfile>) => void;
   processPayment: (stage: 'round_1_2' | 'round_3' | 'round_4', method: 'UPI' | 'Credit Card' | 'Debit Card' | 'Net Banking' | 'Waiver/Coupon', couponCode?: string) => Promise<{ success: boolean; message: string; receiptNumber?: string }>;
   makePayment: (stage?: string, amount?: number, method?: string) => Promise<{ success: boolean; message: string; receiptNumber?: string }>;
-  
+
   // Quiz Programs & Module
   quizPrograms: QuizProgram[];
   addQuizProgram: (program: Omit<QuizProgram, 'id' | 'enrolledCount' | 'completedCount' | 'inProgressCount'>) => QuizProgram;
-  updateQuizProgram: (id: string, program: Partial<QuizProgram>) => void;
+  updateQuizProgram: (id: string, program: Partial<QuizProgram>) => Promise<boolean>;
   deleteQuizProgram: (id: string) => void;
   refreshQuizPrograms: () => Promise<void>;
   programQuestionMappings: Record<string, string[]>;
@@ -160,7 +164,7 @@ interface CompetitionContextType {
   deleteQuestion: (id: string) => void;
   isQuizActive: boolean;
   setIsQuizActive: (active: boolean) => void;
-  
+
   // Case Deck Module
   caseSubmissions: CaseSubmission[];
   activeSubmission: CaseSubmission | null;
@@ -168,7 +172,7 @@ interface CompetitionContextType {
   requestAiCaseAssessment: (submissionId: string) => Promise<any>;
   aiEvaluations: Record<string, any>;
   setAiEvaluations: React.Dispatch<React.SetStateAction<Record<string, any>>>;
-  
+
   // Rubrics & Evaluations & Jury
   rubricR2: RubricCriterion[];
   rubricR3: RubricCriterion[];
@@ -179,7 +183,7 @@ interface CompetitionContextType {
   evaluateSubmission: (evalData: any) => void;
   declareConflictOfInterest: (submissionId: string, reason: string) => void;
   moderateEvaluation: (evalId: string, moderatedScore: number, reason: string) => void;
-  
+
   // Jury & Evaluator Desk
   addJuryMember: (jury: Partial<UserProfile> & { name: string; email: string; speciality: string }) => UserProfile;
   updateJuryMember: (userId: string, data: Partial<UserProfile>) => void;
@@ -196,7 +200,7 @@ interface CompetitionContextType {
   verifyAttendance: (teamId: string, attended: boolean) => void;
   schedulePresentationSlot: (teamId: string, slot: { date: string; time: string; venue: string; room: string; juryPanelId: string }) => void;
   submitRegionalJuryScore: (teamId: string, score: number, juryName: string, comments: string) => void;
-  
+
   // Institute & Sponsors
   institutions: InstitutionalProfile[];
   addInstitution: (inst: Omit<InstitutionalProfile, 'id'>) => void;
@@ -219,13 +223,13 @@ interface CompetitionContextType {
   addSponsor: (sponsor: Omit<CorporateSponsor, 'id'>) => void;
   updateSponsor: (id: string, sponsor: Partial<CorporateSponsor>) => void;
   deleteSponsor: (id: string) => void;
-  
+
   // Offline Rounds 2, 3 & 4 Results Management
   offlineRoundResults: OfflineRoundResult[];
   recordOfflineResultsBulk: (round: 'round_2' | 'round_3' | 'round_4', results: Array<Omit<OfflineRoundResult, 'id' | 'uploadedAt'>>) => { success: boolean; count: number };
   updateOfflineResult: (id: string, updates: Partial<OfflineRoundResult>) => void;
   deleteOfflineResult: (id: string) => void;
-  
+
   // Registration Flow with Simulated Gateway
   showRegistrationModal: boolean;
   setShowRegistrationModal: (show: boolean) => void;
@@ -253,14 +257,14 @@ interface CompetitionContextType {
   verifyCertificateCode: (certCode: string) => CertificateRecord | undefined;
   declareRound1Results: () => Promise<{ success: boolean; sentCount: number; message: string }>;
   declareFinalResults: () => Promise<{ success: boolean; sentCount: number; message: string }>;
-  
+
   // Support & Tickets
   supportTickets: SupportTicket[];
   createSupportTicket: (ticket: Omit<SupportTicket, 'id' | 'ticketNumber' | 'createdAt' | 'updatedAt' | 'status'>) => SupportTicket;
   updateTicketStatus: (ticketId: string, status: SupportTicket['status'], resolutionNotes?: string) => void;
   activeSupportModal: boolean;
   setActiveSupportModal: (show: boolean) => void;
-  
+
   // Audit Logs & Announcements & Payments
   auditLogs: AuditLog[];
   addAuditLog: (action: string, module: AuditLog['module'], details: string, extra?: { oldValue?: string; newValue?: string; reason?: string }) => void;
@@ -426,7 +430,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [activeView, setActiveView] = useState<string>(getInitialActiveView);
   const [config, setConfig] = useState<CompetitionConfig>(() => getLocalConfigCache() || INITIAL_CONFIG);
-  
+
   // Participant session helpers & storage keys
   const PARTICIPANT_SESSION_KEY = 'AIMA_PARTICIPANT_SESSION_V1';
 
@@ -446,10 +450,27 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       (r) => r.registrationNumber === participant.registration_number
     );
     const rawData = (cachedReg as any)?.raw_data || {};
-    const nominee = (rawData.nominees || []).find((n: any) => n.email?.toLowerCase().trim() === participant.email?.toLowerCase().trim());
-    const selectedTrackId = (cachedReg as any)?.selectedTrackId || rawData.selectedTrackId || nominee?.selectedTrackId;
-    const selectedTrackName = (cachedReg as any)?.selectedTrackName || rawData.selectedTrackName || nominee?.selectedTrackName;
-    const trackSelectedAt = (cachedReg as any)?.trackSelectedAt || rawData.trackSelectedAt || nominee?.trackSelectedAt;
+    const nominee = (rawData.nominees || []).find(
+      (n: any) => n.email && n.email.toLowerCase().trim() === participant.email.toLowerCase().trim()
+    );
+    const selectedTrackId =
+      (participant as any).selected_track_id ||
+      (participant as any).selectedTrackId ||
+      (cachedReg as any)?.selectedTrackId ||
+      rawData.selectedTrackId ||
+      nominee?.selectedTrackId;
+    const selectedTrackName =
+      (participant as any).selected_track_name ||
+      (participant as any).selectedTrackName ||
+      (cachedReg as any)?.selectedTrackName ||
+      rawData.selectedTrackName ||
+      nominee?.selectedTrackName;
+    const trackSelectedAt =
+      (participant as any).track_locked_at ||
+      (participant as any).trackSelectedAt ||
+      (cachedReg as any)?.trackSelectedAt ||
+      rawData.trackSelectedAt ||
+      nominee?.trackSelectedAt;
 
     // If registration has participantCount <= 1 and no teamName, candidate is a solo candidate
     const isSolo = cachedReg
@@ -522,26 +543,26 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     const teamMembers: TeamMember[] = (reg.nominees && reg.nominees.length > 0)
       ? reg.nominees.map((n) => {
-          const paymentLabel = isPaid
-            ? (isComplimentary ? 'Early Bird (₹0)' : isInst ? 'Institute Paid' : `Paid ₹${perStudentAmount.toLocaleString('en-IN')}`)
-            : (isInst ? 'Invoice Pending' : `Pending ₹${perStudentAmount.toLocaleString('en-IN')}`);
-          return {
-            studentId: 'participant_' + n.email.replace(/[^a-z0-9]/gi, '_').toLowerCase(),
-            name: n.name,
-            email: n.email,
-            mobile: n.mobile || '',
-            institute: reg.organizationName,
-            isLeader: !!n.isTeamLeader,
-            hasPaid: isPaid,
-            acceptedDeclaration: true,
-            roleInTeam: n.isTeamLeader ? 'Team Leader' : 'Member',
-            paymentLabel,
-            paymentStatus: reg.paymentStatus,
-            amount: perStudentAmount,
-          };
-        })
+        const paymentLabel = isPaid
+          ? (isComplimentary ? 'Early Bird (₹0)' : isInst ? 'Institute Paid' : `Paid ₹${perStudentAmount.toLocaleString('en-IN')}`)
+          : (isInst ? 'Invoice Pending' : `Pending ₹${perStudentAmount.toLocaleString('en-IN')}`);
+        return {
+          studentId: 'participant_' + n.email.replace(/[^a-z0-9]/gi, '_').toLowerCase(),
+          name: n.name,
+          email: n.email,
+          mobile: n.mobile || '',
+          institute: reg.organizationName,
+          isLeader: !!n.isTeamLeader,
+          hasPaid: isPaid,
+          acceptedDeclaration: true,
+          roleInTeam: n.isTeamLeader ? 'Team Leader' : 'Member',
+          paymentLabel,
+          paymentStatus: reg.paymentStatus,
+          amount: perStudentAmount,
+        };
+      })
       : participant
-      ? [{
+        ? [{
           studentId: 'participant_' + participant.email.replace(/[^a-z0-9]/gi, '_').toLowerCase(),
           name: participant.name,
           email: participant.email,
@@ -557,7 +578,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
           paymentStatus: reg.paymentStatus,
           amount: perStudentAmount,
         }]
-      : [];
+        : [];
 
     const leaderMember = teamMembers.find((m) => m.isLeader) || teamMembers[0];
 
@@ -565,9 +586,27 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const participantNominee = (rawData.nominees || []).find(
       (n: any) => participant && n.email && n.email.toLowerCase().trim() === participant.email.toLowerCase().trim()
     );
-    const selectedTrackId = (reg as any).selectedTrackId || rawData.selectedTrackId || participantNominee?.selectedTrackId;
-    const selectedTrackName = (reg as any).selectedTrackName || rawData.selectedTrackName || participantNominee?.selectedTrackName;
-    const trackSelectedAt = (reg as any).trackSelectedAt || rawData.trackSelectedAt || participantNominee?.trackSelectedAt;
+    const selectedTrackId =
+      (participant as any)?.selected_track_id ||
+      (participant as any)?.selectedTrackId ||
+      (reg as any).selectedTrackId ||
+      (reg as any).selected_track_id ||
+      rawData.selectedTrackId ||
+      participantNominee?.selectedTrackId;
+    const selectedTrackName =
+      (participant as any)?.selected_track_name ||
+      (participant as any)?.selectedTrackName ||
+      (reg as any).selectedTrackName ||
+      (reg as any).selected_track_name ||
+      rawData.selectedTrackName ||
+      participantNominee?.selectedTrackName;
+    const trackSelectedAt =
+      (participant as any)?.track_locked_at ||
+      (participant as any)?.trackSelectedAt ||
+      (reg as any).trackSelectedAt ||
+      (reg as any).track_locked_at ||
+      rawData.trackSelectedAt ||
+      participantNominee?.trackSelectedAt;
 
     return {
       id: teamId,
@@ -645,6 +684,9 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         createdAt: initialParticipant.created_at || new Date().toISOString(),
         assignedHub: 'north' as any,
         paymentStatus: 'PAID',
+        selectedTrackId: (initialParticipant as any)?.selected_track_id || (initialParticipant as any)?.selectedTrackId,
+        selectedTrackName: (initialParticipant as any)?.selected_track_name || (initialParticipant as any)?.selectedTrackName,
+        trackSelectedAt: (initialParticipant as any)?.track_locked_at || (initialParticipant as any)?.trackSelectedAt,
       };
       return [tempTeam, ...MOCK_TEAMS];
     }
@@ -659,7 +701,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const saved = sessionStorage.getItem('AIMA_STUDENT_ACTIVE_SUBVIEW');
         if (saved && JSON.parse(saved)?.subView === 'quiz') return true;
       }
-    } catch {}
+    } catch { }
     return false;
   });
 
@@ -702,18 +744,47 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       const regNumber = participant.registration_number;
       const teamId = 'team_participant_' + regNumber;
 
+      // Authoritative track selection from DB (jury_evaluations, participants, registrations)
+      const trackData = await fetchParticipantTrackSelection(regNumber, participant.email);
+      const lockedTrackId = trackData?.trackId || (participant as any).selected_track_id || (participant as any).selectedTrackId;
+      const lockedTrackName = trackData?.trackName || (participant as any).selected_track_name || (participant as any).selectedTrackName;
+      const lockedTrackAt = trackData?.trackSelectedAt || (participant as any).track_locked_at || (participant as any).trackSelectedAt;
+
+      if (lockedTrackId) {
+        const updatedPart = {
+          ...participant,
+          selected_track_id: lockedTrackId,
+          selected_track_name: lockedTrackName,
+          track_locked_at: lockedTrackAt,
+        };
+        setParticipantUser(updatedPart as any);
+        try {
+          const serialized = JSON.stringify(updatedPart);
+          sessionStorage.setItem(PARTICIPANT_SESSION_KEY, serialized);
+          localStorage.setItem(PARTICIPANT_SESSION_KEY, serialized);
+        } catch { }
+      }
+
       // 1. Fetch full registration record
       const reg = await fetchRegistrationByNumber(regNumber);
       if (reg && reg.nominees && reg.nominees.length > 0) {
-        const synTeam = buildSyntheticTeamFromReg(reg, participant);
+        const synTeam = buildSyntheticTeamFromReg(reg, {
+          ...participant,
+          ...(lockedTrackId ? { selected_track_id: lockedTrackId, selected_track_name: lockedTrackName, track_locked_at: lockedTrackAt } : {}),
+        } as any);
+        if (lockedTrackId) {
+          synTeam.selectedTrackId = lockedTrackId;
+          synTeam.selectedTrackName = lockedTrackName;
+          synTeam.trackSelectedAt = lockedTrackAt;
+        }
         setTeams((prev) => [synTeam, ...prev.filter((t) => t.id !== teamId)]);
         setCurrentUser((prev) => ({
           ...prev,
           teamId,
           hasPaidR1R2: reg.paymentStatus === 'PAID',
-          selectedTrackId: synTeam.selectedTrackId,
-          selectedTrackName: synTeam.selectedTrackName,
-          trackSelectedAt: synTeam.trackSelectedAt,
+          selectedTrackId: synTeam.selectedTrackId || lockedTrackId,
+          selectedTrackName: synTeam.selectedTrackName || lockedTrackName,
+          trackSelectedAt: synTeam.trackSelectedAt || lockedTrackAt,
         }));
         return;
       }
@@ -745,9 +816,40 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
           createdAt: participant.created_at || new Date().toISOString(),
           assignedHub: 'north' as any,
           paymentStatus: 'PAID',
+          selectedTrackId: lockedTrackId,
+          selectedTrackName: lockedTrackName,
+          trackSelectedAt: lockedTrackAt,
         };
         setTeams((prev) => [synTeam, ...prev.filter((t) => t.id !== teamId)]);
-        setCurrentUser((prev) => ({ ...prev, teamId }));
+        setCurrentUser((prev) => ({
+          ...prev,
+          teamId,
+          selectedTrackId: lockedTrackId || prev.selectedTrackId,
+          selectedTrackName: lockedTrackName || prev.selectedTrackName,
+          trackSelectedAt: lockedTrackAt || prev.trackSelectedAt,
+        }));
+        return;
+      }
+
+      if (lockedTrackId) {
+        setCurrentUser((prev) => ({
+          ...prev,
+          selectedTrackId: lockedTrackId,
+          selectedTrackName: lockedTrackName,
+          trackSelectedAt: lockedTrackAt,
+        }));
+        setTeams((prev) =>
+          prev.map((t) =>
+            t.id === teamId || t.inviteCode === regNumber
+              ? {
+                ...t,
+                selectedTrackId: lockedTrackId,
+                selectedTrackName: lockedTrackName,
+                trackSelectedAt: lockedTrackAt,
+              }
+              : t
+          )
+        );
       }
     } catch (err) {
       console.warn('Sync participant data notice:', err);
@@ -759,7 +861,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (participantUser) {
       syncParticipantData(participantUser);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Round 1 Quiz Sub-system: Dynamic Mount Fetch Hooks with Live DB Data ──
@@ -875,7 +977,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       sessionStorage.removeItem('AIMA_STUDENT_ACTIVE_SUBVIEW');
       sessionStorage.removeItem('AIMA_USER_PROFILE');
       localStorage.removeItem('AIMA_USER_PROFILE');
-      supabase.auth.signOut().catch(() => {});
+      supabase.auth.signOut().catch(() => { });
     } catch {
       // ignore
     }
@@ -1162,6 +1264,65 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
             });
           }
 
+          // Authoritatively hydrate saved evaluations from dedicated jury_evaluations table
+          fetchJuryEvaluationsFromDb('round_2')
+            .then(juryRows => {
+              if (isMounted && Array.isArray(juryRows) && juryRows.length > 0) {
+                const mappedJuryResults: OfflineRoundResult[] = juryRows.map(d => {
+                  const kpiSum =
+                    (Number(d.problem_identification) || 0) +
+                    (Number(d.case_question_1) || 0) +
+                    (Number(d.case_question_2) || 0) +
+                    (Number(d.case_question_3) || 0) +
+                    (Number(d.strategic_alternatives) || 0) +
+                    (Number(d.execution_plan) || 0) +
+                    (Number(d.case_data_evidence) || 0);
+
+                  const totalScore =
+                    d.total_score !== undefined && d.total_score !== null && Number(d.total_score) > 0
+                      ? Number(d.total_score)
+                      : kpiSum;
+
+                  return {
+                    id: d.id || `jury_${d.registration_number || d.team_id}`,
+                    teamId: d.team_id || '',
+                    registrationNumber: d.registration_number || '',
+                    teamName: d.team_name || d.candidate_name || 'Team Entry',
+                    instituteName: d.institute_name || '',
+                    round: d.round || 'round_2',
+                    trackId: d.track_id,
+                    trackName: d.track_name || 'Supply Chain & Energy Risk',
+                    trackBadge: d.track_badge,
+                    masterCaseTitle: d.master_case_title,
+                    offlineQuizScore: 0,
+                    livePresentationScore: totalScore,
+                    presentationMaxMarks: 100,
+                    qaDefenseScore: Number(d.case_question_3) || 0,
+                    aggregateScore: totalScore,
+                    rank: 1,
+                    attendanceVerified: d.attendance_verified !== false,
+                    qualifiedNextRound: d.is_qualified ?? totalScore >= 60,
+                    notes: d.jury_feedback || '',
+                    evaluatedBy: d.evaluated_by || 'AIMA National Jury Panel',
+                    uploadedAt: d.evaluated_at || new Date().toISOString(),
+                  };
+                });
+
+                setOfflineRoundResults(prev => {
+                  const incomingKeys = new Set(
+                    mappedJuryResults.map(m => m.registrationNumber || m.teamId || m.id)
+                  );
+                  return [
+                    ...mappedJuryResults,
+                    ...prev.filter(
+                      p => !incomingKeys.has((p as any).registrationNumber || p.teamId || p.id)
+                    ),
+                  ];
+                });
+              }
+            })
+            .catch(err => console.warn('Hydrate jury evaluations notice:', err));
+
           // Build real teams from Supabase registrations
           if (res.registrations.length > 0) {
             const realTeams = res.registrations.map(r => buildSyntheticTeamFromReg(r));
@@ -1352,7 +1513,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   };
 
-  const userTeam = teams.find(t => t.id === currentUser.teamId || t.members.some(m => m.studentId === currentUser.id));
+  const userTeam = teams.find(t => t.id === currentUser.teamId || t.members?.some(m => m.studentId === currentUser.id));
 
   const updateUserProfile = (data: Partial<UserProfile>) => {
     setCurrentUser(prev => {
@@ -1408,18 +1569,18 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (!found) {
       return { success: false, message: 'Invalid team invitation code. Please verify with your team leader.' };
     }
-    if (found.members.length >= 4) {
+    if ((found.members?.length || 0) >= 4) {
       return { success: false, message: 'Team is already at maximum capacity (4 members).' };
     }
-    if (found.isLocked && found.members.length >= 4) {
+    if (found.isLocked && (found.members?.length || 0) >= 4) {
       return { success: false, message: 'Team roster has been locked by the leader or admin.' };
     }
-    if (found.members.some(m => m.studentId === currentUser.id || m.email?.toLowerCase().trim() === currentUser.email?.toLowerCase().trim())) {
+    if (found.members?.some(m => m.studentId === currentUser.id || m.email?.toLowerCase().trim() === currentUser.email?.toLowerCase().trim())) {
       return { success: false, message: 'You are already a member of this team.' };
     }
 
     const updatedMembers = [
-      ...found.members,
+      ...(found.members || []),
       {
         studentId: currentUser.id,
         name: currentUser.name,
@@ -1469,7 +1630,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (!targetTeam) {
       return { success: false, message: 'No active team found to add member to.' };
     }
-    if (targetTeam.members.length >= 4) {
+    if ((targetTeam.members?.length || 0) >= 4) {
       return { success: false, message: 'Team already has the maximum capacity of 4 members.' };
     }
 
@@ -1498,18 +1659,18 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       paymentStatus: 'PAID',
     };
 
-    const updatedMembers = [...targetTeam.members, newTeamMember];
+    const updatedMembers = [...(targetTeam.members || []), newTeamMember];
     const isNowLocked = updatedMembers.length >= 4;
 
     setTeams(prev =>
       prev.map(t =>
         t.id === targetTeam.id
           ? {
-              ...t,
-              members: updatedMembers,
-              participantCount: updatedMembers.length,
-              isLocked: isNowLocked,
-            }
+            ...t,
+            members: updatedMembers,
+            participantCount: updatedMembers.length,
+            isLocked: isNowLocked,
+          }
           : t
       )
     );
@@ -1539,7 +1700,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const leaveTeam = () => {
     if (!userTeam) return;
-    const remainingMembers = userTeam.members.filter(m => m.studentId !== currentUser.id);
+    const remainingMembers = (userTeam.members || []).filter(m => m.studentId !== currentUser.id);
     if (remainingMembers.length === 0) {
       setTeams(prev => prev.filter(t => t.id !== userTeam.id));
     } else {
@@ -1551,11 +1712,11 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         prev.map(t =>
           t.id === userTeam.id
             ? {
-                ...t,
-                leaderId: remainingMembers[0].studentId,
-                leaderName: remainingMembers[0].name,
-                members: remainingMembers,
-              }
+              ...t,
+              leaderId: remainingMembers[0].studentId,
+              leaderName: remainingMembers[0].name,
+              members: remainingMembers,
+            }
             : t
         )
       );
@@ -1572,20 +1733,19 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const selectTeamTrack = (trackId: string): { success: boolean; message: string } => {
     const track = OFFICIAL_CASE_TRACKS.find(t => t.id === trackId);
     if (!track) {
-      return { success: false, message: 'Invalid track selected. Please select one of the 6 official tracks.' };
+      return { success: false, message: 'Invalid track selected. Please select one of the official tracks.' };
     }
 
     const now = new Date().toISOString();
+    const targetTeamId = userTeam?.id || currentUser.teamId || (participantUser ? 'team_participant_' + participantUser.registration_number : undefined);
 
-    if (userTeam) {
-      setTeams(prev =>
-        prev.map(t =>
-          t.id === userTeam.id
-            ? { ...t, selectedTrackId: track.id, selectedTrackName: track.name, trackSelectedAt: now }
-            : t
-        )
-      );
-    }
+    setTeams(prev =>
+      prev.map(t =>
+        (targetTeamId && t.id === targetTeamId) || (participantUser && t.inviteCode === participantUser.registration_number)
+          ? { ...t, selectedTrackId: track.id, selectedTrackName: track.name, trackSelectedAt: now }
+          : t
+      )
+    );
 
     updateUserProfile({
       selectedTrackId: track.id,
@@ -1593,10 +1753,25 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       trackSelectedAt: now,
     });
 
+    if (participantUser) {
+      const updatedParticipant: SupabaseParticipantRow = {
+        ...participantUser,
+        selected_track_id: track.id,
+        selected_track_name: track.name,
+        track_locked_at: now,
+      } as any;
+      setParticipantUser(updatedParticipant);
+      try {
+        const serialized = JSON.stringify(updatedParticipant);
+        sessionStorage.setItem(PARTICIPANT_SESSION_KEY, serialized);
+        localStorage.setItem(PARTICIPANT_SESSION_KEY, serialized);
+      } catch { }
+    }
+
     addAuditLog(
       'Track Selected',
       'Team',
-      `Participant/Team selected Track ${track.trackNumber}: "${track.name}" for Round 2 offline presentation at AIMA venue.`
+      `Participant/Team selected Track ${track.trackNumber}: "${track.name}" (${track.badge}) for Round 2 offline presentation at AIMA venue.`
     );
 
     // Save track selection to Supabase database (and update on change)
@@ -1604,19 +1779,27 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       participantUser?.registration_number ||
       (userTeam as any)?.inviteCode ||
       (userTeam as any)?.registrationNumber ||
+      currentUser.registrationNumber ||
       currentUser.institutionId?.replace('inst_participant_', '') ||
       currentUser.institution ||
       '';
     const email = participantUser?.email || currentUser.email || '';
     if (regNum || email) {
-      saveParticipantTrackSelection(regNum, email, track.id, track.name).catch((err) => {
+      saveParticipantTrackSelection(regNum, email, track.id, track.name, {
+        trackBadge: track.badge,
+        masterCaseTitle: track.masterCaseTitle,
+        teamId: targetTeamId || userTeam?.id,
+        teamName: userTeam?.name || (participantUser?.name ? `${participantUser.name}'s Team` : 'Individual Entry'),
+        candidateName: participantUser?.name || currentUser.name || 'Candidate',
+        instituteName: participantUser?.institute_name || currentUser.instituteName || userTeam?.instituteName || 'Management Institute',
+      }).catch((err) => {
         console.warn('Could not persist track selection to Supabase:', err);
       });
     }
 
     return {
       success: true,
-      message: `Track "${track.name}" confirmed successfully! You are now qualified to proceed with your offline case presentation at the AIMA venue.`,
+      message: `Track "${track.name}" (${track.badge}) locked & confirmed in database! You are now scheduled for your offline presentation at the AIMA venue.`,
     };
   };
 
@@ -1906,7 +2089,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       const history: QuizAttempt[] = existingHistoryStr ? JSON.parse(existingHistoryStr) : [];
       const updatedHistory = [completedAttempt, ...history.filter(a => a.studentId !== currentUser.id && a.userId !== currentUser.id && a.attemptId !== completedAttempt.attemptId)];
       localStorage.setItem('aima_quiz_attempts_all', JSON.stringify(updatedHistory));
-      refreshQuizAttempts().catch(() => {});
+      refreshQuizAttempts().catch(() => { });
     } catch (storageErr) {
       console.warn('localStorage attempt caching notice:', storageErr);
     }
@@ -2206,10 +2389,10 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       prev.map(i =>
         i.id === instId
           ? {
-              ...i,
-              registeredStudents: i.registeredStudents + addedCount,
-              totalStudents: Math.max(i.totalStudents, i.registeredStudents + addedCount),
-            }
+            ...i,
+            registeredStudents: i.registeredStudents + addedCount,
+            totalStudents: Math.max(i.totalStudents, i.registeredStudents + addedCount),
+          }
           : i
       )
     );
@@ -2359,14 +2542,20 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     // Persist each jury scorecard to Supabase DB against that team/participant
     created.forEach(scorecard => {
       saveJuryScorecardToDb({
+        registrationNumber: (scorecard as any).registrationNumber,
+        candidateEmail: (scorecard as any).candidateEmail,
+        userId: (scorecard as any).userId,
         teamId: scorecard.teamId,
         teamName: scorecard.teamName,
         instituteName: scorecard.instituteName,
         round: scorecard.round,
         trackId: scorecard.trackId,
         trackName: scorecard.trackName,
+        trackBadge: (scorecard as any).trackBadge,
+        masterCaseTitle: (scorecard as any).masterCaseTitle,
         offlineQuizScore: scorecard.offlineQuizScore,
         livePresentationScore: scorecard.livePresentationScore,
+        presentationMaxMarks: scorecard.presentationMaxMarks,
         qaDefenseScore: scorecard.qaDefenseScore || 0,
         aggregateScore: scorecard.aggregateScore,
         rank: scorecard.rank,
@@ -2375,6 +2564,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         award: scorecard.award,
         notes: scorecard.notes,
         evaluatedBy: scorecard.evaluatedBy,
+        kpiScores: scorecard.kpiScores,
       }).catch(err => console.warn('Error saving jury scorecard to DB:', err));
     });
 
@@ -2430,14 +2620,20 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
         // Persist updated jury scorecard to DB
         saveJuryScorecardToDb({
+          registrationNumber: (updated as any).registrationNumber,
+          candidateEmail: (updated as any).candidateEmail,
+          userId: (updated as any).userId,
           teamId: updated.teamId,
           teamName: updated.teamName,
           instituteName: updated.instituteName,
           round: updated.round,
           trackId: updated.trackId,
           trackName: updated.trackName,
+          trackBadge: (updated as any).trackBadge,
+          masterCaseTitle: (updated as any).masterCaseTitle,
           offlineQuizScore: updated.offlineQuizScore,
           livePresentationScore: updated.livePresentationScore,
+          presentationMaxMarks: updated.presentationMaxMarks,
           qaDefenseScore: updated.qaDefenseScore || 0,
           aggregateScore: updated.aggregateScore,
           rank: updated.rank,
@@ -2446,6 +2642,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
           award: updated.award,
           notes: updated.notes,
           evaluatedBy: updated.evaluatedBy,
+          kpiScores: updated.kpiScores,
         }).catch(err => console.warn('Error updating jury scorecard in DB:', err));
 
         return updated;
@@ -2680,12 +2877,12 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       prev.map(u =>
         u.id === userId
           ? {
-              ...u,
-              qualificationStatus: {
-                ...(u.qualificationStatus || { r1Qualified: false, r2Qualified: false, r3Qualified: false, r4Finalist: false }),
-                ...qualification,
-              },
-            }
+            ...u,
+            qualificationStatus: {
+              ...(u.qualificationStatus || { r1Qualified: false, r2Qualified: false, r3Qualified: false, r4Finalist: false }),
+              ...qualification,
+            },
+          }
           : u
       )
     );
@@ -2708,16 +2905,58 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return newProgram;
   };
 
-  const updateQuizProgram = (id: string, program: Partial<QuizProgram>) => {
+  const updateQuizProgram = async (id: string, program: Partial<QuizProgram>): Promise<boolean> => {
+    let targetToPersist: QuizProgram | undefined;
+
+    // 1. Immediately and synchronously update React state
     setQuizPrograms(prev => {
-      const updated = prev.map(p => (p.id === id ? { ...p, ...program } : p));
-      const target = updated.find(p => p.id === id);
-      if (target) {
-        upsertQuizProgram(target).catch(console.error);
-      }
+      const updated = prev.map(p => {
+        if (p.id === id) {
+          const merged = { ...p, ...program };
+          targetToPersist = merged;
+          return merged;
+        }
+        return p;
+      });
       return updated;
     });
+
+    // Fallback if not found in prev state
+    if (!targetToPersist) {
+      const cached = getLocalQuizProgramsCache().find(p => p.id === id);
+      if (cached) {
+        targetToPersist = { ...cached, ...program };
+      }
+    }
+
+    // 2. Immediately update local storage cache so it persists across refreshes
+    if (targetToPersist) {
+      try {
+        const currentCache = getLocalQuizProgramsCache();
+        const updatedCache = currentCache.map(p => (p.id === id ? targetToPersist! : p));
+        if (!currentCache.some(p => p.id === id)) {
+          updatedCache.unshift(targetToPersist);
+        }
+        saveLocalQuizProgramsCache(updatedCache);
+      } catch (err) {
+        console.warn('saveLocalQuizProgramsCache warning:', err);
+      }
+    }
+
     addAuditLog('Quiz Program Updated', 'Quiz', `Updated quiz program ID ${id}`);
+
+    // 3. Await database persistence so subsequent calls (like refreshQuizPrograms) get the fresh DB state
+    if (targetToPersist) {
+      try {
+        const ok = await upsertQuizProgram(targetToPersist);
+        return ok;
+      } catch (err) {
+        console.error('upsertQuizProgram error:', err);
+        return false;
+      }
+    }
+
+    return true;
   };
 
   const deleteQuizProgram = (id: string) => {
@@ -2917,12 +3156,12 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       prev.map(h =>
         h.id === hubId
           ? {
-              ...h,
-              coordinatorName: coordinator.name,
-              coordinatorEmail: coordinator.email,
-              coordinatorMobile: coordinator.mobile || h.coordinatorMobile,
-              coordinatorDesignation: coordinator.designation || h.coordinatorDesignation,
-            }
+            ...h,
+            coordinatorName: coordinator.name,
+            coordinatorEmail: coordinator.email,
+            coordinatorMobile: coordinator.mobile || h.coordinatorMobile,
+            coordinatorDesignation: coordinator.designation || h.coordinatorDesignation,
+          }
           : h
       )
     );
@@ -3356,13 +3595,13 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     // Dispatch registration confirmation email with login credentials
     try {
       const isSolo = data.track === 'corporate_individual' || (Array.isArray(data.nominees) && data.nominees.length === 1);
-      
+
       if (isSolo) {
         // Solo / Individual registration -> send exactly one email to this solo person with credentials
         const soloNominee = (Array.isArray(data.nominees) && data.nominees.length > 0)
           ? data.nominees[0]
           : { name: data.coordinator?.name || 'Participant', email: data.coordinator?.email, mobile: data.coordinator?.mobile };
-        
+
         const soloEmail = soloNominee.email || data.coordinator?.email;
         if (soloEmail) {
           const soloPassword = (soloNominee as any).password || generateDefaultPassword(soloNominee.name, soloNominee.mobile || data.coordinator?.mobile || '');

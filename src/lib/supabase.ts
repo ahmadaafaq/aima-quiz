@@ -97,23 +97,23 @@ export function mapAppRegToSupabaseRow(reg: CSRBootcampRegistration): SupabaseRe
   const authoritativeTotal = isFreeTier ? 0 : (reg.totalPayable ?? participantCount * unitRate);
 
   return {
-      registration_number: reg.registrationNumber,
-      registration_mode: isInst ? 'institute' : 'individual',
-      team_name: reg.teamName || null,
-      candidate_name: coord?.name || leadNominee?.name || 'Candidate',
-      candidate_email: coord?.email || leadNominee?.email || '',
-      candidate_phone: coord?.mobile || leadNominee?.mobile || null,
-      institute_name: reg.organizationName,
-      program: leadNominee?.program || null,
-      semester: leadNominee?.semester || null,
-      enrolment_number: leadNominee?.enrolmentNumber || null,
-      participant_count: participantCount,
-      fee_tier: isFreeTier ? 'Early Bird Complimentary (₹0)' : (reg.tierLabel || `₹${unitRate} per participant`),
-      subtotal_amount: authoritativeSubtotal,
-      gst_amount: 0,
-      total_amount: authoritativeTotal,
-      payment_method: reg.paymentMethod || 'gateway',
-      payment_status: reg.paymentStatus || 'PENDING_INVOICE',
+    registration_number: reg.registrationNumber,
+    registration_mode: isInst ? 'institute' : 'individual',
+    team_name: reg.teamName || null,
+    candidate_name: coord?.name || leadNominee?.name || 'Candidate',
+    candidate_email: coord?.email || leadNominee?.email || '',
+    candidate_phone: coord?.mobile || leadNominee?.mobile || null,
+    institute_name: reg.organizationName,
+    program: leadNominee?.program || null,
+    semester: leadNominee?.semester || null,
+    enrolment_number: leadNominee?.enrolmentNumber || null,
+    participant_count: participantCount,
+    fee_tier: isFreeTier ? 'Early Bird Complimentary (₹0)' : (reg.tierLabel || `₹${unitRate} per participant`),
+    subtotal_amount: authoritativeSubtotal,
+    gst_amount: 0,
+    total_amount: authoritativeTotal,
+    payment_method: reg.paymentMethod || 'gateway',
+    payment_status: reg.paymentStatus || 'PENDING_INVOICE',
     transaction_id: reg.transactionId || null,
     invoice_number: reg.invoiceNumber,
     nominees: reg.nominees || [],
@@ -148,9 +148,9 @@ export function mapSupabaseRowToAppReg(row: SupabaseRegistrationRow): CSRBootcam
   const isInst = row.registration_mode === 'institute';
   const tierIdVal =
     row.fee_tier?.includes('10') ? 'inst_10' :
-    row.fee_tier?.includes('5') ? 'inst_5' :
-    (row.participant_count || 1) >= 8 ? '8_plus' :
-    (row.participant_count || 1) >= 4 ? '4_7' : '1_3';
+      row.fee_tier?.includes('5') ? 'inst_5' :
+        (row.participant_count || 1) >= 8 ? '8_plus' :
+          (row.participant_count || 1) >= 4 ? '4_7' : '1_3';
 
   return {
     id: row.id || 'reg_sp_' + row.registration_number,
@@ -591,7 +591,7 @@ export async function saveRegistrationToSupabase(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ programId: reg.quizProgramId || 'qp_case_comp_stage1_2026' }),
-    }).catch(() => {});
+    }).catch(() => { });
 
     return {
       success: true,
@@ -752,17 +752,91 @@ export async function updateRegistrationPaymentInSupabase(
 
 /**
  * Save / Update Participant Selected Track in Supabase database
+ * Persists into dedicated 'jury_evaluations' table, 'participants' table, and 'registrations'
  */
 export async function saveParticipantTrackSelection(
   registrationNumber: string,
   email: string,
   trackId: string,
-  trackName: string
+  trackName: string,
+  meta?: {
+    trackBadge?: string;
+    masterCaseTitle?: string;
+    teamId?: string;
+    teamName?: string;
+    candidateName?: string;
+    instituteName?: string;
+  }
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const now = new Date().toISOString();
+    const regNum =
+      registrationNumber && registrationNumber !== 'AIMA-CL26-00000'
+        ? registrationNumber
+        : (meta?.teamId ? meta.teamId.replace('team_participant_', '').replace('team_', '') : '') || 'AIMA-CL26-00000';
+
+    // 1. Direct Persist into dedicated 'jury_evaluations' table (if table exists)
+    try {
+      const juryEvaluationPayload = {
+        registration_number: regNum,
+        team_id: meta?.teamId || null,
+        candidate_email: email ? email.toLowerCase().trim() : null,
+        candidate_name: meta?.candidateName || null,
+        team_name: meta?.teamName || null,
+        institute_name: meta?.instituteName || null,
+        round: 'round_2',
+        track_id: trackId,
+        track_name: trackName,
+        track_badge: meta?.trackBadge || null,
+        master_case_title: meta?.masterCaseTitle || null,
+        track_locked_at: now,
+        updated_at: now,
+      };
+
+      const { error: juryErr } = await supabase
+        .from('jury_evaluations')
+        .upsert(juryEvaluationPayload, { onConflict: 'registration_number,round' });
+
+      if (juryErr) {
+        if (juryErr.code === 'PGRST205') {
+          console.info("Notice: Dedicated table 'jury_evaluations' pending in Supabase. Apply migrations/jury_evaluations_migration.sql.");
+        } else {
+          console.warn('jury_evaluations upsert notice:', juryErr.message);
+        }
+      }
+    } catch (e: any) {
+      console.warn('jury_evaluations persist warning:', e?.message);
+    }
+
+    // 2. Direct Persist into 'participants' table (first-class columns)
+    try {
+      if (email || regNum) {
+        let partQuery = supabase
+          .from('participants')
+          .update({
+            selected_track_id: trackId,
+            selected_track_name: trackName,
+            track_locked_at: now,
+          });
+
+        if (email) {
+          partQuery = partQuery.eq('email', email.toLowerCase().trim());
+        } else {
+          partQuery = partQuery.eq('registration_number', regNum);
+        }
+        const { error: partErr } = await partQuery;
+        if (partErr && partErr.code !== '42703') {
+          console.warn('participants table track update notice:', partErr.message);
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // 3. Fallback Persist into 'registrations' (first-class columns + raw_data)
     let existingQuery = supabase.from('registrations').select('*');
-    if (registrationNumber) {
-      existingQuery = existingQuery.eq('registration_number', registrationNumber);
+    if (regNum && regNum !== 'AIMA-CL26-00000') {
+      existingQuery = existingQuery.eq('registration_number', regNum);
     } else if (email) {
       existingQuery = existingQuery.eq('coordinator_email', email.toLowerCase().trim());
     }
@@ -774,7 +848,6 @@ export async function saveParticipantTrackSelection(
     }
 
     const existing = existingRows?.[0];
-    const now = new Date().toISOString();
     const rawData = existing?.raw_data || {};
 
     const updatedNominees = (rawData.nominees || []).map((n: any) => {
@@ -793,25 +866,38 @@ export async function saveParticipantTrackSelection(
       ...rawData,
       selectedTrackId: trackId,
       selectedTrackName: trackName,
+      trackBadge: meta?.trackBadge,
+      masterCaseTitle: meta?.masterCaseTitle,
       trackSelectedAt: now,
       nominees: updatedNominees,
     };
 
     if (existing) {
+      const updateData: any = {
+        raw_data: updatedRaw,
+        selected_track_id: trackId,
+        selected_track_name: trackName,
+        track_locked_at: now,
+      };
       const { error: updErr } = await supabase
         .from('registrations')
-        .update({ raw_data: updatedRaw })
+        .update(updateData)
         .eq('id', existing.id);
 
       if (updErr) {
-        console.warn('Supabase track update error:', updErr.message);
+        // Fallback if column not yet added
+        if (updErr.code === '42703') {
+          await supabase.from('registrations').update({ raw_data: updatedRaw }).eq('id', existing.id);
+        } else {
+          console.warn('Supabase track update error:', updErr.message);
+        }
       }
     }
 
     // Update local cache
     const cached = getLocalRegistrationsCache();
     const updated = cached.map((r) => {
-      if (r.registrationNumber === registrationNumber) {
+      if (r.registrationNumber === regNum || (email && (r.coordinator?.email?.toLowerCase() === email.toLowerCase() || (r as any).coordinatorEmail?.toLowerCase() === email.toLowerCase()))) {
         return {
           ...r,
           selectedTrackId: trackId,
@@ -832,7 +918,127 @@ export async function saveParticipantTrackSelection(
 }
 
 /**
+ * Authoritatively fetch confirmed Round 2 case track from Supabase
+ * Checks dedicated 'jury_evaluations', 'participants', and 'registrations' tables
+ */
+export async function fetchParticipantTrackSelection(
+  registrationNumber?: string,
+  email?: string
+): Promise<{ trackId: string; trackName: string; trackSelectedAt?: string } | null> {
+  const regNum = registrationNumber && registrationNumber !== 'AIMA-CL26-00000' ? registrationNumber.trim() : null;
+  const cleanEmail = email ? email.toLowerCase().trim() : null;
+
+  if (!regNum && !cleanEmail) return null;
+
+  try {
+    // 1. Check dedicated 'jury_evaluations' table
+    try {
+      let query = supabase.from('jury_evaluations').select('track_id, track_name, track_locked_at');
+      if (regNum) {
+        query = query.eq('registration_number', regNum);
+      } else if (cleanEmail) {
+        query = query.ilike('candidate_email', cleanEmail);
+      }
+      const { data, error } = await query.limit(1);
+      if (!error && data && data.length > 0 && data[0].track_id) {
+        return {
+          trackId: data[0].track_id,
+          trackName: data[0].track_name || '',
+          trackSelectedAt: data[0].track_locked_at || undefined,
+        };
+      }
+    } catch {
+      // ignore
+    }
+
+    // 2. Check 'participants' table
+    try {
+      let partQuery = supabase.from('participants').select('selected_track_id, selected_track_name, track_locked_at');
+      if (cleanEmail) {
+        partQuery = partQuery.eq('email', cleanEmail);
+      } else if (regNum) {
+        partQuery = partQuery.eq('registration_number', regNum);
+      }
+      const { data: partData, error: partError } = await partQuery.limit(1);
+      if (!partError && partData && partData.length > 0 && partData[0].selected_track_id) {
+        return {
+          trackId: partData[0].selected_track_id,
+          trackName: partData[0].selected_track_name || '',
+          trackSelectedAt: partData[0].track_locked_at || undefined,
+        };
+      }
+    } catch {
+      // ignore
+    }
+
+    // 3. Check 'registrations' table
+    try {
+      let regQuery = supabase.from('registrations').select('selected_track_id, selected_track_name, track_locked_at, raw_data');
+      if (regNum) {
+        regQuery = regQuery.eq('registration_number', regNum);
+      } else if (cleanEmail) {
+        regQuery = regQuery.eq('coordinator_email', cleanEmail);
+      }
+      const { data: regData, error: regError } = await regQuery.limit(1);
+      if (!regError && regData && regData.length > 0) {
+        const row = regData[0];
+        const raw = row.raw_data || {};
+        const trackId = row.selected_track_id || raw.selectedTrackId;
+        const trackName = row.selected_track_name || raw.selectedTrackName || '';
+        const trackSelectedAt = row.track_locked_at || raw.trackSelectedAt || undefined;
+        if (trackId) {
+          return { trackId, trackName, trackSelectedAt };
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // 4. Fallback: check localStorage cache
+    const cached = getLocalRegistrationsCache();
+    const found = cached.find(r =>
+      (regNum && r.registrationNumber === regNum) ||
+      (cleanEmail && (r.coordinator?.email?.toLowerCase() === cleanEmail || (r as any).coordinatorEmail?.toLowerCase() === cleanEmail))
+    );
+    if (found && (found as any).selectedTrackId) {
+      return {
+        trackId: (found as any).selectedTrackId,
+        trackName: (found as any).selectedTrackName || '',
+        trackSelectedAt: (found as any).trackSelectedAt,
+      };
+    }
+  } catch (e) {
+    console.warn('fetchParticipantTrackSelection warning:', e);
+  }
+
+  return null;
+}
+
+/**
+ * Fetch all authoritative Jury Evaluations from dedicated Supabase table
+ */
+export async function fetchJuryEvaluationsFromDb(round = 'round_2'): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('jury_evaluations')
+      .select('*')
+      .eq('round', round);
+
+    if (error) {
+      if (error.code !== 'PGRST205') {
+        console.warn('Error fetching jury evaluations from DB:', error.message);
+      }
+      return [];
+    }
+    return data || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Save / Update Jury Scorecard in Supabase database against team / participant
+ * Persists into dedicated 'jury_evaluations' table and 'registrations.raw_data'
  */
 export async function saveJuryScorecardToDb(scorecard: {
   teamId: string;
@@ -844,8 +1050,11 @@ export async function saveJuryScorecardToDb(scorecard: {
   round: 'round_2' | 'round_3' | 'round_4';
   trackId?: string;
   trackName?: string;
+  trackBadge?: string;
+  masterCaseTitle?: string;
   offlineQuizScore: number;
   livePresentationScore: number;
+  presentationMaxMarks?: number;
   qaDefenseScore: number;
   aggregateScore: number;
   rank: number;
@@ -860,6 +1069,63 @@ export async function saveJuryScorecardToDb(scorecard: {
     const regNum = scorecard.registrationNumber && scorecard.registrationNumber !== 'AIMA-CL26-00000'
       ? scorecard.registrationNumber
       : scorecard.teamId.replace('team_participant_', '').replace('team_', '');
+    const now = new Date().toISOString();
+    const kpis = scorecard.kpiScores || {};
+
+    // 1. Direct Persist into dedicated 'jury_evaluations' table
+    try {
+      const kpis = scorecard.kpiScores || (scorecard as any).kpi_scores || null;
+      const hasExplicitKpis =
+        kpis !== null &&
+        kpis !== undefined &&
+        (kpis.problemIdentification !== undefined ||
+          kpis.problem_identification !== undefined ||
+          kpis.caseQuestion1 !== undefined ||
+          kpis.case_question_1 !== undefined ||
+          kpis.totalScore !== undefined ||
+          kpis.total_score !== undefined);
+
+      const juryEvaluationPayload: any = {
+        registration_number: regNum,
+        team_id: scorecard.teamId,
+        candidate_email: scorecard.candidateEmail ? scorecard.candidateEmail.toLowerCase().trim() : null,
+        candidate_name: scorecard.teamName,
+        team_name: scorecard.teamName,
+        institute_name: scorecard.instituteName,
+        round: scorecard.round,
+        track_id: scorecard.trackId || 'operations',
+        track_name: scorecard.trackName || 'Operations',
+        track_badge: scorecard.trackBadge || null,
+        master_case_title: scorecard.masterCaseTitle || null,
+        total_score: scorecard.livePresentationScore ?? 0,
+        attendance_verified: Boolean(scorecard.attendanceVerified),
+        jury_feedback: scorecard.notes || '',
+        is_qualified: Boolean(scorecard.qualifiedNextRound),
+        evaluated_by: scorecard.evaluatedBy || 'AIMA National Jury Panel',
+        evaluated_at: now,
+        updated_at: now,
+      };
+
+      if (hasExplicitKpis && kpis) {
+        juryEvaluationPayload.problem_identification = Number(kpis.problemIdentification ?? kpis.problem_identification ?? 0);
+        juryEvaluationPayload.case_question_1 = Number(kpis.caseQuestion1 ?? kpis.case_question_1 ?? 0);
+        juryEvaluationPayload.case_question_2 = Number(kpis.caseQuestion2 ?? kpis.case_question_2 ?? 0);
+        juryEvaluationPayload.case_question_3 = Number(kpis.caseQuestion3 ?? kpis.case_question_3 ?? 0);
+        juryEvaluationPayload.strategic_alternatives = Number(kpis.strategicAlternatives ?? kpis.strategic_alternatives ?? 0);
+        juryEvaluationPayload.execution_plan = Number(kpis.executionPlan ?? kpis.execution_plan ?? 0);
+        juryEvaluationPayload.case_data_evidence = Number(kpis.caseDataEvidence ?? kpis.case_data_evidence ?? 0);
+      }
+
+      const { error: juryErr } = await supabase
+        .from('jury_evaluations')
+        .upsert(juryEvaluationPayload, { onConflict: 'registration_number,round' });
+
+      if (juryErr && juryErr.code !== 'PGRST205') {
+        console.warn('jury_evaluations scorecard upsert notice:', juryErr.message);
+      }
+    } catch (e: any) {
+      console.warn('jury_evaluations save error:', e?.message);
+    }
 
     let existing: any = null;
 
@@ -873,12 +1139,13 @@ export async function saveJuryScorecardToDb(scorecard: {
       if (data && data.length > 0) existing = data[0];
     }
 
-    // 2. Try finding by contact_email
+    // 2. Try finding by coordinator_email or candidate_email
     if (!existing && scorecard.candidateEmail) {
+      const normalizedEmail = scorecard.candidateEmail.toLowerCase().trim();
       const { data } = await supabase
         .from('registrations')
         .select('*')
-        .eq('contact_email', scorecard.candidateEmail.toLowerCase().trim())
+        .or(`coordinator_email.eq.${normalizedEmail},candidate_email.eq.${normalizedEmail}`)
         .limit(1);
       if (data && data.length > 0) existing = data[0];
     }
@@ -893,7 +1160,6 @@ export async function saveJuryScorecardToDb(scorecard: {
       if (data && data.length > 0) existing = data[0];
     }
 
-    const now = new Date().toISOString();
     const rawData = existing?.raw_data || {};
     const prevOfflineResults = rawData.offlineRoundResults || [];
 
@@ -948,8 +1214,9 @@ export async function saveJuryScorecardToDb(scorecard: {
         registration_number: regNum.startsWith('AIMA-') ? regNum : `AIMA-CL26-${Math.floor(10000 + Math.random() * 90000)}`,
         team_name: scorecard.teamName || 'Individual Entry',
         candidate_name: scorecard.teamName,
-        contact_email: scorecard.candidateEmail || '',
-        institution_name: scorecard.instituteName || 'Management Institute',
+        coordinator_email: scorecard.candidateEmail || '',
+        candidate_email: scorecard.candidateEmail || '',
+        institute_name: scorecard.instituteName || 'Management Institute',
         payment_status: 'paid',
         payment_amount: 0,
         raw_data: updatedRaw,
@@ -1342,7 +1609,9 @@ export function mapSupabaseRowToQuizProgram(row: any): QuizProgram {
     totalMarks: Number(row.total_marks ?? 100),
     cutoffScore: row.cutoff_score !== null && row.cutoff_score !== undefined
       ? Number(row.cutoff_score)
-      : 60,
+      : (row.passing_marks !== null && row.passing_marks !== undefined && Number(row.total_marks || 100) > 0
+        ? Math.round((Number(row.passing_marks) / Number(row.total_marks || 100)) * 100)
+        : 60),
     passingMarks: Number(
       row.passing_marks ?? Math.round(Number(row.total_marks || 100) * (Number(row.cutoff_score ?? 60) / 100))
     ),
@@ -1381,7 +1650,7 @@ if (typeof window !== 'undefined') {
         localStorage.removeItem(k);
       }
     }
-  } catch {}
+  } catch { }
 }
 
 export function getLocalQuizProgramsCache(): QuizProgram[] {
@@ -1391,18 +1660,35 @@ export function getLocalQuizProgramsCache(): QuizProgram[] {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
     }
-  } catch {}
+  } catch { }
   return [];
 }
 
 export function saveLocalQuizProgramsCache(programs: QuizProgram[]): void {
   try {
     localStorage.setItem(QUIZ_PROGRAMS_CACHE_KEY, JSON.stringify(programs));
-  } catch {}
+  } catch { }
 }
 
 export async function fetchQuizPrograms(): Promise<QuizProgram[]> {
   const localCached = getLocalQuizProgramsCache();
+
+  // 1. Fetch live programs via server API (using privileged supabaseAdmin, bypasses client RLS & browser caching)
+  try {
+    const res = await fetch(`/api/quiz-programs?t=${Date.now()}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json && Array.isArray(json.programs) && json.programs.length > 0) {
+        const dbPrograms = json.programs.map((row: any) => mapSupabaseRowToQuizProgram(row));
+        saveLocalQuizProgramsCache(dbPrograms);
+        return dbPrograms;
+      }
+    }
+  } catch (err: any) {
+    console.warn('fetchQuizPrograms server API fetch exception:', err?.message);
+  }
+
+  // 2. Direct client query to Supabase quiz_programs table
   try {
     const { data, error } = await supabase
       .from('quiz_programs')
@@ -1420,7 +1706,7 @@ export async function fetchQuizPrograms(): Promise<QuizProgram[]> {
       if (sysRow?.raw_data?.programOverrides) {
         sysOverrides = sysRow.raw_data.programOverrides;
       }
-    } catch {}
+    } catch { }
 
     if (error) {
       console.warn('Could not fetch quiz_programs from Supabase (using local):', error.message);
@@ -1438,18 +1724,17 @@ export async function fetchQuizPrograms(): Promise<QuizProgram[]> {
         } else if (row.is_results_published !== undefined && row.is_results_published !== null) {
           prog.isResultsPublished = Boolean(row.is_results_published);
           (prog as any).is_results_published = Boolean(row.is_results_published);
+        } else if (override && override.isResultsPublished !== undefined) {
+          prog.isResultsPublished = Boolean(override.isResultsPublished);
+          (prog as any).is_results_published = Boolean(override.isResultsPublished);
         }
 
-        if (override && override.status) {
-          prog.status = override.status;
-        } else if (row.status) {
+        if (row.status) {
           prog.status = row.status;
+        } else if (override && override.status) {
+          prog.status = override.status;
         }
 
-        if (override && override.cutoffScore !== undefined) {
-          prog.cutoffScore = override.cutoffScore;
-          (prog as any).cutoff_score = override.cutoffScore;
-        }
         return prog;
       });
 
@@ -1539,7 +1824,7 @@ export async function upsertQuizProgram(program: QuizProgram): Promise<boolean> 
         },
       ]);
     }
-  } catch {}
+  } catch { }
 
   // 4. Try direct client write to quiz_programs (catches RLS gracefully)
   try {
@@ -1566,7 +1851,7 @@ export async function upsertQuizProgram(program: QuizProgram): Promise<boolean> 
       updated_at: now,
     };
     await supabase.from('quiz_programs').upsert(row, { onConflict: 'id' });
-  } catch {}
+  } catch { }
 
   return true;
 }
@@ -1584,7 +1869,7 @@ export async function toggleQuizProgramPublication(programId: string, isPublishe
       return p;
     });
     saveLocalQuizProgramsCache(updated);
-  } catch {}
+  } catch { }
 
   // 2. Server API sync via Vercel serverless function
   try {
@@ -1596,8 +1881,8 @@ export async function toggleQuizProgramPublication(programId: string, isPublishe
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ programId, isPublished }),
-    }).catch(() => {});
-  } catch {}
+    }).catch(() => { });
+  } catch { }
 
   // 3. Persist system override in registrations table (which anon key can always write)
   try {
@@ -1647,7 +1932,7 @@ export async function toggleQuizProgramPublication(programId: string, isPublishe
         updated_at: now,
       })
       .eq('id', programId);
-  } catch {}
+  } catch { }
 
   return true;
 }
@@ -1709,14 +1994,14 @@ export function getLocalQuizQuestionsCache(): QuizQuestion[] {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
     }
-  } catch {}
+  } catch { }
   return [];
 }
 
 export function saveLocalQuizQuestionsCache(questions: QuizQuestion[]): void {
   try {
     localStorage.setItem(QUIZ_QUESTIONS_CACHE_KEY, JSON.stringify(questions));
-  } catch {}
+  } catch { }
 }
 
 export async function fetchQuizQuestionsAdmin(): Promise<QuizQuestion[]> {
@@ -1727,7 +2012,7 @@ export async function fetchQuizQuestionsAdmin(): Promise<QuizQuestion[]> {
     try {
       const raw = sessionStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1') || localStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1');
       if (raw) token = JSON.parse(raw)?.token || '';
-    } catch {}
+    } catch { }
     if (!token) token = 'aima_sec_admin_session';
 
     const res = await fetch('/api/admin/quiz-questions', {
@@ -1876,14 +2161,14 @@ export function getLocalProgramQuestionsCache(programId: string): string[] {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
     }
-  } catch {}
+  } catch { }
   return [];
 }
 
 export function saveLocalProgramQuestionsCache(programId: string, questionIds: string[]): void {
   try {
     localStorage.setItem(PROGRAM_QUESTIONS_CACHE_PREFIX + programId, JSON.stringify(questionIds));
-  } catch {}
+  } catch { }
 }
 
 export async function fetchAllProgramQuestionMappings(): Promise<Record<string, string[]>> {
@@ -2020,7 +2305,7 @@ export async function fetchLeaderboard(): Promise<QuizAttempt[]> {
     try {
       const raw = sessionStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1') || localStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1');
       if (raw) token = JSON.parse(raw)?.token || '';
-    } catch {}
+    } catch { }
     if (!token) token = 'aima_sec_admin_session';
 
     try {
@@ -2150,7 +2435,7 @@ export async function fetchQuizAttemptById(attemptId: string): Promise<QuizAttem
     try {
       const raw = sessionStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1') || localStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1');
       if (raw) token = JSON.parse(raw)?.token || '';
-    } catch {}
+    } catch { }
     if (!token) token = 'aima_sec_admin_session';
 
     const res = await fetch(`/api/admin/quiz-attempts/${encodeURIComponent(attemptId)}`, {
@@ -2257,7 +2542,7 @@ export async function fetchProgramQuestionsOrdered(programId: string): Promise<Q
     try {
       const raw = sessionStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1') || localStorage.getItem('AIMA_ADMIN_AUTH_TOKEN_V1');
       if (raw) token = JSON.parse(raw)?.token || '';
-    } catch {}
+    } catch { }
     if (!token) token = 'aima_sec_admin_session';
 
     const res = await fetch(`/api/quiz-programs/${encodeURIComponent(programId)}/questions`, {

@@ -1130,6 +1130,38 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
     }
   });
 
+  // GET /api/quiz-programs: Fetch all quiz programs with live values strictly from quiz_programs table
+  app.get("/api/quiz-programs", async (_req: Request, res: Response) => {
+    try {
+      const { data: programs, error } = await supabaseAdmin
+        .from("quiz_programs")
+        .select("*")
+        .order("created_at", { ascending: false, nullsFirst: false });
+
+      if (error) {
+        return res.status(500).json({ error: "Failed to fetch quiz programs: " + error.message });
+      }
+
+      if (Array.isArray(programs)) {
+        for (const prog of programs) {
+          const totalMarks = Number(prog.total_marks || 100);
+          if (prog.passing_marks !== null && prog.passing_marks !== undefined && totalMarks > 0) {
+            const derivedCutoff = Math.round((Number(prog.passing_marks) / totalMarks) * 100);
+            if (derivedCutoff !== Number(prog.cutoff_score)) {
+              prog.cutoff_score = derivedCutoff;
+              await supabaseAdmin.from("quiz_programs").update({ cutoff_score: derivedCutoff }).eq("id", prog.id);
+            }
+          }
+        }
+      }
+
+      return res.json({ success: true, programs: programs || [] });
+    } catch (err: any) {
+      console.error("quiz-programs fetch error:", err);
+      return res.status(500).json({ error: "Server error: " + err.message });
+    }
+  });
+
   // POST /api/admin/quiz-program: Upsert program (Admin authorized)
   app.post("/api/admin/quiz-program", async (req: Request, res: Response) => {
     try {
@@ -1236,7 +1268,7 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
             .update({ raw_data: { ...raw, programOverrides } })
             .eq("id", existingSys.id);
         }
-      } catch {}
+      } catch { }
 
       return res.json({ success: true, programId, isPublished: Boolean(isPublished) });
     } catch (err: any) {
