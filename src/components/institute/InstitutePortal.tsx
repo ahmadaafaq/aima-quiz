@@ -349,7 +349,7 @@ export const InstitutePortal: React.FC = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <span className="text-[10px] text-slate-400 uppercase font-semibold block">Total Enrolled Students</span>
-          <span className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1 block">{inst.totalStudents || 8}</span>
+          <span className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1 block">{inst.totalStudents}</span>
           <span className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold block mt-0.5">Across MBA & PGP</span>
         </div>
 
@@ -358,12 +358,12 @@ export const InstitutePortal: React.FC = () => {
           <span className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1 block">
             {instituteTeams.length} Teams
           </span>
-          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold block mt-0.5">Section 5.2 Compliant</span>
+          {/* <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold block mt-0.5">Section 5.2 Compliant</span> */}
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <span className="text-[10px] text-slate-400 uppercase font-semibold block">Round 1 Enrolled Count</span>
-          <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">{inst.registeredStudents || 8}</span>
+          <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">{inst.registeredStudents}</span>
           <span className="text-[11px] text-slate-500 block mt-0.5">100% Verified Candidates</span>
         </div>
 
@@ -408,11 +408,10 @@ export const InstitutePortal: React.FC = () => {
       <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl w-fit">
         <button
           onClick={() => setActiveTab('teams')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-            activeTab === 'teams'
-              ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-          }`}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${activeTab === 'teams'
+            ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-xs'
+            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
         >
           <Users className="w-4 h-4" />
           <span>Formed Institutional Teams ({instituteTeams.length})</span>
@@ -420,11 +419,10 @@ export const InstitutePortal: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('roster')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-            activeTab === 'roster'
-              ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-          }`}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${activeTab === 'roster'
+            ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-xs'
+            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
         >
           <GraduationCap className="w-4 h-4" />
           <span>Student Candidate Registry ({filteredRoster.length})</span>
