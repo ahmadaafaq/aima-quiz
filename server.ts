@@ -1243,6 +1243,18 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
         return res.status(400).json({ error: "Invalid quiz program payload." });
       }
 
+      const cleanScheduleDate = (val: any): string | null => {
+        if (!val) return null;
+        const s = String(val).trim();
+        if (!s) return null;
+        const match = s.match(/(\d{4})[-/](\d{2})[-/](\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
+        if (match) {
+          const sec = match[6] || '00';
+          return `${match[1]}-${match[2]}-${match[3]} ${match[4]}:${match[5]}:${sec}`;
+        }
+        return s;
+      };
+
       const row = {
         id: program.id,
         code: program.code || program.id,
@@ -1252,8 +1264,8 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
         stage: program.stage || "round_1",
         category: program.category || null,
         status: program.status || "draft",
-        start_time: program.startTime || null,
-        end_time: program.endTime || null,
+        start_time: cleanScheduleDate(program.startTime || (program as any).startDate),
+        end_time: cleanScheduleDate(program.endTime || (program as any).endDate),
         duration_minutes: Number(program.durationMinutes ?? 45),
         total_questions: Number(program.totalQuestions ?? 25),
         total_marks: Number(program.totalMarks ?? 100),

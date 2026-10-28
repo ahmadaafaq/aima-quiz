@@ -68,15 +68,18 @@ export default async function handler(req: any, res: any) {
         return res.status(400).json({ error: 'program payload with id is required' });
       }
 
-      const parseDate = (val: any): string | null => {
+      const cleanScheduleDate = (val: any): string | null => {
         if (!val) return null;
         const s = String(val).trim();
         if (!s) return null;
-        const candidate = s.includes('T') ? s : s.replace(' ', 'T');
-        const hasTz = /[Zz]|([+-]\d{2}:?\d{2})$/.test(candidate);
-        const withTz = hasTz ? candidate : `${candidate}:00+05:30`;
-        const d = new Date(withTz);
-        return isNaN(d.getTime()) ? s : d.toISOString();
+        // Direct format extraction to match public schema format "YYYY-MM-DD HH:mm:ss"
+        // Avoids browser/server timezone offset skew (+05:30)
+        const match = s.match(/(\d{4})[-/](\d{2})[-/](\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
+        if (match) {
+          const sec = match[6] || '00';
+          return `${match[1]}-${match[2]}-${match[3]} ${match[4]}:${match[5]}:${sec}`;
+        }
+        return s;
       };
 
       const row: any = {
@@ -88,8 +91,8 @@ export default async function handler(req: any, res: any) {
         stage: program.stage || 'round_1',
         category: program.category || null,
         status: program.status || 'draft',
-        start_time: parseDate(program.startTime || program.startDate),
-        end_time: parseDate(program.endTime || program.endDate),
+        start_time: cleanScheduleDate(program.startTime || program.startDate),
+        end_time: cleanScheduleDate(program.endTime || program.endDate),
         duration_minutes: Number(program.durationMinutes ?? 45),
         total_questions: Number(program.totalQuestions ?? 25),
         total_marks: Number(program.totalMarks ?? 100),

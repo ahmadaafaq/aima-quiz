@@ -93,14 +93,11 @@ CREATE TABLE IF NOT EXISTS uat.quiz_programs (
 );
 
 ALTER TABLE uat.quiz_programs ENABLE ROW LEVEL SECURITY;
-REVOKE INSERT, UPDATE, DELETE ON uat.quiz_programs FROM anon, authenticated;
+GRANT ALL ON uat.quiz_programs TO anon, authenticated, service_role;
 
-DROP POLICY IF EXISTS "UAT Public read quiz_programs" ON uat.quiz_programs;
-CREATE POLICY "UAT Public read quiz_programs"
-    ON uat.quiz_programs FOR SELECT USING (true);
-
-GRANT ALL ON uat.quiz_programs TO service_role;
-GRANT SELECT ON uat.quiz_programs TO anon, authenticated;
+DROP POLICY IF EXISTS "UAT Allow all on quiz_programs" ON uat.quiz_programs;
+CREATE POLICY "UAT Allow all on quiz_programs"
+    ON uat.quiz_programs FOR ALL USING (true) WITH CHECK (true);
 
 -- Seed Stage 1 UAT quiz program (live for testing)
 INSERT INTO uat.quiz_programs (
@@ -288,10 +285,12 @@ CREATE TABLE IF NOT EXISTS uat.quiz_questions (
     created_at            TIMESTAMPTZ DEFAULT NOW()
 );
 
--- quiz_questions: service_role only (prevents exposing correct_answer_index)
 ALTER TABLE uat.quiz_questions ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON uat.quiz_questions FROM anon, authenticated;
-GRANT ALL ON uat.quiz_questions TO service_role;
+GRANT ALL ON uat.quiz_questions TO anon, authenticated, service_role;
+
+DROP POLICY IF EXISTS "UAT Allow all on quiz_questions" ON uat.quiz_questions;
+CREATE POLICY "UAT Allow all on quiz_questions"
+    ON uat.quiz_questions FOR ALL USING (true) WITH CHECK (true);
 
 -- Public view (exposes question metadata, hides correct_answer_index)
 DROP VIEW IF EXISTS uat.quiz_questions_public CASCADE;
@@ -349,8 +348,11 @@ CREATE INDEX IF NOT EXISTS idx_uat_quiz_attempts_program ON uat.quiz_attempts(pr
 CREATE INDEX IF NOT EXISTS idx_uat_quiz_attempts_email   ON uat.quiz_attempts(participant_email);
 
 ALTER TABLE uat.quiz_attempts ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON uat.quiz_attempts FROM anon, authenticated;
-GRANT ALL ON uat.quiz_attempts TO service_role;
+GRANT ALL ON uat.quiz_attempts TO anon, authenticated, service_role;
+
+DROP POLICY IF EXISTS "UAT Allow all on quiz_attempts" ON uat.quiz_attempts;
+CREATE POLICY "UAT Allow all on quiz_attempts"
+    ON uat.quiz_attempts FOR ALL USING (true) WITH CHECK (true);
 
 -- Leaderboard view (Enriches attempts with participant & institute details)
 DROP VIEW IF EXISTS uat.quiz_attempts_leaderboard CASCADE;
