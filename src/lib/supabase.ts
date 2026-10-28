@@ -6,8 +6,23 @@ export const SUPABASE_URL =
 export const SUPABASE_ANON_KEY =
   (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
   'sb_publishable_RDIbw6a-RZItDzeY80ylwA_-7XGzb5V';
-export const DB_SCHEMA =
-  (import.meta as any).env?.VITE_DB_SCHEMA || 'public';
+export function resolveAppSchema(): 'public' | 'uat' {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname.toLowerCase();
+    // Live production domain: strictly locked to public schema
+    if (host === 'research.aima.in' || host.endsWith('.aima.in')) {
+      return 'public';
+    }
+    // aima-quiz.vercel.app, any preview vercel deployment, or localhost defaults to uat
+    if (host.includes('vercel.app') || host === 'localhost' || host === '127.0.0.1') {
+      return 'uat';
+    }
+  }
+  // Build-time / SSR fallback: default to public if explicitly set, otherwise uat for safety
+  return (import.meta as any).env?.VITE_DB_SCHEMA === 'public' ? 'public' : 'uat';
+}
+
+export const DB_SCHEMA: 'public' | 'uat' = resolveAppSchema();
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   db: { schema: DB_SCHEMA },
@@ -1456,7 +1471,9 @@ export function mapSupabaseRowToAppConfig(row: any): Partial<CompetitionConfig> 
  */
 export async function fetchCompetitionConfigFromSupabase(): Promise<CompetitionConfig | null> {
   try {
-    const res = await fetch('/api/competition/config');
+    const res = await fetch('/api/competition/config', {
+      headers: { 'x-app-schema': DB_SCHEMA },
+    });
     if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
       const data = await res.json();
       if (data && data.activeStage) {
@@ -1524,6 +1541,7 @@ export async function updateCompetitionConfigViaServer(
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
+          'x-app-schema': DB_SCHEMA,
         },
         body: JSON.stringify({ updates }),
       });
@@ -1780,6 +1798,7 @@ export async function upsertQuizProgram(program: QuizProgram): Promise<boolean> 
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
+        'x-app-schema': DB_SCHEMA,
       },
       body: JSON.stringify({ program }),
     });
@@ -1883,6 +1902,7 @@ export async function toggleQuizProgramPublication(programId: string, isPublishe
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
+        'x-app-schema': DB_SCHEMA,
       },
       body: JSON.stringify({ programId, isPublished }),
     }).catch(() => { });
