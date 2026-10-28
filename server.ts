@@ -1505,6 +1505,79 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
     }
   });
 
+  // POST /api/admin/quiz-program: Update quiz program in database
+  app.post("/api/admin/quiz-program", async (req: Request, res: Response) => {
+    try {
+      const { program } = req.body || {};
+      if (!program || !program.id) {
+        return res.status(400).json({ error: "program payload with id is required" });
+      }
+
+      const parseDate = (val: any): string | null => {
+        if (!val) return null;
+        const s = String(val).trim();
+        if (!s) return null;
+        const candidate = s.includes("T") ? s : s.replace(" ", "T");
+        const hasTz = /[Zz]|([+-]\d{2}:?\d{2})$/.test(candidate);
+        const withTz = hasTz ? candidate : `${candidate}:00+05:30`;
+        const d = new Date(withTz);
+        return isNaN(d.getTime()) ? s : d.toISOString();
+      };
+
+      const now = new Date().toISOString();
+      const row: any = {
+        id: program.id,
+        code: program.code || program.id,
+        title: program.title || "Untitled Program",
+        tagline: program.tagline || null,
+        description: program.description || "",
+        stage: program.stage || "round_1",
+        category: program.category || null,
+        status: program.status || "draft",
+        start_time: parseDate(program.startTime || program.startDate),
+        end_time: parseDate(program.endTime || program.endDate),
+        duration_minutes: Number(program.durationMinutes ?? 45),
+        total_questions: Number(program.totalQuestions ?? 25),
+        total_marks: Number(program.totalMarks ?? 100),
+        passing_marks: Number(program.passingMarks ?? 65),
+        cutoff_score: program.cutoffScore !== undefined && program.cutoffScore !== null ? Number(program.cutoffScore) : 40,
+        negative_marking: Boolean(program.negativeMarking),
+        negative_marks_per_question: Number(program.negativeMarksPerQuestion ?? 0.5),
+        marks_per_question: Number(program.marksPerQuestion ?? 4),
+        fee: Number(program.fee ?? 0),
+        max_intake: Number(program.maxIntake ?? 15000),
+        enrolled_count: Number(program.enrolledCount ?? 0),
+        completed_count: Number(program.completedCount ?? 0),
+        in_progress_count: Number(program.inProgressCount ?? 0),
+        instructions: Array.isArray(program.instructions) ? program.instructions : [],
+        eligibility: program.eligibility || null,
+        proctoring_strictness: program.proctoringStrictness || "High (Webcam + Fullscreen + Tab Lock)",
+        proctoring_mode: program.proctoringMode || "strict_lockdown",
+        tags: Array.isArray(program.tags) ? program.tags : [],
+        shuffle_questions: Boolean(program.shuffleQuestions),
+        allow_review: program.allowReview !== false,
+        is_results_published: Boolean(program.isResultsPublished !== undefined ? program.isResultsPublished : program.is_results_published),
+        updated_at: now,
+      };
+
+      const { data: savedRow, error: upsertErr } = await supabaseAdmin
+        .from("quiz_programs")
+        .upsert(row, { onConflict: "id" })
+        .select()
+        .single();
+
+      if (upsertErr) {
+        console.error("quiz_programs upsert error:", upsertErr.message);
+        return res.status(500).json({ error: "Database update failed: " + upsertErr.message });
+      }
+
+      return res.status(200).json({ success: true, program: savedRow || row });
+    } catch (err: any) {
+      console.error("quiz-program route error:", err);
+      return res.status(500).json({ error: err?.message || "Internal server error" });
+    }
+  });
+
   // POST /api/quiz-programs/sync-enrollment: Recalculate dynamic candidate count from live registrations
   app.post("/api/quiz-programs/sync-enrollment", async (req: Request, res: Response) => {
     try {
