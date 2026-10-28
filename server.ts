@@ -4,6 +4,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
+import { AsyncLocalStorage } from "async_hooks";
 import {
   sendEmail,
   getRegistrationConfirmationEmail,
@@ -20,7 +21,6 @@ const SUPABASE_SERVICE_ROLE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   'sb_publishable_RDIbw6a-RZItDzeY80ylwA_-7XGzb5V';
-const DB_SCHEMA = process.env.VITE_DB_SCHEMA || process.env.DB_SCHEMA || 'public';
 
 if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
   console.warn("WARNING: SUPABASE_SERVICE_ROLE_KEY is not set in environment. Falling back to default key.");
@@ -29,24 +29,78 @@ if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
 // Polyfill WebSocket for Node runtime supabase admin client
 (globalThis as any).WebSocket = WebSocket;
 
-export const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false },
-  db: { schema: DB_SCHEMA },
+// Request-scoped schema context
+const schemaStorage = new AsyncLocalStorage<'public' | 'uat'>();
+
+export function resolveRequestSchema(req: Request | any): 'public' | 'uat' {
+  const origin = ((req.headers?.origin || req.headers?.referer || '') as string).toLowerCase();
+  const host = ((req.headers?.host || '') as string).toLowerCase();
+  const explicit = ((req.headers?.['x-app-schema'] || req.headers?.['x-db-schema'] || '') as string).toLowerCase();
+
+  // 1. Live production domain: strictly locked to public schema
+  if (origin.includes('research.aima.in') || host.includes('research.aima.in')) {
+    return 'public';
+  }
+
+  // 2. Explicit header check
+  if (explicit === 'public') return 'public';
+  if (explicit === 'uat') return 'uat';
+
+  // 3. UAT vercel deployment or localhost: uat
+  if (origin.includes('vercel.app') || host.includes('vercel.app') || origin.includes('localhost') || host.includes('localhost')) {
+    return 'uat';
+  }
+
+  return (process.env.VITE_DB_SCHEMA || process.env.DB_SCHEMA || 'uat') === 'public' ? 'public' : 'uat';
+}
+
+const adminClients: Record<'public' | 'uat', any> = {
+  public: createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    db: { schema: 'public' },
+  }),
+  uat: createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    db: { schema: 'uat' },
+  }),
+};
+
+export function getSupabaseAdmin(schemaOrReq?: any) {
+  if (!schemaOrReq) {
+    const active = schemaStorage.getStore() || 'public';
+    return adminClients[active] || adminClients.public;
+  }
+  const schema = typeof schemaOrReq === 'string' ? schemaOrReq : resolveRequestSchema(schemaOrReq);
+  return adminClients[schema as 'public' | 'uat'] || adminClients.public;
+}
+
+// Dynamic transparent proxy: automatically resolves target client based on active request schema
+export const supabaseAdmin = new Proxy({} as any, {
+  get(_target, prop) {
+    const active = schemaStorage.getStore() || 'public';
+    const client = adminClients[active] || adminClients.public;
+    const value = client[prop];
+    if (typeof value === 'function') {
+      return value.bind(client);
+    }
+    return value;
+  },
 });
 
 export const app = express();
 
 app.use(express.json({ limit: "25mb" }));
 
-// Standard CORS handler
+// Standard CORS & Request-scoped schema context handler
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-App-Schema, X-Db-Schema");
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
   }
-  next();
+  const currentSchema = resolveRequestSchema(req);
+  schemaStorage.run(currentSchema, () => next());
 });
 
 async function startServer() {

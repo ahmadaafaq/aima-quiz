@@ -25,6 +25,7 @@ import { ContactUsPage } from './components/legal/ContactUsPage';
 import { PolicyConsentModal } from './components/legal/PolicyConsentModal';
 import { PaymentReturnListener } from './components/payment/PaymentReturnListener';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { UatEnvironmentBadge } from './components/common/UatEnvironmentBadge';
 
 const AppContent: React.FC = () => {
   const { activeView, isQuizActive, activeCertificateModal, setActiveCertificateModal, showRegistrationModal, setShowRegistrationModal, registrationModalTrack } = useCompetition();
@@ -174,6 +175,9 @@ const AppContent: React.FC = () => {
 
       {/* Bottom Footer (suppressed during quiz session) */}
       {!hideFooter && <Footer />}
+
+      {/* Floating UAT environment indicator (only active when on UAT domain or localhost) */}
+      <UatEnvironmentBadge />
     </div>
   );
 };

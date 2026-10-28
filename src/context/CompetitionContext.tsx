@@ -2019,7 +2019,10 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     try {
       const res = await fetch('/api/quiz/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-app-schema': DB_SCHEMA,
+        },
         body: JSON.stringify({
           answers,
           markedForReview: marked,
