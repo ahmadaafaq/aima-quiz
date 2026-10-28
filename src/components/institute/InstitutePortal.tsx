@@ -306,13 +306,13 @@ export const InstitutePortal: React.FC = () => {
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
                 {inst.name}
               </h1>
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20">
+              {/* <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20">
                 Rank #{inst.ranking} National Institutional Leaderboard
-              </span>
+              </span> */}
               <DocRequirementInfo specKey="institute_leaderboard" variant="icon" size="xs" colorTheme="purple" />
             </div>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Faculty Coordinator: <strong className="text-slate-800 dark:text-slate-200">{inst.coordinatorName}</strong> ({inst.coordinatorEmail}) • NIRF Tier-1 Accredited
+              Faculty Coordinator: <strong className="text-slate-800 dark:text-slate-200">{inst.coordinatorName}</strong> ({inst.coordinatorEmail})
             </p>
           </div>
         </div>
@@ -335,13 +335,13 @@ export const InstitutePortal: React.FC = () => {
             <span>Upload Student Roster (CSV)</span>
           </button>
 
-          <button
+          {/* <button
             onClick={() => alert(`Downloading consolidated B2B GST Tax Invoice for ${inst.name} (Ref: ${matchedReg?.registrationNumber || 'AIMA-CL26-42754'}). Total ${inst.totalPaidAmount ? '₹' + inst.totalPaidAmount.toLocaleString('en-IN') : 'Complimentary / Settled'}.`)}
             className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer border border-slate-200 dark:border-slate-700"
           >
             <Download className="w-3.5 h-3.5" />
             <span>GST Tax Invoice (PDF)</span>
-          </button>
+          </button> */}
         </div>
       </div>
 
@@ -450,7 +450,7 @@ export const InstitutePortal: React.FC = () => {
               className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs self-start sm:self-auto"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>+ Form New Team</span>
+              <span>Form New Team</span>
             </button>
           </div>
 
