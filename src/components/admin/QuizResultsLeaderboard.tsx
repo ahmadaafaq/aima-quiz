@@ -418,7 +418,19 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         attendanceVerified: true,
       });
     }
-    setExpandedJuryUserId((row as any).id || row.userId);
+    setExpandedJuryUserId(targetRowKey);
+
+    // On mobile devices, smoothly scroll table container and scroll accordion into view
+    setTimeout(() => {
+      const scrollContainer = document.getElementById('leaderboard-table-scroll-container');
+      if (scrollContainer && window.innerWidth < 768) {
+        scrollContainer.scrollTo({ left: 0, behavior: 'smooth' });
+      }
+      const accordionEl = document.getElementById(`${targetRowKey}_jury_accordion`);
+      if (accordionEl) {
+        accordionEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 100);
   };
 
   // Save the entered KPI scores for case study presentation to Database
@@ -1907,7 +1919,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
       {/* Leaderboard Table */}
       <div id="leaderboard-table-container" className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden scroll-mt-6">
-        <div className="overflow-x-auto">
+        <div id="leaderboard-table-scroll-container" className="overflow-x-auto">
           <table id="leaderboard-table" className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-bold uppercase tracking-wider">
@@ -2354,29 +2366,59 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                       {isExpanded && (
                         <tr
                           key={`${row.id}_jury_accordion`}
+                          id={`${row.id}_jury_accordion`}
                           className="bg-slate-50/95 dark:bg-slate-900/95 border-b-2 border-red-500/40"
                         >
-                          <td colSpan={8} className="p-4 sm:p-6">
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-md">
+                          <td colSpan={8} className="p-2 sm:p-5 max-w-full">
+                            <div className="sticky left-2 sm:static w-[calc(100vw-2rem)] sm:w-full max-w-[calc(100vw-2rem)] sm:max-w-full mx-auto sm:mx-0 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-3.5 sm:p-5 shadow-lg space-y-4 box-border">
                               {/* Accordion Header Banner */}
-                              <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 mb-4 border-b border-slate-200 dark:border-slate-700 gap-3">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 sm:pb-4 mb-3 sm:mb-4 border-b border-slate-200 dark:border-slate-700 gap-3">
                                 <div>
                                   <div className="flex items-center gap-2">
-                                    <span className="p-1.5 rounded-lg bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400">
+                                    <span className="p-1.5 rounded-lg bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 shrink-0">
                                       <Sliders className="w-4 h-4" />
                                     </span>
-                                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                                      Jury Scorecard: Evaluation of Case Study Presentation (100% Weightage)
-                                    </h4>
+                                    <div>
+                                      <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white leading-tight">
+                                        Jury Scorecard: Case Study Presentation
+                                      </h4>
+                                      <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5 flex items-center flex-wrap gap-1.5">
+                                        <span className="font-bold text-slate-700 dark:text-slate-300">
+                                          {row.isTeam ? row.teamName : row.name}
+                                        </span>
+                                        {row.instituteName && (
+                                          <>
+                                            <span>•</span>
+                                            <span className="truncate max-w-[180px] sm:max-w-[280px]">{row.instituteName}</span>
+                                          </>
+                                        )}
+                                        {trackDisplayName && (
+                                          <span className="px-1.5 py-0.2 rounded bg-red-500/10 text-red-600 dark:text-red-400 font-bold text-[9px] uppercase">
+                                            {trackDisplayName}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
 
                                 {/* Live Auto-calculated Total */}
-                                <div className="text-right">
-                                  <div className="text-[10px] uppercase font-bold text-slate-400">Calculated Total</div>
-                                  <div className="text-xl font-black text-slate-900 dark:text-white">
-                                    <span>{liveFormTotal}</span>
-                                    <span className="text-xs text-slate-400 font-semibold ml-0.5">/ 100</span>
+                                <div className="flex items-center justify-between sm:justify-end gap-3 bg-red-50 dark:bg-red-950/40 sm:bg-transparent p-2.5 sm:p-0 rounded-xl border border-red-200 dark:border-red-900/40 sm:border-0">
+                                  <div className="text-left sm:text-right">
+                                    <div className="text-[9px] sm:text-[10px] uppercase font-bold text-red-600 dark:text-red-400 sm:text-slate-400">Calculated Total</div>
+                                    <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+                                      <span>{liveFormTotal}</span>
+                                      <span className="text-xs text-slate-400 font-semibold ml-0.5">/ 100</span>
+                                    </div>
+                                  </div>
+                                  <div className="sm:hidden text-right">
+                                    <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${
+                                      liveFormTotal >= 50
+                                        ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                                        : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
+                                    }`}>
+                                      {liveFormTotal >= 50 ? 'Passing' : 'Below 50'}
+                                    </span>
                                   </div>
                                 </div>
                               </div>
@@ -2384,22 +2426,22 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                               {/* Form Fields */}
                               <div className="space-y-4">
                                 {/* 7 Official KPIs Grid */}
-                                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl p-4 border border-slate-200 dark:border-slate-700/80">
-                                  <div className="flex items-center justify-between mb-3">
-                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl p-2.5 sm:p-4 border border-slate-200 dark:border-slate-700/80">
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2.5 sm:mb-3">
+                                    <span className="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                                       Evaluation of Case Study Presentation (7 KPIs — Max 100 Marks)
                                     </span>
                                     <span className="text-[11px] font-mono font-bold text-slate-500">
                                       Sum: {liveFormTotal} / 100
                                     </span>
                                   </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3.5">
                                     {CASE_STUDY_KPIS.map(kpi => {
                                       const val = (juryFormData as any)[kpi.id] ?? 0;
                                       return (
                                         <div
                                           key={kpi.id}
-                                          className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs"
+                                          className="bg-white dark:bg-slate-800 p-2.5 sm:p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs"
                                         >
                                           <div className="flex items-center justify-between gap-2 mb-1">
                                             <span
@@ -2418,6 +2460,8 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                           <div className="flex items-center gap-2">
                                             <input
                                               type="number"
+                                              inputMode="numeric"
+                                              pattern="[0-9]*"
                                               min="0"
                                               max={kpi.max}
                                               value={val === 0 ? '' : val}
@@ -2428,7 +2472,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                                 setJuryFormData(prev => ({ ...prev, [kpi.id]: parsed }));
                                               }}
                                               placeholder="0"
-                                              className="w-full text-xs font-bold py-1.5 px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                                              className="w-full text-base sm:text-xs font-bold py-2 sm:py-1.5 px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 touch-manipulation"
                                             />
                                             <span className="text-xs font-bold text-slate-400 shrink-0">
                                               / {kpi.max}
@@ -2441,7 +2485,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                 </div>
 
                                 {/* Qualitative Feedback & Attendance */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 pt-1">
                                   <div className="md:col-span-2">
                                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                                       Jury Qualitative Feedback & Defense Observations
@@ -2451,7 +2495,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                       value={juryFormData.notes}
                                       onChange={(e) => setJuryFormData(prev => ({ ...prev, notes: e.target.value }))}
                                       placeholder="Enter jury observations, execution feasibility notes, or Q&A defense remarks..."
-                                      className="w-full text-xs py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                                      className="w-full text-base sm:text-xs py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 touch-manipulation"
                                     />
                                   </div>
 
@@ -2463,20 +2507,20 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                       <p className="text-[10px] text-slate-400 mb-1.5">
                                         Confirms team was physically present at the venue to present before the jury
                                       </p>
-                                      <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer font-medium bg-slate-50 dark:bg-slate-900/60 p-2 rounded-xl border border-slate-200 dark:border-slate-700">
+                                      <label className="flex items-center gap-2.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer font-medium bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 min-h-[44px]">
                                         <input
                                           type="checkbox"
                                           checked={juryFormData.attendanceVerified}
                                           onChange={(e) => setJuryFormData(prev => ({ ...prev, attendanceVerified: e.target.checked }))}
-                                          className="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-slate-300"
+                                          className="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-slate-300 shrink-0"
                                         />
-                                        <span>Team Present in Presentation Hall</span>
+                                        <span className="font-semibold">Team Present in Presentation Hall</span>
                                       </label>
                                     </div>
 
                                     {/* Feedback Message */}
                                     {jurySaveFeedback && (jurySaveFeedback.userId === row.userId || jurySaveFeedback.userId === row.id) && (
-                                      <div className={`text-xs font-bold mt-2 p-2 rounded-lg ${jurySaveFeedback.isError
+                                      <div className={`text-xs font-bold mt-2 p-2.5 rounded-xl ${jurySaveFeedback.isError
                                         ? 'bg-red-500/10 text-red-600 border border-red-500/20'
                                         : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
                                         }`}>
@@ -2487,11 +2531,11 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                 </div>
 
                                 {/* Form Action Buttons */}
-                                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                                <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
                                   <button
                                     type="button"
                                     onClick={() => setExpandedJuryUserId(null)}
-                                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
+                                    className="w-full sm:w-auto px-4 py-2.5 sm:py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 sm:border-transparent dark:border-slate-700 text-center transition cursor-pointer"
                                   >
                                     Cancel
                                   </button>
@@ -2499,7 +2543,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                     type="button"
                                     disabled={isSavingJury}
                                     onClick={() => handleSaveJuryEvaluation(row)}
-                                    className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-xs transition disabled:opacity-50 cursor-pointer"
+                                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 sm:py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-sm transition disabled:opacity-50 cursor-pointer min-h-[42px]"
                                   >
                                     {isSavingJury ? (
                                       <>
@@ -2508,7 +2552,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                       </>
                                     ) : (
                                       <>
-                                        <Save className="w-3.5 h-3.5" />
+                                        <Save className="w-4 h-4" />
                                         <span>Save Evaluation ({liveFormTotal}/100)</span>
                                       </>
                                     )}
