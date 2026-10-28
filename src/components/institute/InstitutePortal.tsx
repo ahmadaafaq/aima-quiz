@@ -467,7 +467,7 @@ export const InstitutePortal: React.FC = () => {
                   className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4 hover:border-purple-300 dark:hover:border-purple-800 transition-colors"
                 >
                   {/* Top Bar */}
-                  <div className="flex items-start justify-between gap-3">
+                  {/* <div className="flex items-start justify-between gap-3">
                     <div>
                       <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider block">
                         Assigned Regional Hub: {t.assignedHub?.toUpperCase() || 'SOUTH'}
@@ -492,7 +492,7 @@ export const InstitutePortal: React.FC = () => {
                         <span className="text-[10px] text-emerald-600 font-bold">Copied!</span>
                       )}
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Team Members List */}
                   <div className="space-y-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
