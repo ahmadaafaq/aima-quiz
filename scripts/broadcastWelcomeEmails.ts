@@ -1,6 +1,9 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+import WebSocket from "ws";
+(globalThis as any).WebSocket = WebSocket;
+
 import { createClient } from "@supabase/supabase-js";
 import { getRegistrationConfirmationEmail, sendEmail } from "../server/mailer";
 
@@ -12,6 +15,7 @@ const SUPABASE_SERVICE_ROLE_KEY =
 const DB_SCHEMA = process.env.VITE_DB_SCHEMA || process.env.DB_SCHEMA || "public";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { autoRefreshToken: false, persistSession: false },
   db: { schema: DB_SCHEMA },
 });
 

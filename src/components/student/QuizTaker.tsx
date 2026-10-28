@@ -577,8 +577,8 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
                 <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
                   <span className="text-[10px] text-slate-400 uppercase font-semibold block">Total Score</span>
                   <span className="text-2xl font-black text-slate-900 dark:text-slate-100">{displayAttempt.score}%</span>
-                  <span className={`text-[10px] font-semibold block mt-0.5 ${isPassed ? 'text-emerald-600' : 'text-amber-600'}`}>
-                    Cutoff: {activeProgram?.cutoffScore || config.r1CutoffScore}%
+                  <span className={`text-[10px] font-semibold block mt-0.5 ${isPassed ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {isPassed ? 'Passed' : 'Failed'}
                   </span>
                 </div>
 

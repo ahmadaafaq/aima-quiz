@@ -12,7 +12,6 @@ import {
   getR1ResultsEmail,
   getFinalResultsEmail,
 } from "./server/mailer";
-import { broadcastWelcomeEmails, collectRecipients } from "./scripts/broadcastWelcomeEmails";
 
 dotenv.config();
 
@@ -306,6 +305,7 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
     try {
       const { dryRun = false, delayMs = 250 } = req.body || {};
       console.log(`[Admin API] Triggering welcome emails broadcast (dryRun=${dryRun}, delayMs=${delayMs})...`);
+      const { broadcastWelcomeEmails } = await import("./scripts/broadcastWelcomeEmails");
       const results = await broadcastWelcomeEmails({
         dryRun: Boolean(dryRun),
         delayMs: Number(delayMs) || 250,
