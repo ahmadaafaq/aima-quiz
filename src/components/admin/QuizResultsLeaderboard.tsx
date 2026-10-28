@@ -1710,7 +1710,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
               </span>
             </div>
           </div>
-          <div className="inline-flex p-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs self-start md:self-auto shrink-0">
+          <div className="inline-flex p-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs self-start md:self-auto shrink-0 max-w-full overflow-x-auto">
             <button
               type="button"
               onClick={() => setRankingMode('combined')}
@@ -1743,12 +1743,12 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
         {/* Row 1: Program Selector, Search & Status Tabs */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 w-full lg:flex-1 min-w-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:flex-1 min-w-0">
             {/* Program Selector with schedule-normalized badges */}
             <select
               value={selectedProgramId}
               onChange={e => setSelectedProgramId(e.target.value)}
-              className="text-xs font-bold p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white shrink-0 cursor-pointer shadow-xs focus:ring-2 focus:ring-red-500 max-w-[320px] truncate"
+              className="text-xs font-bold p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white shrink-0 cursor-pointer shadow-xs focus:ring-2 focus:ring-red-500 w-full sm:w-auto sm:max-w-[280px] md:max-w-[320px] truncate"
             >
               <option value="all">
                 📚 All Quiz Programs ({liveQuizPrograms.length} Live • {upcomingQuizPrograms.length} Upcoming)
@@ -1764,15 +1764,25 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
               })}
             </select>
 
-            <div className="relative flex-1 min-w-[180px]">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <div className="relative flex-1 min-w-0 w-full">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Search ranker, college, team..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full text-xs pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                className="w-full text-base sm:text-xs pl-9 pr-8 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-red-500 touch-manipulation"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -1791,7 +1801,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                 <button
                   key={st}
                   onClick={() => setFilterStatus(st)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition cursor-pointer whitespace-nowrap shrink-0 ${filterStatus === st
+                  className={`flex-1 sm:flex-initial text-center px-3 py-2 sm:py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition cursor-pointer whitespace-nowrap shrink-0 ${filterStatus === st
                     ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                     }`}
@@ -1855,11 +1865,11 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
           </div>
 
           {/* Publish Results Button (Dependent on Selected Quiz Program) */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <button
               onClick={handleTogglePublishResults}
               disabled={selectedProgramId === 'all'}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-xs ${selectedProgramId === 'all'
+              className={`w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs ${selectedProgramId === 'all'
                 ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700 cursor-not-allowed opacity-75'
                 : isResultsPublished
                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'
