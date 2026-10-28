@@ -437,14 +437,20 @@ export async function signInWithEmailPassword(
       if (legacyResult.success && legacyResult.participant) {
         const p = legacyResult.participant;
         const isJuryCoord = p.email.toLowerCase().trim() === 'co@aima.in';
-        const isCoordinator =
-          (p.coordinator_email && p.email.toLowerCase() === p.coordinator_email.toLowerCase()) ||
-          (p.program && p.program.toLowerCase().includes('coordinator')) ||
-          (p as any).role === 'institute_coordinator';
+        // Only classify as institute coordinator if explicitly not a team leader, in institutional mode,
+        // and specifically designated as faculty/institutional coordinator.
+        const isExplicitFacultyCoordinator =
+          !p.is_team_leader &&
+          p.registration_mode === 'institute' &&
+          Boolean(
+            (p.program && p.program.toLowerCase().includes('faculty')) ||
+            (p.program && p.program.toLowerCase().includes('institutional coordinator')) ||
+            (p as any).role === 'institute_coordinator'
+          );
 
         const assignedRole: UserProfileRow['role'] = isJuryCoord
           ? 'admin'
-          : (isCoordinator
+          : (isExplicitFacultyCoordinator
           ? 'institute_coordinator'
           : (p.is_team_leader ? 'team_leader' : 'student'));
 

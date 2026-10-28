@@ -482,12 +482,16 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       ? (!cachedReg.teamName && (cachedReg.participantCount || cachedReg.nominees?.length || 1) <= 1)
       : false;
     const isTeamLeader = isSolo ? false : Boolean(participant.is_team_leader);
-    const isCoordinator =
-      (participant.coordinator_email && participant.email.toLowerCase().trim() === participant.coordinator_email.toLowerCase().trim()) ||
-      (participant.program && participant.program.toLowerCase().includes('coordinator')) ||
-      (participant as any).role === 'institute_coordinator';
+    const isExplicitFacultyCoordinator =
+      !isTeamLeader &&
+      participant.registration_mode === 'institute' &&
+      Boolean(
+        (participant.program && participant.program.toLowerCase().includes('faculty')) ||
+        (participant.program && participant.program.toLowerCase().includes('institutional coordinator')) ||
+        (participant as any).role === 'institute_coordinator'
+      );
 
-    const userRole: UserRole = isCoordinator
+    const userRole: UserRole = isExplicitFacultyCoordinator
       ? 'institute_coordinator'
       : (isTeamLeader ? 'team_leader' : 'student');
 
@@ -1299,6 +1303,13 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  // Guard: If a student/participant is logged in, ensure they are in the student workspace, never stranded on institute portal
+  useEffect(() => {
+    if (participantUser && currentUser.role !== 'institute_coordinator' && activeView === 'institute') {
+      setActiveView('student');
+    }
+  }, [participantUser, currentUser.role, activeView]);
 
   // Hydrate registrations dynamically from Supabase & cached storage
   useEffect(() => {
