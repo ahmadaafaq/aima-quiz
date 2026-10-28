@@ -15,7 +15,7 @@ import { FinancialLedgerManager } from './FinancialLedgerManager';
 import { DynamicRegistrationsManager } from './DynamicRegistrationsManager';
 import { InstitutionsAdminPanel } from './InstitutionsAdminPanel';
 import { QuizQuestionsCuratorPage } from './QuizQuestionsCuratorPage';
-import { AdminLoginGate, checkIsAdminAuthenticated, clearAdminAuth } from './AdminLoginGate';
+import { AdminLoginGate, checkIsAdminAuthenticated, clearAdminAuth, getAdminAuthData } from './AdminLoginGate';
 import { DocRequirementInfo } from '../common/DocRequirementInfo';
 import { ErrorBoundary } from '../common/ErrorBoundary';
 import { formatPhaseName, removeUnderscores, parseISTTimestamp } from '../../lib/formatters';
@@ -111,8 +111,10 @@ export const AdminControlCenter: React.FC = () => {
   const [isDeclaringFinal, setIsDeclaringFinal] = useState(false);
   const [emailStatusMsg, setEmailStatusMsg] = useState<string | null>(null);
 
-  // Secretariat Super-Admin Authentication Gate (admin@aima.in / case-aima@123#league)
+  // Secretariat Super-Admin / Jury Coordinator Authentication Gate
   const [isAdminAuthed, setIsAdminAuthed] = useState<boolean>(() => checkIsAdminAuthenticated());
+  const adminAuth = getAdminAuthData();
+  const isJuryCoordinator = adminAuth?.user === 'co@aima.in' || adminAuth?.role === 'jury_coordinator';
 
   const handleAdminLogout = () => {
     clearAdminAuth();
@@ -208,6 +210,13 @@ export const AdminControlCenter: React.FC = () => {
       // Fallback
     }
   };
+
+  // Enforce tab access restriction for Jury Coordinators (co@aima.in)
+  useEffect(() => {
+    if (isJuryCoordinator && activeTab !== 'dynamic_registrations' && activeTab !== 'quiz_results') {
+      setActiveTab('quiz_results');
+    }
+  }, [isJuryCoordinator, activeTab]);
 
   // Role Perspective Simulator
   const [rolePerspective, setRolePerspective] = useState<UserRole | 'all'>('admin');
@@ -323,7 +332,7 @@ export const AdminControlCenter: React.FC = () => {
   };
   const activeStageBadge = stageBadgeMap[config.activeStage || 'round_2'] || 'Live R2';
 
-  const menuItems: MenuItem[] = [
+  const allMenuItems: MenuItem[] = [
     {
       id: 'dynamic_registrations',
       label: 'Dynamic Registrations',
@@ -346,6 +355,11 @@ export const AdminControlCenter: React.FC = () => {
       roles: ['admin', 'all', 'regional_hub', 'institute_coordinator', 'corporate_partner', 'evaluator'],
     },
   ];
+
+  // Jury Coordinators (co@aima.in) only see Dynamic Registrations and Quiz Results & Rankings
+  const menuItems: MenuItem[] = isJuryCoordinator
+    ? allMenuItems.filter(item => item.id === 'dynamic_registrations' || item.id === 'quiz_results')
+    : allMenuItems;
   /* =========================================================================
    * PHASE 2 / 3 ROLLOUT: Ecosystem & Governance temporarily hidden
    * =========================================================================
@@ -422,8 +436,12 @@ export const AdminControlCenter: React.FC = () => {
             />
           </div>
           <div>
-            <span className="font-bold text-xs uppercase text-slate-900 dark:text-white">Admin Command</span>
-            <span className="text-[10px] text-slate-500 block">AIMA-ICRC Central Secretariat</span>
+            <span className="font-bold text-xs uppercase text-slate-900 dark:text-white">
+              {isJuryCoordinator ? 'Jury Coordinator' : 'Admin Command'}
+            </span>
+            <span className="text-[10px] text-slate-500 block">
+              {isJuryCoordinator ? 'Jury Scoring & Evaluation Station' : 'AIMA-ICRC Central Secretariat'}
+            </span>
           </div>
         </div>
 
@@ -485,7 +503,13 @@ export const AdminControlCenter: React.FC = () => {
         */}
 
         {!sidebarCollapsed && (
-          <div className="hidden lg:flex p-2 justify-end border-b border-slate-100 dark:border-slate-800/80 shrink-0">
+          <div className="hidden lg:flex p-2 items-center justify-between border-b border-slate-100 dark:border-slate-800/80 shrink-0">
+            <div className="flex items-center gap-2 pl-2">
+              <span className={`w-2 h-2 rounded-full ${isJuryCoordinator ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                {isJuryCoordinator ? 'Jury Coordinator' : 'Admin Command'}
+              </span>
+            </div>
             <button
               onClick={() => setSidebarCollapsed(true)}
               className="p-1 rounded-md border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors outline-none focus:outline-none focus:ring-0 select-none"
@@ -551,7 +575,7 @@ export const AdminControlCenter: React.FC = () => {
               title="Sign Out of Central Admin Session"
             >
               <Lock className="w-3.5 h-3.5 text-red-500" />
-              <span>Logout (admin@aima.in)</span>
+              <span>Logout ({adminAuth?.user || (isJuryCoordinator ? 'co@aima.in' : 'admin@aima.in')})</span>
             </button>
           </div>
         </div>
@@ -1103,7 +1127,7 @@ export const AdminControlCenter: React.FC = () => {
         )}
 
         {/* -------------------- TAB: QUIZ PROGRAMS -------------------- */}
-        {activeTab === 'quiz_programs' && (
+        {activeTab === 'quiz_programs' && !isJuryCoordinator && (
           <div className="animate-in fade-in duration-200">
             <QuizProgramManager
               autoOpenCreate={autoOpenCreateQuiz}

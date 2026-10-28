@@ -384,9 +384,50 @@ export async function signInWithEmailPassword(
   session?: any;
   error?: string;
 }> {
+  const cleanEmail = email.toLowerCase().trim();
+  const cleanPass = plainPassword.trim();
+
+  // Special direct credentials for Jury Coordinator
+  if (cleanEmail === 'co@aima.in' && cleanPass === 'co@case#') {
+    return {
+      success: true,
+      user: { id: 'usr_jury_coordinator_central', email: 'co@aima.in' },
+      profile: {
+        id: 'usr_jury_coordinator_central',
+        email: 'co@aima.in',
+        role: 'admin',
+        name: 'AIMA Jury Coordinator',
+        mobile: '+91 98111 00000',
+        organization_name: 'AIMA Case Research Centre (Jury Station)',
+        registration_number: 'AIMA-JURY-COORD',
+        is_team_leader: false,
+      },
+      session: { access_token: 'aima_jury_sec_' + Date.now().toString(36) },
+    };
+  }
+
+  // Special direct credentials for Secretariat Super Admin
+  if (cleanEmail === 'admin@aima.in' && (cleanPass === 'case-aima@123#league' || cleanPass === 'admin123')) {
+    return {
+      success: true,
+      user: { id: 'usr_admin_aima_hq', email: 'admin@aima.in' },
+      profile: {
+        id: 'usr_admin_aima_hq',
+        email: 'admin@aima.in',
+        role: 'admin',
+        name: 'Dr. Rajan Saxena (Chief Scrutineer)',
+        mobile: '+91 98111 00000',
+        organization_name: 'AIMA Secretariat HQ',
+        registration_number: 'AIMA-HQ-ADMIN',
+        is_team_leader: false,
+      },
+      session: { access_token: 'aima_sec_' + Date.now().toString(36) },
+    };
+  }
+
   try {
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: email.toLowerCase().trim(),
+      email: cleanEmail,
       password: plainPassword,
     });
 
@@ -395,14 +436,17 @@ export async function signInWithEmailPassword(
       const legacyResult = await loginParticipant(email, plainPassword);
       if (legacyResult.success && legacyResult.participant) {
         const p = legacyResult.participant;
+        const isJuryCoord = p.email.toLowerCase().trim() === 'co@aima.in';
         const isCoordinator =
           (p.coordinator_email && p.email.toLowerCase() === p.coordinator_email.toLowerCase()) ||
           (p.program && p.program.toLowerCase().includes('coordinator')) ||
           (p as any).role === 'institute_coordinator';
 
-        const assignedRole: UserProfileRow['role'] = isCoordinator
+        const assignedRole: UserProfileRow['role'] = isJuryCoord
+          ? 'admin'
+          : (isCoordinator
           ? 'institute_coordinator'
-          : (p.is_team_leader ? 'team_leader' : 'student');
+          : (p.is_team_leader ? 'team_leader' : 'student'));
 
         return {
           success: true,

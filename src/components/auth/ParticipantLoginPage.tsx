@@ -228,9 +228,10 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
       setLoggedInProfile(prof);
 
       if (prof.role === 'admin') {
+        const isJury = prof.email === 'co@aima.in';
         const authData = {
           user: prof.email,
-          role: 'super_admin',
+          role: isJury ? 'jury_coordinator' : 'super_admin',
           token: 'aima_sec_' + Date.now().toString(36),
           loginTime: new Date().toISOString(),
         };
@@ -311,6 +312,9 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
   };
 
   const getPortalLabel = (role: string) => {
+    if (loggedInProfile?.email === 'co@aima.in') {
+      return 'Go to Jury Coordinator Station';
+    }
     switch (role) {
       case 'admin':
         return 'Go to Executive Admin Control Center';
