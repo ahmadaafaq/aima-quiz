@@ -317,16 +317,38 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
     const existing = getRowJuryScorecard(row);
 
+    const rowContextTeam = teams.find(
+      t => (row.teamId && t.id === row.teamId) || (row.teamName && t.name === row.teamName)
+    );
+
     const rawTrackId =
       dbEval?.track_id ||
       row.userProfile?.selectedTrackId ||
       (row.userProfile as any)?.trackName ||
+      rowContextTeam?.selectedTrackId ||
+      rowContextTeam?.selectedTrackName ||
       (row as any).attemptData?.selectedTrackId ||
       existing?.trackId;
 
     const matchedOfficial = OFFICIAL_CASE_TRACKS.find(
       t => t.id === rawTrackId || t.name.toLowerCase() === (dbEval?.track_name || rawTrackId || '').toLowerCase()
     );
+
+    const hasChosenTrack = Boolean(
+      rawTrackId ||
+      matchedOfficial ||
+      dbEval?.track_name ||
+      row.userProfile?.selectedTrackName ||
+      rowContextTeam?.selectedTrackName ||
+      existing?.trackName
+    );
+
+    const isRowQualified = (row as any).isQualified ?? (row.score >= effectiveCutoff);
+
+    // Safeguard: Do not allow opening Jury evaluation if below cutoff or no track chosen
+    if (!isResultsPublished || !isRowQualified || !hasChosenTrack) {
+      return;
+    }
 
     const resolvedTrackDisplayName = matchedOfficial
       ? `${matchedOfficial.badge} • ${matchedOfficial.name}`
@@ -1946,6 +1968,23 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                   const trackDisplayName = matchedTrack?.name || rowDbEval?.track_name || rowContextTeam?.selectedTrackName || row.userProfile?.selectedTrackName;
                   const masterCaseTitle = matchedTrack?.masterCaseTitle || rowDbEval?.master_case_title;
 
+                  const hasChosenTrack = Boolean(
+                    rawTrackId ||
+                    matchedTrack ||
+                    (trackDisplayName && trackDisplayName.trim() !== '')
+                  );
+
+                  const isBelowCutoff = !row.isQualified;
+                  const isJuryDisabled = !isResultsPublished || isBelowCutoff || !hasChosenTrack;
+
+                  const juryDisabledReason = !isResultsPublished
+                    ? 'Publish Round 1 Online Quiz Results first to enable Stage 2 Case Study Presentation Jury evaluation'
+                    : isBelowCutoff
+                      ? 'Jury evaluation disabled: Round 1 score is below cutoff (Did not qualify for Stage 2)'
+                      : !hasChosenTrack
+                        ? 'Jury evaluation disabled: Participant / Team has not chosen an official case track for Round 2 yet'
+                        : 'Enter / Edit Offline Jury Case Study Presentation Scorecard';
+
                   const liveFormTotal =
                     (Number(juryFormData.problemIdentification) || 0) +
                     (Number(juryFormData.caseQuestion1) || 0) +
@@ -2278,28 +2317,25 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                             </button>
 
                             <button
-                              disabled={!isResultsPublished}
+                              disabled={isJuryDisabled}
                               onClick={() => {
-                                if (!isResultsPublished) return;
+                                if (isJuryDisabled) return;
                                 handleToggleJuryAccordion(row);
                               }}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition shadow-2xs border ${!isResultsPublished
-                                ? 'opacity-45 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700'
-                                : isExpanded
-                                  ? 'bg-red-600 text-white border-red-600 ring-2 ring-red-400/30 cursor-pointer'
-                                  : (rowJuryResult?.livePresentationScore !== undefined || (rowDbEval?.total_score !== undefined && rowDbEval?.total_score !== null && Number(rowDbEval.total_score) > 0))
-                                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 cursor-pointer'
-                                    : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer'
-                                }`}
-                              title={
-                                !isResultsPublished
-                                  ? 'Publish Round 1 Online Quiz Results first to enable Stage 2 Case Study Presentation Jury evaluation'
-                                  : 'Enter / Edit Offline Jury Case Study Presentation Scorecard'
-                              }
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition shadow-2xs border ${
+                                isJuryDisabled
+                                  ? 'opacity-45 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700'
+                                  : isExpanded
+                                    ? 'bg-red-600 text-white border-red-600 ring-2 ring-red-400/30 cursor-pointer'
+                                    : (rowJuryResult?.livePresentationScore !== undefined || (rowDbEval?.total_score !== undefined && rowDbEval?.total_score !== null && Number(rowDbEval.total_score) > 0))
+                                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 cursor-pointer'
+                                      : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer'
+                              }`}
+                              title={juryDisabledReason}
                             >
                               <Sliders className="w-3.5 h-3.5" />
                               <span>Jury</span>
-                              {!isResultsPublished ? (
+                              {isJuryDisabled ? (
                                 <Lock className="w-3 h-3 text-slate-400" />
                               ) : isExpanded ? (
                                 <ChevronUp className="w-3.5 h-3.5" />
