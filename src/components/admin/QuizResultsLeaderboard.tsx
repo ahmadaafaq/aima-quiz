@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import { useCompetition } from '../../context/CompetitionContext';
 import { QuizAttempt, UserProfile, QuizQuestion, CertificateRecord } from '../../types';
 import { parseISTTimestamp, formatISTDateTime } from '../../lib/formatters';
@@ -1372,78 +1373,185 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   }, [attemptQuestions, selectedAttemptForReview, modalFilter]);
 
   const handleExportMeritList = () => {
-    const headers = [
-      rankingMode === 'combined' ? 'Final Merit Rank' : 'Quiz Rank',
-      'Entry Type',
-      'Candidate / Team ID',
-      'Name',
-      'Email',
-      'Institute',
-      'Affiliated Team',
-      'Team Members Count',
-      'Screening Quiz Score (100)',
-      '5 Tie-Breaker Questions Score (20)',
-      'Case Presentation (100)',
-      'Presentation Track',
-      'Grand Combined Total (200)',
-      'Ranking Mode',
-      'Award / Merit Status',
-      'Time Taken (s)',
-      'Tab Switches',
-      'Round 1 Gate Status',
-    ];
-    const rows = filteredList.map((r, idx) => {
-      const rankNum = idx + 1;
-      const awardStatus =
-        rankingMode === 'combined'
-          ? (rankNum === 1
-            ? '1st Winner (Gold Prize)'
-            : rankNum === 2
-              ? '1st Runner-Up (Silver Prize)'
-              : rankNum === 3
-                ? '2nd Runner-Up (Bronze Prize)'
-                : r.hasPresentation
-                  ? 'Grand Finalist'
-                  : r.isQualified
-                    ? 'R2 Qualifier (Pending Jury)'
-                    : 'Below Cutoff')
-          : (r.isQualified ? 'QUALIFIED FOR STAGE 2' : 'BELOW CUTOFF');
+    // Helper to calculate auto-fit column widths for SheetJS
+    const fitColWidths = (rows: Record<string, any>[]) => {
+      if (!rows || rows.length === 0) return [];
+      const keys = Object.keys(rows[0]);
+      return keys.map(k => {
+        let maxLen = k.length;
+        rows.forEach(r => {
+          const val = r[k] !== undefined && r[k] !== null ? String(r[k]) : '';
+          if (val.length > maxLen) maxLen = val.length;
+        });
+        return { wch: Math.min(65, Math.max(12, maxLen + 3)) };
+      });
+    };
 
-      return [
-        rankNum,
-        r.isTeam ? 'Team Entry' : 'Solo Entry',
-        r.id,
-        `"${r.name}"`,
-        r.email,
-        `"${r.instituteName}"`,
-        `"${r.teamName}"`,
-        r.isTeam ? r.members.length : 1,
-        r.quizScore,
-        r.tieBreakerScore,
-        r.hasPresentation ? r.presentationScore : 'Pending Jury',
-        r.presentationTrackName ? `"${r.presentationTrackName}"` : 'Pending Selection',
-        r.combinedScore,
-        rankingMode === 'combined' ? 'Grand Finale Combined (Quiz + Presentation + Tie-Breaker)' : 'Round 1 Quiz Rank',
-        `"${awardStatus}"`,
-        r.timeTaken,
-        r.tabSwitches,
-        r.isQualified ? 'QUALIFIED FOR STAGE 2' : 'BELOW CUTOFF',
-      ];
+    // ─────────────────────────────────────────────────────────────────────────
+    // SHEET 1: Combined Final Results (Sorted by Grand Finale Combined Rank)
+    // ─────────────────────────────────────────────────────────────────────────
+    const combinedSorted = [...leaderboardWithCombinedScores].sort((a, b) => {
+      if (b.combinedScore !== a.combinedScore) return b.combinedScore - a.combinedScore;
+      if (b.validPresentationScore !== a.validPresentationScore) {
+        return b.validPresentationScore - a.validPresentationScore;
+      }
+      if (b.tieBreakerScore !== a.tieBreakerScore) return b.tieBreakerScore - a.tieBreakerScore;
+      if (b.quizScore !== a.quizScore) return b.quizScore - a.quizScore;
+      if (a.timeTaken !== b.timeTaken) return a.timeTaken - b.timeTaken;
+      return a.tabSwitches - b.tabSwitches;
     });
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `AIMA_Official_Merit_List_${rankingMode === 'combined' ? 'GrandFinale' : 'Round1'}_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const sheet1Rows = combinedSorted.map((r, idx) => {
+      const rank = idx + 1;
+      const awardStatus =
+        rank === 1
+          ? '🥇 1st Winner (Gold Prize)'
+          : rank === 2
+            ? '🥈 1st Runner-Up (Silver Prize)'
+            : rank === 3
+              ? '🥉 2nd Runner-Up (Bronze Prize)'
+              : r.hasPresentation
+                ? '🎖️ Grand Finalist'
+                : r.isQualified
+                  ? 'Qualified Round 2 (Pending Presentation)'
+                  : 'Below Cutoff';
+
+      const memberNames =
+        r.members && r.members.length > 0
+          ? r.members.map((m: any) => `${m.name} (${m.email || 'N/A'})`).join('; ')
+          : r.name;
+
+      return {
+        'Final Combined Rank': rank,
+        'Award / Final Standing': awardStatus,
+        'Entry Type': r.isTeam ? 'Team Entry' : 'Solo Entry',
+        'Candidate / Team Name': r.name,
+        'Contact Email': r.email,
+        'Institution': r.instituteName,
+        'Grand Combined Total (200)': r.combinedScore,
+        'Round 1 Screening Quiz Score (100)': r.quizScore,
+        '5 Analytical Tie-Breakers Score (20)': r.tieBreakerScore,
+        'Round 2 Case Presentation Score (100)': r.hasPresentation ? r.presentationScore : 'Pending Jury Score',
+        'Case Track Assigned': r.presentationTrackName || 'General / Corporate Strategy',
+        'Round 1 Gate Status': r.isQualified ? 'QUALIFIED FOR STAGE 2' : 'BELOW CUTOFF',
+        'Time Taken (s)': r.timeTaken,
+        'Proctoring Tab Switches': r.tabSwitches,
+        'Affiliated Team Name': r.teamName,
+        'Team Roster Size': r.isTeam ? (r.members?.length || 1) : 1,
+        'Squad Members Roster': memberNames,
+      };
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SHEET 2: Round 1 Results (Sorted strictly by Round 1 Screening Quiz Rank)
+    // ─────────────────────────────────────────────────────────────────────────
+    const round1Sorted = [...leaderboardWithCombinedScores].sort((a, b) => {
+      if (b.quizScore !== a.quizScore) return b.quizScore - a.quizScore;
+      if (b.tieBreakerScore !== a.tieBreakerScore) return b.tieBreakerScore - a.tieBreakerScore;
+      if (a.timeTaken !== b.timeTaken) return a.timeTaken - b.timeTaken;
+      return a.tabSwitches - b.tabSwitches;
+    });
+
+    const sheet2Rows = round1Sorted.map((r, idx) => {
+      const rank = idx + 1;
+      const memberNames =
+        r.members && r.members.length > 0
+          ? r.members.map((m: any) => `${m.name} (${m.registrationNumber || m.email || 'N/A'})`).join('; ')
+          : r.name;
+
+      return {
+        'Round 1 Rank': rank,
+        'Round 1 Gate Status': r.isQualified ? 'QUALIFIED FOR ROUND 2' : 'BELOW CUTOFF',
+        'Entry Type': r.isTeam ? 'Team Entry' : 'Solo Entry',
+        'Candidate / Team Name': r.name,
+        'Candidate Email': r.email,
+        'Institution': r.instituteName,
+        'Screening Quiz Score (100)': r.quizScore,
+        '5 Analytical Tie-Breakers Score (20)': r.tieBreakerScore,
+        'Passing Cutoff (%)': `${effectiveCutoff}%`,
+        'Time Taken (seconds)': r.timeTaken,
+        'Proctoring Tab Switches': r.tabSwitches,
+        'Registration / Attempt ID': r.registrationNumber || r.id,
+        'Squad Members Roster': memberNames,
+      };
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SHEET 3: Round 2 Results (Sorted strictly by Round 2 Case Presentation Rank)
+    // ─────────────────────────────────────────────────────────────────────────
+    const round2Sorted = [...leaderboardWithCombinedScores].sort((a, b) => {
+      const bScore = b.hasPresentation ? Number(b.presentationScore) : -1;
+      const aScore = a.hasPresentation ? Number(a.presentationScore) : -1;
+      if (bScore !== aScore) return bScore - aScore;
+      if (b.combinedScore !== a.combinedScore) return b.combinedScore - a.combinedScore;
+      if (b.tieBreakerScore !== a.tieBreakerScore) return b.tieBreakerScore - a.tieBreakerScore;
+      return b.quizScore - a.quizScore;
+    });
+
+    const sheet3Rows = round2Sorted.map((r, idx) => {
+      const rank = idx + 1;
+      const jury = getRowJuryScorecard(r);
+      const dbEval = dbJuryEvaluations.find(
+        d =>
+          (r.registrationNumber && d.registration_number === r.registrationNumber) ||
+          (r.teamId && d.team_id === r.teamId) ||
+          (r.email && d.candidate_email && d.candidate_email.toLowerCase() === r.email.toLowerCase().trim()) ||
+          (r.members && r.members.some((m: any) =>
+            (m.registrationNumber && d.registration_number === m.registrationNumber) ||
+            (m.email && d.candidate_email && d.candidate_email.toLowerCase() === m.email.toLowerCase().trim())
+          ))
+      );
+
+      const matchedTrack = OFFICIAL_CASE_TRACKS.find(
+        t => t.name.toLowerCase() === (r.presentationTrackName || dbEval?.track_name || '').toLowerCase()
+      );
+
+      return {
+        'Round 2 Rank': rank,
+        'Jury Evaluation Status': r.hasPresentation ? 'EVALUATED' : 'PENDING EVALUATION',
+        'Candidate / Team Name': r.name,
+        'Institution': r.instituteName,
+        'Selected Case Track': r.presentationTrackName || dbEval?.track_name || 'General / Corporate Strategy',
+        'Master Case Problem Title': matchedTrack?.masterCaseTitle || dbEval?.master_case_title || 'National Case Study Scenario',
+        'Total Presentation Score (100)': r.hasPresentation ? r.presentationScore : 0,
+        'KPI 1: Problem Identification & Root Cause (15)': dbEval?.problem_identification ?? (jury?.scores?.['problemIdentification'] ?? 0),
+        'KPI 2: Answer to Case Question 1 (15)': dbEval?.case_question_1 ?? (jury?.scores?.['caseQuestion1'] ?? 0),
+        'KPI 3: Answer to Case Question 2 (15)': dbEval?.case_question_2 ?? (jury?.scores?.['caseQuestion2'] ?? 0),
+        'KPI 4: Answer to Case Question 3 (15)': dbEval?.case_question_3 ?? (jury?.scores?.['caseQuestion3'] ?? 0),
+        'KPI 5: Strategic Alternatives & Recommended Strategy (20)': dbEval?.strategic_alternatives ?? (jury?.scores?.['strategicAlternatives'] ?? 0),
+        'KPI 6: Execution Plan & Feasibility (15)': dbEval?.execution_plan ?? (jury?.scores?.['executionPlan'] ?? 0),
+        'KPI 7: Case Data Evidence & Assumptions (5)': dbEval?.case_data_evidence ?? (jury?.scores?.['caseDataEvidence'] ?? 0),
+        'Jury Evaluator Name': dbEval?.evaluator_name || jury?.evaluatorName || 'AIMA-ICRC Panel Evaluator',
+        'Jury Remarks / Observations': dbEval?.observations || jury?.generalRemarks || 'Offline Presentation Evaluation Completed',
+        'Candidate Email': r.email,
+        'Squad Members': r.members && r.members.length > 0 ? r.members.map((m: any) => m.name).join(', ') : r.name,
+      };
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Assemble Multi-Sheet Excel Workbook
+    // ─────────────────────────────────────────────────────────────────────────
+    const wb = XLSX.utils.book_new();
+
+    const ws1 = XLSX.utils.json_to_sheet(sheet1Rows);
+    ws1['!cols'] = fitColWidths(sheet1Rows);
+    XLSX.utils.book_append_sheet(wb, ws1, 'Combined Final Results');
+
+    const ws2 = XLSX.utils.json_to_sheet(sheet2Rows);
+    ws2['!cols'] = fitColWidths(sheet2Rows);
+    XLSX.utils.book_append_sheet(wb, ws2, 'Round 1 Results');
+
+    const ws3 = XLSX.utils.json_to_sheet(sheet3Rows);
+    ws3['!cols'] = fitColWidths(sheet3Rows);
+    XLSX.utils.book_append_sheet(wb, ws3, 'Round 2 Results');
+
+    const timestamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `AIMA_ICL_2026_Official_Merit_List_3_Sheets_${timestamp}.xlsx`);
 
     addAuditLog(
       'Merit List Exported',
       'Quiz',
-      `Super Admin exported official leaderboard of ${filteredList.length} rankers in "${rankingMode === 'combined' ? 'Grand Finale Combined' : 'Round 1 Quiz'}" mode with 5 reserve tie-breaker scores`
+      `Super Admin exported official 3-sheet Excel spreadsheet (Combined Final Results, Round 1 Results, Round 2 Results) with ${combinedSorted.length} entries.`
     );
   };
 
@@ -1480,9 +1588,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
           <button
             onClick={handleExportMeritList}
             className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition flex items-center gap-2 cursor-pointer border border-slate-700"
+            title="Download multi-sheet Excel spreadsheet containing: 1. Combined Final Results (sorted by rank), 2. Round 1 Results (sorted by rank), 3. Round 2 Results (sorted by rank)"
           >
-            <Download className="w-4 h-4" />
-            <span>Export Official Merit List CSV</span>
+            <Download className="w-4 h-4 text-emerald-400" />
+            <span>Export Official Merit List (Excel - 3 Sheets)</span>
           </button>
           <button
             onClick={() => setShowCertificateCockpit(true)}
