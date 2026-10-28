@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { CertificateRecord } from '../../types';
 import { Award, CheckCircle2, Download, Printer, Shield, X, Sparkles } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { useCompetition } from '../../context/CompetitionContext';
 
 interface CertificateModalProps {
   certificate: CertificateRecord | null;
@@ -9,11 +10,20 @@ interface CertificateModalProps {
 }
 
 export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate, onClose }) => {
+  const { currentUser, quizPrograms, config } = useCompetition();
   const [isDownloading, setIsDownloading] = useState(false);
   const certContainerRef = useRef<HTMLDivElement>(null);
 
+  const stage1Program = (quizPrograms || []).find(p => p.id === 'qp_case_comp_stage1_2026') || (quizPrograms || [])[0];
+  const isResultsPublished = Boolean(
+    stage1Program?.isResultsPublished ??
+    (stage1Program as any)?.is_results_published ??
+    config?.isResultsPublishedR1 ??
+    false
+  );
+
   React.useEffect(() => {
-    if (certificate) {
+    if (certificate && (!currentUser || currentUser.role !== 'student' || isResultsPublished)) {
       confetti({
         particleCount: 70,
         spread: 60,
@@ -21,9 +31,34 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate,
         colors: ['#0B4E94', '#C59B27', '#1E3A8A', '#D97706', '#10B981']
       });
     }
-  }, [certificate]);
+  }, [certificate, isResultsPublished, currentUser]);
 
   if (!certificate) return null;
+
+  // Student safety gate: Must have results published to view
+  if (currentUser?.role === 'student' && !isResultsPublished) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto">
+            <Shield className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+            Results Under Official Review
+          </h3>
+          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+            Official competition certificates will become accessible once Stage 1 Business Quiz results have been officially published by the AIMA Secretariat.
+          </p>
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Determine certificate type & category
   const achievementUpper = (certificate.achievement || '').toUpperCase();

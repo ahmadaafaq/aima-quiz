@@ -1107,8 +1107,13 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     } else if (options.modal === 'support') {
       setActiveSupportModal(true);
     } else if (options.modal === 'certificate') {
-      if (certificates.length > 0) {
-        setActiveCertificateModal(certificates[0]);
+      const isStudent = currentUser?.role === 'student';
+      const stage1 = (quizPrograms || []).find(p => p.id === 'qp_case_comp_stage1_2026') || (quizPrograms || [])[0];
+      const resultsPub = Boolean(stage1?.isResultsPublished ?? (stage1 as any)?.is_results_published ?? config?.isResultsPublishedR1 ?? false);
+      if (!isStudent || resultsPub) {
+        if (certificates.length > 0) {
+          setActiveCertificateModal(certificates[0]);
+        }
       }
     }
     // Only scroll to top if not deep-linking to a specific requirement clause or section

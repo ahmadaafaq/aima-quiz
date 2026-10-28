@@ -412,6 +412,30 @@ export const StudentDashboard: React.FC = () => {
     false
   );
 
+  // Dynamic Certificate Published determination:
+  // Must be marked published in registration raw_data OR in certificates catalog
+  const isCertificatePublished = Boolean(
+    (liveRegistration as any)?.raw_data?.isCertificatePublished === true ||
+    (liveRegistration as any)?.isCertificatePublished === true ||
+    (myCert as any)?.isCertificatePublished === true ||
+    (myCert as any)?.isPublished === true ||
+    (myCert && Array.isArray(certificates) && certificates.some(c => c && (c.certificateNumber === myCert.certificateNumber || c.id === myCert.id)))
+  );
+
+  // Participant can view certificate ONLY IF BOTH criteria are strictly satisfied:
+  // 1. Certificate published AND 2. Quiz result published
+  const canViewCertificate = Boolean(
+    myCert &&
+    isResultsPublished &&
+    isCertificatePublished
+  );
+
+  useEffect(() => {
+    if (!canViewCertificate && activeCertificateModal) {
+      setActiveCertificateModal(null);
+    }
+  }, [canViewCertificate, activeCertificateModal]);
+
   // Team Cumulative Score Calculation
   const isTeam = Boolean(!isSoloCandidate && currentTeam && (currentTeam.members?.length > 1 || liveRegistration?.teamName));
   const teamMemberEmails = useMemo(() => {
@@ -1659,7 +1683,7 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
 
           {/* Quick Action Badges */}
           <div className="flex items-center gap-3 flex-wrap">
-            {myCert && (
+            {canViewCertificate && myCert && (
               <div className="inline-flex items-center gap-1">
                 <button
                   onClick={() => setActiveCertificateModal(myCert)}
@@ -1809,8 +1833,8 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
         </div>
       </div>
 
-      {/* Official Certificate Announcement Banner */}
-      {myCert && (
+      {/* Official Certificate Announcement Banner (Requires both results & certificate published) */}
+      {canViewCertificate && myCert && (
         <div className="rounded-3xl p-5 sm:p-6 bg-gradient-to-r from-amber-500/15 via-blue-500/10 to-emerald-500/15 border-2 border-amber-500/40 dark:border-amber-400/30 shadow-lg relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="flex items-start sm:items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white shrink-0 shadow-md">
