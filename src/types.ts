@@ -449,6 +449,7 @@ export interface CertificateRecord {
   recipientId?: string;
   teamId?: string;
   teamName?: string;
+  registrationNumber?: string;
   institute: string;
   achievement:
     | 'CERTIFICATE OF ACHIEVEMENT - TOP 1 POSITION'

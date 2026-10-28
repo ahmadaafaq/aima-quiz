@@ -68,6 +68,7 @@ export const StudentDashboard: React.FC = () => {
     caseSubmissions,
     hubs,
     certificates,
+    setCertificates,
     quizPrograms,
     refreshQuizPrograms,
     setActiveCertificateModal,
@@ -181,6 +182,10 @@ export const StudentDashboard: React.FC = () => {
           const reg = await fetchRegistrationByNumber(regNum);
           if (isMounted && reg) {
             setLiveRegistration(reg);
+            if ((reg as any)?.raw_data?.certificate) {
+              const c = (reg as any).raw_data.certificate;
+              setCertificates(prev => [c, ...prev.filter(item => item.id !== c.id && item.certificateNumber !== c.certificateNumber)]);
+            }
           }
         } catch (err) {
           console.warn('Could not load live student registration:', err);
@@ -222,15 +227,30 @@ export const StudentDashboard: React.FC = () => {
     ? caseSubmissions.find(s => s.teamId === currentTeam?.id) || currentTeam?.r2Submission
     : currentTeam?.r2Submission;
 
-  const myCert = Array.isArray(certificates)
-    ? certificates.find(
-        c =>
-          c.recipientId === currentUser.id ||
-          (currentUser.email && c.recipientEmail?.toLowerCase() === currentUser.email?.toLowerCase()) ||
-          (currentTeam?.name && c.teamName?.toLowerCase() === currentTeam.name.toLowerCase()) ||
-          (currentTeam?.id && c.teamId === currentTeam.id)
-      )
-    : undefined;
+  const myCert =
+    (Array.isArray(certificates)
+      ? certificates.find((c) => {
+          if (!c) return false;
+          // Match by email
+          if (currentUser.email && c.recipientEmail && c.recipientEmail.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return true;
+          if (liveRegistration?.email && c.recipientEmail && c.recipientEmail.toLowerCase().trim() === liveRegistration.email.toLowerCase().trim()) return true;
+          if (liveRegistration?.candidate_email && c.recipientEmail && c.recipientEmail.toLowerCase().trim() === liveRegistration.candidate_email.toLowerCase().trim()) return true;
+          // Match by registration number
+          if (currentUser.registrationNumber && (c as any).registrationNumber && (c as any).registrationNumber === currentUser.registrationNumber) return true;
+          if (liveRegistration?.registrationNumber && (c as any).registrationNumber && (c as any).registrationNumber === liveRegistration.registrationNumber) return true;
+          if (currentUser.registrationNumber && c.certificateNumber && c.certificateNumber.includes(currentUser.registrationNumber)) return true;
+          if (liveRegistration?.registrationNumber && c.certificateNumber && c.certificateNumber.includes(liveRegistration.registrationNumber)) return true;
+          // Match by team name
+          if (currentTeam?.name && c.teamName && c.teamName.toLowerCase().trim() === currentTeam.name.toLowerCase().trim()) return true;
+          if (liveRegistration?.teamName && c.teamName && c.teamName.toLowerCase().trim() === liveRegistration.teamName.toLowerCase().trim()) return true;
+          // Match by recipient ID / team ID
+          if (c.recipientId && (c.recipientId === currentUser.id || c.recipientId === currentUser.email)) return true;
+          if (currentTeam?.id && c.teamId && c.teamId === currentTeam.id) return true;
+          return false;
+        })
+      : undefined) ||
+    (liveRegistration as any)?.raw_data?.certificate ||
+    (liveRegistration as any)?.certificate;
 
   const assignedHubId = currentTeam?.assignedHub || currentUser.assignedHub || 'north';
   const hubInfo = hubs.find(h => h.id === assignedHubId) || hubs[0];

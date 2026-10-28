@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { CSRBootcampRegistration, CSRBootcampNominee, CompetitionConfig, QuizProgram, QuizQuestion, QuizAttempt } from '../types';
+import { CSRBootcampRegistration, CSRBootcampNominee, CompetitionConfig, QuizProgram, QuizQuestion, QuizAttempt, CertificateRecord } from '../types';
 
 export const SUPABASE_URL =
   (import.meta as any).env?.VITE_SUPABASE_URL || 'https://setjjgjhuslevgnqcnhj.supabase.co';
@@ -2676,6 +2676,90 @@ export async function fetchProgramQuestionsOrdered(programId: string): Promise<Q
     console.warn('fetchProgramQuestionsOrdered warning:', err?.message);
   }
   return [];
+}
+
+/**
+ * Persists published certificates to Supabase so that participants across all browsers/devices
+ * can access their official credentials.
+ */
+export async function savePublishedCertificatesToSupabase(
+  certs: CertificateRecord[]
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const payload = JSON.stringify({
+      publishedCertificates: certs,
+      publishedAt: new Date().toISOString(),
+      count: certs.length,
+    });
+
+    // 1. Save to quiz_programs table in public and active schema
+    const { error: progErr } = await supabase
+      .from('quiz_programs')
+      .update({ eligibility: payload, updated_at: new Date().toISOString() })
+      .eq('id', 'qp_case_comp_stage1_2026');
+
+    if (progErr) {
+      console.warn('Could not update quiz_programs with published certificates:', progErr);
+    }
+
+    // 2. Also update each registration's raw_data.certificate in the database for direct access
+    for (const cert of certs) {
+      if (cert.registrationNumber || cert.recipientEmail) {
+        try {
+          let query = supabase.from('registrations').select('id, raw_data');
+          if (cert.registrationNumber) {
+            query = query.eq('registration_number', cert.registrationNumber);
+          } else if (cert.recipientEmail) {
+            query = query.eq('candidate_email', cert.recipientEmail.toLowerCase().trim());
+          }
+          const { data: regRows } = await query.limit(1);
+          if (regRows && regRows.length > 0) {
+            const row = regRows[0];
+            const updatedRaw = {
+              ...(row.raw_data || {}),
+              certificate: cert,
+              isCertificatePublished: true,
+              certificatePublishedAt: new Date().toISOString(),
+            };
+            await supabase.from('registrations').update({ raw_data: updatedRaw }).eq('id', row.id);
+          }
+        } catch {
+          // ignore individual update errors
+        }
+      }
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('savePublishedCertificatesToSupabase error:', err);
+    return { success: false, error: err?.message };
+  }
+}
+
+/**
+ * Fetches published certificates from Supabase.
+ */
+export async function fetchPublishedCertificatesFromSupabase(): Promise<CertificateRecord[] | null> {
+  try {
+    const { data, error } = await supabase
+      .from('quiz_programs')
+      .select('eligibility')
+      .eq('id', 'qp_case_comp_stage1_2026')
+      .single();
+
+    if (error || !data?.eligibility) {
+      return null;
+    }
+
+    const parsed = JSON.parse(data.eligibility);
+    if (Array.isArray(parsed?.publishedCertificates) && parsed.publishedCertificates.length > 0) {
+      return parsed.publishedCertificates as CertificateRecord[];
+    }
+    return null;
+  } catch (err) {
+    console.warn('fetchPublishedCertificatesFromSupabase error:', err);
+    return null;
+  }
 }
 
 export const SUPABASE_SQL_SETUP_SCRIPT = `-- ==============================================================

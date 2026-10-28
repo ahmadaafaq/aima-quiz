@@ -1074,6 +1074,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         recipientId: item.isTeam ? item.members?.[0]?.id || item.id : item.id,
         teamId: item.id,
         teamName,
+        registrationNumber: item.registrationNumber,
         institute,
         achievement,
         certificateCategory: category,
@@ -1113,6 +1114,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
               recipientEmail: m.email || '',
               recipientId: m.id,
               recipientRole: 'Squad Member',
+              registrationNumber: m.registrationNumber || c.certificate.registrationNumber,
               qrVerificationUrl: `https://research.aima.in/verify/${memberCertNum}`,
             });
           });
@@ -1152,6 +1154,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
               recipientEmail: m.email || '',
               recipientId: m.id,
               recipientRole: 'Squad Member',
+              registrationNumber: m.registrationNumber || c.certificate.registrationNumber,
               qrVerificationUrl: `https://research.aima.in/verify/${memberCertNum}`,
             });
           });

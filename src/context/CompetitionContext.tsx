@@ -61,6 +61,8 @@ import {
   createAndAssignQuestion,
   getLocalProgramQuestionsCache,
   generateDefaultPassword,
+  savePublishedCertificatesToSupabase,
+  fetchPublishedCertificatesFromSupabase,
   DB_SCHEMA,
 } from '../lib/supabase';
 import {
@@ -789,6 +791,10 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
       // 1. Fetch full registration record
       const reg = await fetchRegistrationByNumber(regNumber);
+      if (reg && (reg as any).raw_data?.certificate) {
+        const cert = (reg as any).raw_data.certificate;
+        setCertificates((prev) => [cert, ...prev.filter((c) => c.id !== cert.id && c.certificateNumber !== cert.certificateNumber)]);
+      }
       if (reg && reg.nominees && reg.nominees.length > 0) {
         const synTeam = buildSyntheticTeamFromReg(reg, {
           ...participant,
@@ -892,10 +898,38 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       .then((data) => {
         if (Array.isArray(data)) {
           setQuizPrograms(data);
+          // Check if any quiz program contains published certificates in eligibility
+          for (const prog of data) {
+            if (prog.eligibility) {
+              try {
+                const parsed = JSON.parse(prog.eligibility);
+                if (Array.isArray(parsed?.publishedCertificates) && parsed.publishedCertificates.length > 0) {
+                  setCertificates(parsed.publishedCertificates);
+                  try {
+                    localStorage.setItem('aima_published_certificates', JSON.stringify(parsed.publishedCertificates));
+                  } catch (e) {}
+                  break;
+                }
+              } catch (e) {}
+            }
+          }
         }
       })
       .catch((err) => {
         console.warn('Error loading quiz programs:', err);
+      });
+
+    fetchPublishedCertificatesFromSupabase()
+      .then((published) => {
+        if (Array.isArray(published) && published.length > 0) {
+          setCertificates(published);
+          try {
+            localStorage.setItem('aima_published_certificates', JSON.stringify(published));
+          } catch (e) {}
+        }
+      })
+      .catch((err) => {
+        console.warn('Error loading published certificates from Supabase:', err);
       });
 
     fetchQuizQuestionsPublic()
@@ -2737,10 +2771,11 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     certs: CertificateRecord[],
     options?: { sendEmails?: boolean }
   ): Promise<{ success: boolean; publishedCount: number; emailSentCount: number }> => {
+    let combined: CertificateRecord[] = [];
     setCertificates(prev => {
       const existingMap = new Map(prev.map(c => [c.id || c.certificateNumber, c]));
       certs.forEach(c => existingMap.set(c.id || c.certificateNumber, c));
-      const combined = Array.from(existingMap.values());
+      combined = Array.from(existingMap.values());
       try {
         localStorage.setItem('aima_published_certificates', JSON.stringify(combined));
       } catch (err) {
@@ -2748,6 +2783,13 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
       return combined;
     });
+
+    // Persist to Supabase database so all students across all devices can immediately access their certificates
+    try {
+      await savePublishedCertificatesToSupabase(combined.length > 0 ? combined : certs);
+    } catch (err) {
+      console.warn('Error saving published certificates to Supabase:', err);
+    }
 
     addAuditLog(
       'Certificates Published',
