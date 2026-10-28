@@ -180,6 +180,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
   // Case Study Presentation Jury Evaluation States
   const [expandedJuryUserId, setExpandedJuryUserId] = useState<string | null>(null);
+  const [activeJuryRow, setActiveJuryRow] = useState<any | null>(null);
   const [juryFormData, setJuryFormData] = useState<{
     track: string;
     evaluatorName: string;
@@ -205,6 +206,18 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     notes: '',
     attendanceVerified: true,
   });
+
+  const currentJuryFormTotal = useMemo(() => {
+    return (
+      (Number(juryFormData.problemIdentification) || 0) +
+      (Number(juryFormData.caseQuestion1) || 0) +
+      (Number(juryFormData.caseQuestion2) || 0) +
+      (Number(juryFormData.caseQuestion3) || 0) +
+      (Number(juryFormData.strategicAlternatives) || 0) +
+      (Number(juryFormData.executionPlan) || 0) +
+      (Number(juryFormData.caseDataEvidence) || 0)
+    );
+  }, [juryFormData]);
   const [isSavingJury, setIsSavingJury] = useState<boolean>(false);
   const [jurySaveFeedback, setJurySaveFeedback] = useState<{ userId: string; msg: string; isError?: boolean } | null>(null);
   const [dbJuryEvaluations, setDbJuryEvaluations] = useState<any[]>([]);
@@ -304,6 +317,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     const targetRowKey = (row as any).id || row.userId;
     if (expandedJuryUserId === targetRowKey || expandedJuryUserId === row.userId) {
       setExpandedJuryUserId(null);
+      setActiveJuryRow(null);
       return;
     }
 
@@ -419,16 +433,15 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       });
     }
     setExpandedJuryUserId(targetRowKey);
+    setActiveJuryRow(row);
 
-    // On mobile devices, smoothly scroll table container and scroll accordion into view
+    // On desktop screens, smoothly scroll table container and scroll accordion into view
     setTimeout(() => {
-      const scrollContainer = document.getElementById('leaderboard-table-scroll-container');
-      if (scrollContainer && window.innerWidth < 768) {
-        scrollContainer.scrollTo({ left: 0, behavior: 'smooth' });
-      }
-      const accordionEl = document.getElementById(`${targetRowKey}_jury_accordion`);
-      if (accordionEl) {
-        accordionEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      if (window.innerWidth >= 768) {
+        const accordionEl = document.getElementById(`${targetRowKey}_jury_accordion`);
+        if (accordionEl) {
+          accordionEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
       }
     }, 100);
   };
@@ -574,8 +587,9 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         setJurySaveFeedback(null);
       }, 5000);
 
-      // Automatically close accordion & smoothly scroll up with transition to show listing table
+      // Automatically close accordion/modal & smoothly scroll up with transition to show listing table
       setExpandedJuryUserId(null);
+      setActiveJuryRow(null);
       const targetRowId = (row as any).id || row.userId;
       setTimeout(() => {
         const rowElem = document.getElementById(`row-${targetRowId}`) || document.getElementById(`row-${row.userId}`);
@@ -2372,12 +2386,12 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                         </td>
                       </tr>
 
-                      {/* Expandable Jury Presentation Evaluation Accordion */}
+                      {/* Expandable Jury Presentation Evaluation Accordion (Desktop View: hidden on mobile) */}
                       {isExpanded && (
                         <tr
                           key={`${row.id}_jury_accordion`}
                           id={`${row.id}_jury_accordion`}
-                          className="bg-slate-50/95 dark:bg-slate-900/95 border-b-2 border-red-500/40"
+                          className="hidden md:table-row bg-slate-50/95 dark:bg-slate-900/95 border-b-2 border-red-500/40"
                         >
                           <td colSpan={8} className="p-2 sm:p-5 max-w-full">
                             <div className="sticky left-2 sm:static w-[calc(100vw-2rem)] sm:w-full max-w-[calc(100vw-2rem)] sm:max-w-full mx-auto sm:mx-0 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-3.5 sm:p-5 shadow-lg space-y-4 box-border">
@@ -2544,7 +2558,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                 <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
                                   <button
                                     type="button"
-                                    onClick={() => setExpandedJuryUserId(null)}
+                                    onClick={() => {
+                                      setExpandedJuryUserId(null);
+                                      setActiveJuryRow(null);
+                                    }}
                                     className="w-full sm:w-auto px-4 py-2.5 sm:py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 sm:border-transparent dark:border-slate-700 text-center transition cursor-pointer"
                                   >
                                     Cancel
@@ -2581,6 +2598,221 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Mobile Jury Evaluation Modal (Dedicated bottom sheet modal on mobile screens) */}
+      {activeJuryRow && (
+        <div
+          className="md:hidden fixed inset-0 z-50 flex flex-col justify-end items-center bg-slate-950/80 backdrop-blur-sm p-0 animate-in fade-in duration-200"
+          onClick={() => {
+            setExpandedJuryUserId(null);
+            setActiveJuryRow(null);
+          }}
+        >
+          <div
+            className="w-full bg-white dark:bg-slate-900 rounded-t-3xl border-t border-x border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden animate-in slide-in-from-bottom duration-300"
+            role="dialog"
+            aria-modal="true"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Drag Handle */}
+            <div className="pt-3 pb-1 flex justify-center shrink-0">
+              <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full" />
+            </div>
+
+            {/* Modal Header */}
+            <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50/60 dark:bg-slate-800/40">
+              <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                <span className="p-2 rounded-xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 shrink-0">
+                  <Sliders className="w-4 h-4" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white truncate">
+                    Jury Scorecard
+                  </h3>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate flex items-center gap-1.5">
+                    <span className="font-bold text-slate-800 dark:text-slate-200">
+                      {activeJuryRow.isTeam ? activeJuryRow.teamName : activeJuryRow.name}
+                    </span>
+                    {activeJuryRow.instituteName && (
+                      <>
+                        <span>•</span>
+                        <span className="truncate">{activeJuryRow.instituteName}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Score Badge & Close Button */}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="text-right px-2.5 py-1 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40">
+                  <div className="text-[8px] uppercase font-bold text-red-600 dark:text-red-400">Total</div>
+                  <div className="text-sm font-black text-slate-900 dark:text-white leading-tight">
+                    {currentJuryFormTotal}
+                    <span className="text-[10px] text-slate-400 font-normal">/100</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpandedJuryUserId(null);
+                    setActiveJuryRow(null);
+                  }}
+                  className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                  title="Close modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Form Body */}
+            <div className="p-4 overflow-y-auto space-y-4">
+              {/* Selected Track Pill */}
+              {juryFormData.track && (
+                <div className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-2 border border-slate-200/60 dark:border-slate-700/60">
+                  <span className="text-[9px] uppercase font-black px-1.5 py-0.5 rounded bg-red-600 text-white shrink-0">Track</span>
+                  <span className="truncate text-slate-900 dark:text-slate-100">{juryFormData.track}</span>
+                </div>
+              )}
+
+              {/* 7 Official KPIs */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-3.5 border border-slate-200 dark:border-slate-700/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    7 Evaluation KPIs
+                  </span>
+                  <span className="text-xs font-mono font-bold text-red-600 dark:text-red-400">
+                    Sum: {currentJuryFormTotal} / 100
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {CASE_STUDY_KPIS.map(kpi => {
+                    const val = (juryFormData as any)[kpi.id] ?? 0;
+                    return (
+                      <div
+                        key={kpi.id}
+                        className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                            {kpi.label}
+                          </span>
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 shrink-0">
+                            Max {kpi.max}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mb-2 leading-relaxed">
+                          {kpi.desc}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            min="0"
+                            max={kpi.max}
+                            value={val === 0 ? '' : val}
+                            onChange={(e) => {
+                              const parsed = e.target.value === ''
+                                ? 0
+                                : Math.min(kpi.max, Math.max(0, Number(e.target.value)));
+                              setJuryFormData(prev => ({ ...prev, [kpi.id]: parsed }));
+                            }}
+                            placeholder="0"
+                            className="w-full text-base font-bold py-2 px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 touch-manipulation"
+                          />
+                          <span className="text-xs font-bold text-slate-400 shrink-0">
+                            / {kpi.max}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Qualitative Notes */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Jury Qualitative Feedback & Defense Observations
+                </label>
+                <textarea
+                  rows={2}
+                  value={juryFormData.notes}
+                  onChange={(e) => setJuryFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Enter jury observations, execution feasibility notes, or Q&A defense remarks..."
+                  className="w-full text-base sm:text-xs py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 touch-manipulation"
+                />
+              </div>
+
+              {/* Offline Presentation Attendance */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-0.5">
+                  Offline Presentation Attendance
+                </label>
+                <p className="text-[10px] text-slate-400 mb-1.5">
+                  Confirms team was physically present at the venue to present before the jury
+                </p>
+                <label className="flex items-center gap-2.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer font-medium bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 min-h-[44px]">
+                  <input
+                    type="checkbox"
+                    checked={juryFormData.attendanceVerified}
+                    onChange={(e) => setJuryFormData(prev => ({ ...prev, attendanceVerified: e.target.checked }))}
+                    className="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-slate-300 shrink-0"
+                  />
+                  <span className="font-semibold">Team Present in Presentation Hall</span>
+                </label>
+              </div>
+
+              {/* Feedback Message */}
+              {jurySaveFeedback && (jurySaveFeedback.userId === activeJuryRow.userId || jurySaveFeedback.userId === activeJuryRow.id) && (
+                <div className={`text-xs font-bold p-3 rounded-xl ${jurySaveFeedback.isError
+                  ? 'bg-red-500/10 text-red-600 border border-red-500/20'
+                  : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                  }`}>
+                  {jurySaveFeedback.msg}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Bottom Actions */}
+            <div className="p-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setExpandedJuryUserId(null);
+                  setActiveJuryRow(null);
+                }}
+                className="w-1/3 px-4 py-3 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-center transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSavingJury}
+                onClick={async () => {
+                  await handleSaveJuryEvaluation(activeJuryRow);
+                }}
+                className="w-2/3 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-sm transition disabled:opacity-50 cursor-pointer min-h-[44px]"
+              >
+                {isSavingJury ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Save Evaluation ({currentJuryFormTotal}/100)</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Squad Members Modal (Triggered from Headcount / Members Button in ACTION Column) */}
       {activeSquadMembersModal && (
