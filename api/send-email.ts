@@ -5,8 +5,8 @@ import nodemailer from 'nodemailer';
 // ─────────────────────────────────────────────────────────────────────────────
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.falconide.com';
 const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
-const SMTP_USER = process.env.SMTP_USER || 'aimain';
-const SMTP_PASS = process.env.SMTP_PASS || 'Metro$23456';
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_FROM = process.env.SMTP_FROM || '"AIMA Case Research Centre" <sjames@aima.in>';
 const SMTP_REPLY_TO = process.env.SMTP_REPLY_TO || 'sjames@aima.in';
 
