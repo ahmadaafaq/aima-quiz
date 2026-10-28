@@ -11,6 +11,7 @@ import {
   fetchJuryEvaluationsFromDb,
 } from '../../lib/supabase';
 import { OFFICIAL_CASE_TRACKS } from '../../data/caseTracks';
+import { sendFinalResultsEmail } from '../../lib/emailService';
 import {
   Trophy,
   Medal,
@@ -1061,6 +1062,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   const [selectionTopPercentage, setSelectionTopPercentage] = useState<number>(25);
   const [isPublishingCerts, setIsPublishingCerts] = useState<boolean>(false);
   const [isEmailingCerts, setIsEmailingCerts] = useState<boolean>(false);
+  const [emailingCertId, setEmailingCertId] = useState<string | null>(null);
   const [certPublishStatus, setCertPublishStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [certSearchQuery, setCertSearchQuery] = useState<string>('');
   const [certFilterCategory, setCertFilterCategory] = useState<'all' | 'achievement' | 'selection' | 'participation'>('all');
@@ -1085,8 +1087,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         category = 'participation';
       }
 
-      const recipientName = item.name;
-      const recipientEmail = item.email || item.members?.[0]?.email || '';
+      // If team entry, determine leader details for candidate-level certificate
+      const leaderMember = item.members?.find((m: any) => m.isTeamLeader) || item.members?.[0];
+      const recipientName = item.isTeam ? (leaderMember?.name || item.name) : item.name;
+      const recipientEmail = (item.email || leaderMember?.email || item.members?.[0]?.email || '').trim();
       const teamName = item.isTeam ? item.name : (item.userProfile?.teamName || item.name);
       const institute = item.instituteName || item.userProfile?.instituteName || 'ICFAI Business School (IBS) Bengaluru';
       const certNum = `AIMA-ICL-2026-${category.toUpperCase().slice(0, 3)}-${String(rank).padStart(3, '0')}-${Math.floor(1000 + (rank * 137) % 9000)}`;
@@ -1097,7 +1101,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         recipientName,
         recipientEmail,
         recipientRole: item.isTeam ? 'Team Leader' : 'Participant',
-        recipientId: item.isTeam ? item.members?.[0]?.id || item.id : item.id,
+        recipientId: item.isTeam ? leaderMember?.userId || leaderMember?.id || item.id : item.id,
         teamId: item.id,
         teamName,
         registrationNumber: item.registrationNumber,
@@ -1120,73 +1124,41 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     });
   }, [sortedLeaderboard, selectionTopPercentage, selectionCutoffRank]);
 
-  // Handlers for certificate publication
-  const handlePublishToWorkspacesOnly = async () => {
-    try {
-      setIsPublishingCerts(true);
-      setCertPublishStatus(null);
-      // Collect certificates for both the team entry and all squad members
-      const allCerts: CertificateRecord[] = [];
-      computedCertificates.forEach(c => {
-        allCerts.push(c.certificate);
-        if (c.isTeam && c.members && c.members.length > 0) {
-          c.members.forEach((m: any, mIdx: number) => {
-            const memberCertNum = `${c.certificate.certificateNumber}-M${mIdx + 1}`;
-            allCerts.push({
-              ...c.certificate,
-              id: `cert_${m.id || m.email || mIdx}_${c.category}`,
-              certificateNumber: memberCertNum,
-              recipientName: m.name,
-              recipientEmail: m.email || '',
-              recipientId: m.id,
-              recipientRole: 'Squad Member',
-              registrationNumber: m.registrationNumber || c.certificate.registrationNumber,
-              qrVerificationUrl: `https://research.aima.in/verify/${memberCertNum}`,
-            });
+  // Assemble certificates for both individual squad members and team entries
+  const assembleAllCertificates = (): CertificateRecord[] => {
+    const allCerts: CertificateRecord[] = [];
+    computedCertificates.forEach(c => {
+      if (c.isTeam && c.members && c.members.length > 0) {
+        // First push personalized certificates for each squad member (including leader)
+        c.members.forEach((m: any, mIdx: number) => {
+          const memberCertNum = `${c.certificate.certificateNumber}-M${mIdx + 1}`;
+          allCerts.push({
+            ...c.certificate,
+            id: `cert_${m.userId || m.id || m.email || mIdx}_${c.category}`,
+            certificateNumber: memberCertNum,
+            recipientName: m.name,
+            recipientEmail: (m.email || '').trim(),
+            recipientId: m.userId || m.id,
+            recipientRole: m.isTeamLeader ? 'Team Leader' : 'Squad Member',
+            registrationNumber: m.registrationNumber || c.certificate.registrationNumber,
+            qrVerificationUrl: `https://research.aima.in/verify/${memberCertNum}`,
           });
-        }
-      });
-
-      const res = await publishOfficialCertificates(allCerts, { sendEmails: false });
-      setCertPublishStatus({
-        type: 'success',
-        message: `Successfully published ${res.publishedCount} official certificates directly to participant workspaces!`,
-      });
-    } catch (err: any) {
-      setCertPublishStatus({
-        type: 'error',
-        message: err?.message || 'Failed to publish certificates to student workspaces.',
-      });
-    } finally {
-      setIsPublishingCerts(false);
-    }
+        });
+        // Also push the team certificate for team-level querying
+        allCerts.push(c.certificate);
+      } else {
+        allCerts.push(c.certificate);
+      }
+    });
+    return allCerts;
   };
 
+  // Handlers for certificate publication
   const handlePublishAndEmailDispatch = async () => {
     try {
       setIsEmailingCerts(true);
       setCertPublishStatus(null);
-      const allCerts: CertificateRecord[] = [];
-      computedCertificates.forEach(c => {
-        allCerts.push(c.certificate);
-        if (c.isTeam && c.members && c.members.length > 0) {
-          c.members.forEach((m: any, mIdx: number) => {
-            const memberCertNum = `${c.certificate.certificateNumber}-M${mIdx + 1}`;
-            allCerts.push({
-              ...c.certificate,
-              id: `cert_${m.id || m.email || mIdx}_${c.category}`,
-              certificateNumber: memberCertNum,
-              recipientName: m.name,
-              recipientEmail: m.email || '',
-              recipientId: m.id,
-              recipientRole: 'Squad Member',
-              registrationNumber: m.registrationNumber || c.certificate.registrationNumber,
-              qrVerificationUrl: `https://research.aima.in/verify/${memberCertNum}`,
-            });
-          });
-        }
-      });
-
+      const allCerts = assembleAllCertificates();
       const res = await publishOfficialCertificates(allCerts, { sendEmails: true });
       setCertPublishStatus({
         type: 'success',
@@ -1199,6 +1171,72 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       });
     } finally {
       setIsEmailingCerts(false);
+    }
+  };
+
+  const handlePublishToWorkspacesOnly = async () => {
+    try {
+      setIsPublishingCerts(true);
+      setCertPublishStatus(null);
+      const allCerts = assembleAllCertificates();
+      const res = await publishOfficialCertificates(allCerts, { sendEmails: false });
+      setCertPublishStatus({
+        type: 'success',
+        message: `Successfully published ${res.publishedCount} official certificates directly to participant workspaces (emails bypassed).`,
+      });
+    } catch (err: any) {
+      setCertPublishStatus({
+        type: 'error',
+        message: err?.message || 'Failed to publish certificates to student workspaces.',
+      });
+    } finally {
+      setIsPublishingCerts(false);
+    }
+  };
+
+  // Single candidate certificate email dispatcher
+  const handleSendSingleCertificateEmail = async (item: any) => {
+    try {
+      setEmailingCertId(item.id);
+      setCertPublishStatus(null);
+      const targetEmail = (item.email || item.certificate?.recipientEmail || item.members?.[0]?.email || '').trim();
+      const targetName = item.certificate?.recipientName || item.name;
+
+      if (!targetEmail || !targetEmail.includes('@')) {
+        setCertPublishStatus({
+          type: 'error',
+          message: `Cannot dispatch email: No valid email address found for ${targetName}.`,
+        });
+        return;
+      }
+
+      const res = await sendFinalResultsEmail({
+        toName: targetName,
+        toEmail: targetEmail,
+        teamName: item.teamName || item.name,
+        achievement: item.certificate.achievement,
+        certNumber: item.certificate.certificateNumber,
+        certVerifyUrl: item.certificate.qrVerificationUrl,
+      });
+
+      if (res?.success) {
+        setCertPublishStatus({
+          type: 'success',
+          message: `Official certificate email successfully delivered to ${targetName} (${targetEmail})!`,
+        });
+      } else {
+        setCertPublishStatus({
+          type: 'error',
+          message: `Failed to deliver certificate email to ${targetEmail}: ${res?.error || 'Unknown error'}`,
+        });
+      }
+    } catch (err: any) {
+      setCertPublishStatus({
+        type: 'error',
+        message: `Error sending certificate email: ${err?.message || 'Failed to dispatch'}`,
+      });
+    } finally {
+      setEmailingCertId(null);
     }
   };
 
@@ -3645,7 +3683,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                         <th className="py-2.5 px-3">Institution</th>
                         <th className="py-2.5 px-3 text-center">Score</th>
                         <th className="py-2.5 px-3">Assigned Certificate Type</th>
-                        <th className="py-2.5 px-3 text-center">Preview</th>
+                        <th className="py-2.5 px-3 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -3691,14 +3729,29 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                               )}
                             </td>
                             <td className="py-2.5 px-3 text-center">
-                              <button
-                                type="button"
-                                onClick={() => setActiveCertificateModal(item.certificate)}
-                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition cursor-pointer shadow-2xs"
-                                title="Preview replica of certificate"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveCertificateModal(item.certificate)}
+                                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition cursor-pointer shadow-2xs"
+                                  title="Preview replica of certificate"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={emailingCertId === item.id}
+                                  onClick={() => handleSendSingleCertificateEmail(item)}
+                                  className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-xs font-bold transition cursor-pointer shadow-2xs border border-amber-200/60 dark:border-amber-800/60 disabled:opacity-50"
+                                  title={`Send / Resend certificate email to ${item.email || item.certificate?.recipientEmail || 'candidate'}`}
+                                >
+                                  {emailingCertId === item.id ? (
+                                    <span className="w-3.5 h-3.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin inline-block" />
+                                  ) : (
+                                    <Mail className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -3723,11 +3776,11 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                   type="button"
                   onClick={handlePublishToWorkspacesOnly}
                   disabled={isPublishingCerts || isEmailingCerts}
-                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-2xs"
-                  title="Make certificates immediately available on Student Dashboard workspaces"
+                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-xs transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-2xs border border-slate-200 dark:border-slate-700"
+                  title="Make certificates immediately available in Student Dashboards without triggering email alerts"
                 >
-                  <Users className="w-4 h-4 text-amber-500" />
-                  <span>{isPublishingCerts ? 'Publishing...' : 'Publish to Student Workspaces'}</span>
+                  <Users className="w-4 h-4 text-slate-500" />
+                  <span>{isPublishingCerts ? 'Publishing...' : 'Publish Workspaces Only (No Email)'}</span>
                 </button>
 
                 <button
@@ -3735,10 +3788,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                   onClick={handlePublishAndEmailDispatch}
                   disabled={isPublishingCerts || isEmailingCerts}
                   className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  title="Publish to student workspaces AND dispatch email notifications with verified certificate IDs"
+                  title="Publish official certificates to student workspaces AND dispatch email notifications with verified certificate IDs"
                 >
-                  <Send className={`w-4 h-4 text-slate-950 ${isEmailingCerts ? 'animate-pulse' : ''}`} />
-                  <span>{isEmailingCerts ? 'Dispatching...' : 'Publish & Dispatch Emails'}</span>
+                  <Mail className={`w-4 h-4 text-slate-950 ${isEmailingCerts ? 'animate-bounce' : ''}`} />
+                  <span>{isEmailingCerts ? 'Publishing & Dispatching...' : 'Publish & Dispatch Certificate Emails'}</span>
                 </button>
               </div>
             </div>

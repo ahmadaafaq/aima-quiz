@@ -2798,25 +2798,42 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     );
 
     let emailSentCount = 0;
-    if (options?.sendEmails) {
-      const emailList = certs
-        .filter(c => Boolean(c.recipientEmail))
-        .map(c => ({
-          name: c.recipientName,
-          email: c.recipientEmail,
-          teamName: c.teamName || c.recipientName,
-          achievement: c.achievement,
-          certNumber: c.certificateNumber,
-          certVerifyUrl: c.qrVerificationUrl,
-        }));
+    if (options?.sendEmails !== false) {
+      // Deduplicate emails by recipientEmail so a participant or team leader receives their personalized email
+      const seenEmails = new Set<string>();
+      const emailList: {
+        name: string;
+        email: string;
+        teamName: string;
+        achievement: string;
+        certNumber: string;
+        certVerifyUrl: string;
+      }[] = [];
 
-      await broadcastFinalResults(emailList);
-      emailSentCount = emailList.length;
-      addAuditLog(
-        'Certificates Dispatched via Email',
-        'System',
-        `Dispatched ${emailSentCount} official certificates via Falconide SMTP.`
-      );
+      certs.forEach(c => {
+        const cleanEmail = (c.recipientEmail || '').trim().toLowerCase();
+        if (cleanEmail && cleanEmail.includes('@') && !seenEmails.has(cleanEmail)) {
+          seenEmails.add(cleanEmail);
+          emailList.push({
+            name: c.recipientName,
+            email: c.recipientEmail,
+            teamName: c.teamName || c.recipientName,
+            achievement: c.achievement,
+            certNumber: c.certificateNumber,
+            certVerifyUrl: c.qrVerificationUrl,
+          });
+        }
+      });
+
+      if (emailList.length > 0) {
+        const broadcastRes = await broadcastFinalResults(emailList);
+        emailSentCount = broadcastRes.sent;
+        addAuditLog(
+          'Certificates Dispatched via Email',
+          'System',
+          `Dispatched ${emailSentCount} official certificates via Falconide SMTP (${broadcastRes.failed} skipped/failed).`
+        );
+      }
     }
 
     return {

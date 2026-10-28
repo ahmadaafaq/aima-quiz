@@ -12,7 +12,7 @@ export const SENDER_NAME     = (import.meta as any).env?.VITE_EMAIL_FROM_NAME ||
 export const REPLY_TO_EMAIL  = (import.meta as any).env?.VITE_EMAIL_REPLY_TO  || 'sjames@aima.in';
 
 // Direct backend email dispatcher
-async function sendViaBackend(type: string, payload: Record<string, any>): Promise<void> {
+async function sendViaBackend(type: string, payload: Record<string, any>): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
     const res = await fetch('/api/send-email', {
       method: 'POST',
@@ -25,14 +25,16 @@ async function sendViaBackend(type: string, payload: Record<string, any>): Promi
     if (!res.ok) {
       const errorText = await res.text();
       console.warn(`[Email API] Error (${res.status}):`, errorText);
-      return;
+      return { success: false, error: `HTTP ${res.status}: ${errorText}` };
     }
 
     const data = await res.json();
     console.info(`[Email Sent] (${type}) to ${payload.toEmail || '(recipient)'}:`, data.messageId || 'OK');
-  } catch (err) {
+    return { success: true, messageId: data.messageId };
+  } catch (err: any) {
     // Non-blocking log — user flow never halts on email dispatch failures
     console.warn('[Email] Dispatch failed via backend:', err);
+    return { success: false, error: err?.message || 'Network dispatch error' };
   }
 }
 
@@ -144,7 +146,7 @@ export interface FinalResultsEmailPayload {
   certVerifyUrl: string;
 }
 
-export async function sendFinalResultsEmail(p: FinalResultsEmailPayload): Promise<void> {
+export async function sendFinalResultsEmail(p: FinalResultsEmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
   return sendViaBackend('final_results', {
     toName:        p.toName,
     toEmail:       p.toEmail,
@@ -166,9 +168,15 @@ export async function broadcastFinalResults(
     certNumber: string;
     certVerifyUrl: string;
   }[]
-): Promise<void> {
+): Promise<{ total: number; sent: number; failed: number }> {
+  let sent = 0;
+  let failed = 0;
   for (const p of participants) {
-    await sendFinalResultsEmail({
+    if (!p.email || !p.email.includes('@')) {
+      failed++;
+      continue;
+    }
+    const res = await sendFinalResultsEmail({
       toName:        p.name,
       toEmail:       p.email,
       teamName:      p.teamName,
@@ -176,6 +184,13 @@ export async function broadcastFinalResults(
       certNumber:    p.certNumber,
       certVerifyUrl: p.certVerifyUrl,
     });
-    await new Promise(r => setTimeout(r, 100));
+    if (res?.success) {
+      sent++;
+    } else {
+      failed++;
+    }
+    // Brief spacing between dispatches
+    await new Promise(r => setTimeout(r, 120));
   }
+  return { total: participants.length, sent, failed };
 }
