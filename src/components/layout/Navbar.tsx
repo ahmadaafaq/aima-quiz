@@ -70,13 +70,25 @@ export const Navbar: React.FC = () => {
     { id: 'corporate', label: 'Corporate', fullTitle: 'Corporate Partner Portal & Live Case Sponsoring', icon: Trophy },
   ];
 
+  const isCoordinator =
+    currentUser.role === 'institute_coordinator' ||
+    Boolean(
+      participantUser && (
+        (participantUser.program && participantUser.program.toLowerCase().includes('coordinator')) ||
+        (participantUser.program && participantUser.program.toLowerCase().includes('faculty')) ||
+        (participantUser as any).role === 'institute_coordinator'
+      )
+    );
+
   const visibleWebsiteNav = isLiveSite
     ? [
       { id: 'public', label: 'Home', fullTitle: 'India Case League 2026 - Home', icon: BookOpen },
       { id: 'registration', label: 'Registration', fullTitle: 'Registration & Participant Onboarding', icon: GraduationCap },
       { id: 'contact_us', label: 'Contact Us', fullTitle: 'AIMA Secretariat & Hub Contacts', icon: Phone },
       ...(participantUser
-        ? [{ id: 'student', label: 'Workspace', fullTitle: 'Student Participant Workspace', icon: LayoutDashboard }]
+        ? isCoordinator
+          ? [{ id: 'institute', label: 'Institute Portal', fullTitle: 'Institute Coordinator Portal & Roster', icon: Building2 }]
+          : [{ id: 'student', label: 'Workspace', fullTitle: 'Student Participant Workspace', icon: LayoutDashboard }]
         : [{ id: 'participant_login', label: 'Login', fullTitle: 'Participant Portal Login', icon: User }]),
     ]
     : fullDemoNavItems;
@@ -227,9 +239,9 @@ export const Navbar: React.FC = () => {
               {participantUser ? (
                 <div className="flex items-center gap-2">
                   <div
-                    onClick={() => setActiveView('student')}
+                    onClick={() => setActiveView(isCoordinator ? 'institute' : 'student')}
                     className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 cursor-pointer transition-colors"
-                    title="Go to Student Workspace"
+                    title={isCoordinator ? "Go to Institute Coordinator Portal" : "Go to Student Workspace"}
                   >
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     <span className="truncate max-w-[130px] font-bold text-[11px]">
@@ -239,7 +251,7 @@ export const Navbar: React.FC = () => {
                   <button
                     onClick={logoutParticipant}
                     className="h-8.5 inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-bold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
-                    title="Sign out of student account"
+                    title={isCoordinator ? "Sign out of coordinator account" : "Sign out of student account"}
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     <span>Logout</span>

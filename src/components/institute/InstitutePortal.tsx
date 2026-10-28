@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useCompetition } from '../../context/CompetitionContext';
 import { DocRequirementInfo } from '../common/DocRequirementInfo';
 import { Team } from '../../types';
@@ -35,38 +35,40 @@ import {
 } from 'lucide-react';
 
 export const InstitutePortal: React.FC = () => {
-  const { institutions, currentUser, teams, createInstitutionalTeam } = useCompetition();
-  
-  const currentInstName = currentUser.instituteName || (currentUser as any).organization_name || '';
-  const currentInstEmail = currentUser.email || '';
+  const { institutions, currentUser, teams, createInstitutionalTeam, participantUser, csrRegistrations } = useCompetition();
 
-  const matchedInst = institutions.find(i =>
-    (currentInstEmail && i.coordinatorEmail?.toLowerCase() === currentInstEmail.toLowerCase()) ||
-    (currentInstName && i.name.toLowerCase().includes(currentInstName.toLowerCase())) ||
-    (currentInstName && currentInstName.toLowerCase().includes(i.name.toLowerCase()))
+  const userEmail = (participantUser?.email || participantUser?.coordinator_email || currentUser.email || '').toLowerCase().trim();
+  const userInstName = participantUser?.institute_name || currentUser.instituteName || (currentUser as any).organization_name || '';
+  const userRegNum = participantUser?.registration_number || currentUser.registrationNumber || '';
+
+  // 1. Locate dynamic live registration for this coordinator or institute
+  const matchedReg = csrRegistrations.find(r =>
+    (userRegNum && r.registrationNumber === userRegNum) ||
+    (userEmail && (
+      r.coordinator?.email?.toLowerCase().trim() === userEmail ||
+      (r as any).candidate_email?.toLowerCase().trim() === userEmail ||
+      (r as any).coordinator_email?.toLowerCase().trim() === userEmail
+    )) ||
+    (userInstName && (
+      r.organizationName?.toLowerCase().trim() === userInstName.toLowerCase().trim() ||
+      r.organizationName?.toLowerCase().includes(userInstName.toLowerCase()) ||
+      userInstName.toLowerCase().includes(r.organizationName?.toLowerCase())
+    ))
   );
 
-  const inst = matchedInst || (currentInstName ? {
-    id: 'inst_' + currentInstName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
-    name: currentInstName,
-    ranking: 5,
-    coordinatorName: currentUser.name || 'Faculty Coordinator',
-    coordinatorEmail: currentInstEmail || 'coordinator@institute.ac.in',
-    totalStudents: 10,
-    registeredStudents: 9,
-    teamsCreated: 2,
-    totalPaidAmount: 3600,
-  } : institutions[0] || {
-    id: 'inst_iimb',
-    name: 'Indian Institute of Management Bangalore (IIMB)',
-    ranking: 1,
-    coordinatorName: 'Dr. Ananya Ray',
-    coordinatorEmail: 'coordinator@iimb.ac.in',
-    totalStudents: 140,
-    registeredStudents: 128,
-    teamsCreated: 34,
-    totalPaidAmount: 25600,
-  });
+  const matchedInst = institutions.find(i =>
+    (userEmail && i.coordinatorEmail?.toLowerCase() === userEmail) ||
+    (userInstName && i.name.toLowerCase().includes(userInstName.toLowerCase())) ||
+    (userInstName && userInstName.toLowerCase().includes(i.name.toLowerCase()))
+  );
+
+  // Authoritative dynamic values - NO IIMB fallback when real coordinator is logged in
+  const instName = matchedReg?.organizationName || userInstName || matchedInst?.name || "ASM's Institute of Business Management and Research";
+  const coordinatorName = matchedReg?.coordinator?.name || participantUser?.name || currentUser.name || matchedInst?.coordinatorName || 'Faculty Coordinator';
+  const coordinatorEmail = matchedReg?.coordinator?.email || userEmail || matchedInst?.coordinatorEmail || 'coordinator@institute.ac.in';
+  const coordinatorPhone = matchedReg?.coordinator?.mobile || participantUser?.mobile || currentUser.mobile || '';
+
+  const regNominees = Array.isArray(matchedReg?.nominees) ? matchedReg.nominees : [];
 
   const [dbParticipants, setDbParticipants] = useState<any[]>([]);
 
@@ -74,12 +76,12 @@ export const InstitutePortal: React.FC = () => {
     async function fetchRoster() {
       try {
         let query = supabase.from('participants').select('*');
-        if (currentUser.registrationNumber) {
-          query = query.eq('registration_number', currentUser.registrationNumber);
-        } else if (inst.coordinatorEmail) {
-          query = query.eq('coordinator_email', inst.coordinatorEmail);
-        } else if (inst.name) {
-          query = query.ilike('institute_name', `%${inst.name.slice(0, 15)}%`);
+        if (userRegNum || matchedReg?.registrationNumber) {
+          query = query.eq('registration_number', userRegNum || matchedReg?.registrationNumber);
+        } else if (coordinatorEmail) {
+          query = query.eq('coordinator_email', coordinatorEmail);
+        } else if (instName) {
+          query = query.ilike('institute_name', `%${instName.slice(0, 15)}%`);
         }
         const { data } = await query;
         if (data && data.length > 0) {
@@ -90,7 +92,95 @@ export const InstitutePortal: React.FC = () => {
       }
     }
     fetchRoster();
-  }, [currentUser.registrationNumber, inst.coordinatorEmail, inst.name]);
+  }, [userRegNum, matchedReg?.registrationNumber, coordinatorEmail, instName]);
+
+  // Derive dynamic teams directly from registration nominees
+  const dynamicTeamsFromReg = useMemo(() => {
+    if (!regNominees || regNominees.length === 0) return [];
+    const teamMap = new Map<string, any>();
+    regNominees.forEach((n, idx) => {
+      const tName = n.teamName || 'Institute Delegation';
+      if (!teamMap.has(tName)) {
+        teamMap.set(tName, {
+          id: `team_reg_${matchedReg?.registrationNumber || 'reg'}_${tName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`,
+          name: tName,
+          inviteCode: `AIMA-TEAM-${tName.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase()}-${idx + 10}`,
+          instituteId: 'inst_' + instName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+          instituteName: instName,
+          assignedHub: 'south',
+          leaderStudentId: n.isTeamLeader ? (n.enrolmentNumber || n.email) : undefined,
+          members: [],
+          selectedTrackId: (matchedReg as any)?.selectedTrackId || 'case_track_csr_01',
+          selectedTrackName: (matchedReg as any)?.selectedTrackName || 'Strategic CSR & Governance',
+        });
+      }
+      const t = teamMap.get(tName);
+      t.members.push({
+        id: n.id || n.email,
+        studentId: n.enrolmentNumber || n.email,
+        name: n.name,
+        email: n.email,
+        mobile: n.mobile,
+        roleInTeam: n.isTeamLeader ? 'Team Leader & Lead Strategist' : 'Team Member',
+        isLeader: Boolean(n.isTeamLeader),
+      });
+      if (n.isTeamLeader) {
+        t.leaderStudentId = n.enrolmentNumber || n.email;
+      }
+    });
+    return Array.from(teamMap.values());
+  }, [regNominees, matchedReg?.registrationNumber, instName]);
+
+  // Combined teams representing this institution
+  const instituteTeams = useMemo(() => {
+    if (dynamicTeamsFromReg.length > 0) return dynamicTeamsFromReg;
+    return teams.filter(
+      t =>
+        (instName && t.instituteName?.toLowerCase().includes(instName.toLowerCase())) ||
+        (instName && instName.toLowerCase().includes(t.instituteName?.toLowerCase() || '___')) ||
+        (coordinatorEmail && (t as any).coordinatorEmail?.toLowerCase() === coordinatorEmail.toLowerCase())
+    );
+  }, [dynamicTeamsFromReg, teams, instName, coordinatorEmail]);
+
+  // Real dynamic roster from registration nominees or db
+  const rosterFromReg = regNominees.map((n, idx) => ({
+    id: n.id || n.email || `nom_${idx}`,
+    name: n.name,
+    studentId: n.enrolmentNumber || ('ENR-' + (n.mobile ? n.mobile.slice(-4) : ('00' + (idx + 1)))),
+    email: n.email,
+    teamName: n.teamName || 'Institute Nominee',
+    feePaid: true,
+    r1Score: (n as any).r1Score || (n as any).score || (n.isTeamLeader ? 88 : 84),
+  }));
+
+  const rosterFromDb = dbParticipants
+    .filter(p => !p.program?.toLowerCase().includes('coordinator') && p.email?.toLowerCase() !== coordinatorEmail.toLowerCase())
+    .map((p, idx) => ({
+      id: p.id || p.email,
+      name: p.name,
+      studentId: p.enrolment_number || ('ENR-' + (p.mobile ? p.mobile.slice(-4) : ('00' + (idx + 1)))),
+      email: p.email,
+      teamName: p.is_team_leader ? `${instName} Team Leader` : `${instName} Student Nominee`,
+      feePaid: true,
+      r1Score: p.quiz_score || 85,
+    }));
+
+  const activeRoster = rosterFromReg.length > 0
+    ? rosterFromReg
+    : (rosterFromDb.length > 0 ? rosterFromDb : []);
+
+  const inst = {
+    id: 'inst_' + instName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+    name: instName,
+    ranking: 1,
+    coordinatorName,
+    coordinatorEmail,
+    coordinatorPhone,
+    totalStudents: activeRoster.length,
+    registeredStudents: activeRoster.length,
+    teamsCreated: instituteTeams.length,
+    totalPaidAmount: matchedReg?.totalPayable || 0,
+  };
 
   const [activeTab, setActiveTab] = useState<'roster' | 'teams'>('teams');
   const [searchTerm, setSearchTerm] = useState('');
@@ -105,59 +195,7 @@ export const InstitutePortal: React.FC = () => {
   const [newTeamHub, setNewTeamHub] = useState<'south' | 'north' | 'east' | 'west' | 'central'>('south');
   const [teamMembers, setTeamMembers] = useState<
     Array<{ studentId: string; name: string; email: string; mobile?: string; roleInTeam: string; isLeader: boolean }>
-  >([
-    {
-      studentId: 'IIMB-PGP-25-089',
-      name: 'Aarav Singhania',
-      email: 'aarav.singhania@iimb.ac.in',
-      mobile: '+91 98450 12345',
-      roleInTeam: 'Team Leader & Lead Strategist',
-      isLeader: true,
-    },
-    {
-      studentId: 'IIMB-PGP-25-112',
-      name: 'Meera Nambiar',
-      email: 'meera.nambiar@iimb.ac.in',
-      mobile: '+91 98450 54321',
-      roleInTeam: 'Financial Modeler',
-      isLeader: false,
-    },
-    {
-      studentId: 'IIMB-PGP-25-045',
-      name: 'Kunal Deshpande',
-      email: 'kunal.d@iimb.ac.in',
-      mobile: '+91 98450 67890',
-      roleInTeam: 'Market Research & Tech Analyst',
-      isLeader: false,
-    },
-  ]);
-
-  const defaultRoster = [
-    { id: 's1', name: 'Aarav Singhania', studentId: 'IIMB-PGP-25-089', email: 'aarav.singhania@iimb.ac.in', teamName: 'StratApex Consultants', feePaid: true, r1Score: 92 },
-    { id: 's2', name: 'Meera Nambiar', studentId: 'IIMB-PGP-25-112', email: 'meera.nambiar@iimb.ac.in', teamName: 'StratApex Consultants', feePaid: true, r1Score: 88 },
-    { id: 's3', name: 'Kunal Deshpande', studentId: 'IIMB-PGP-25-045', email: 'kunal.d@iimb.ac.in', teamName: 'StratApex Consultants', feePaid: true, r1Score: 91 },
-    { id: 's4', name: 'Sneha Venkatesh', studentId: 'IIMB-PGP-25-134', email: 'sneha.v@iimb.ac.in', teamName: 'StratApex Consultants', feePaid: true, r1Score: 89 },
-    { id: 's5', name: 'Rohan Sharma', studentId: 'IIMB-PGP-25-067', email: 'rohan.s@iimb.ac.in', teamName: 'Vanguard Strategy', feePaid: false, r1Score: 78 },
-    { id: 's6', name: 'Priya Iyer', studentId: 'IIMB-PGP-25-023', email: 'priya.i@iimb.ac.in', teamName: 'Vanguard Strategy', feePaid: false, r1Score: 84 },
-    { id: 's7', name: 'Varun Reddy', studentId: 'IIMB-PGP-25-156', email: 'varun.r@iimb.ac.in', teamName: 'Southern Titans', feePaid: true, r1Score: 86 },
-    { id: 's8', name: 'Divya Nair', studentId: 'IIMB-PGP-25-178', email: 'divya.n@iimb.ac.in', teamName: 'Southern Titans', feePaid: true, r1Score: 90 },
-    { id: 's9', name: 'Tanvi Agarwal', studentId: 'IIMB-PGP-25-201', email: 'tanvi.a@iimb.ac.in', teamName: '', feePaid: true, r1Score: 94 },
-    { id: 's10', name: 'Aditya Sen', studentId: 'IIMB-PGP-25-215', email: 'aditya.s@iimb.ac.in', teamName: '', feePaid: true, r1Score: 87 },
-  ];
-
-  const liveRoster = dbParticipants
-    .filter(p => !p.program?.toLowerCase().includes('coordinator') && p.email?.toLowerCase() !== inst.coordinatorEmail.toLowerCase())
-    .map((p, idx) => ({
-      id: p.id || p.email,
-      name: p.name,
-      studentId: p.enrolment_number || ('ASM-' + (p.mobile ? p.mobile.slice(-4) : ('00' + (idx + 1)))),
-      email: p.email,
-      teamName: p.is_team_leader ? `${inst.name} Team Leader` : `${inst.name} Student Nominee`,
-      feePaid: true,
-      r1Score: p.quiz_score || 85,
-    }));
-
-  const activeRoster = liveRoster.length > 0 ? liveRoster : defaultRoster;
+  >([]);
 
   // Filtered roster
   const filteredRoster = activeRoster.filter(s => {
@@ -174,14 +212,6 @@ export const InstitutePortal: React.FC = () => {
   const unpaidCount = activeRoster.filter(s => !s.feePaid).length;
   const totalUnpaidAmount = unpaidCount * 200;
 
-  // Institute's teams
-  const instituteTeams = teams.filter(
-    t =>
-      (inst.name && t.instituteName?.toLowerCase().includes(inst.name.toLowerCase())) ||
-      (inst.name && inst.name.toLowerCase().includes(t.instituteName?.toLowerCase() || '___')) ||
-      (inst.coordinatorEmail && (t as any).coordinatorEmail?.toLowerCase() === inst.coordinatorEmail.toLowerCase())
-  );
-
   const handleCopyCode = (code: string) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
@@ -197,9 +227,9 @@ export const InstitutePortal: React.FC = () => {
     setTeamMembers(prev => [
       ...prev,
       {
-        studentId: `IIMB-PGP-25-00${idx}`,
+        studentId: `ENR-2026-00${idx}`,
         name: `Candidate ${idx}`,
-        email: `candidate${idx}@iimb.ac.in`,
+        email: `candidate${idx}@institute.edu`,
         mobile: '+91 98000 00000',
         roleInTeam: 'Team Analyst',
         isLeader: false,
@@ -306,7 +336,7 @@ export const InstitutePortal: React.FC = () => {
           </button>
 
           <button
-            onClick={() => alert(`Downloading consolidated B2B GST Tax Invoice for ${inst.name} (GSTIN: 29AABCI1234F1Z9). Total ₹25,600 settled.`)}
+            onClick={() => alert(`Downloading consolidated B2B GST Tax Invoice for ${inst.name} (Ref: ${matchedReg?.registrationNumber || 'AIMA-CL26-42754'}). Total ${inst.totalPaidAmount ? '₹' + inst.totalPaidAmount.toLocaleString('en-IN') : 'Complimentary / Settled'}.`)}
             className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer border border-slate-200 dark:border-slate-700"
           >
             <Download className="w-3.5 h-3.5" />
@@ -319,7 +349,7 @@ export const InstitutePortal: React.FC = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <span className="text-[10px] text-slate-400 uppercase font-semibold block">Total Enrolled Students</span>
-          <span className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1 block">{inst.totalStudents || 140}</span>
+          <span className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1 block">{inst.totalStudents || 8}</span>
           <span className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold block mt-0.5">Across MBA & PGP</span>
         </div>
 
@@ -332,15 +362,15 @@ export const InstitutePortal: React.FC = () => {
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-          <span className="text-[10px] text-slate-400 uppercase font-semibold block">Round 1 Pass Count</span>
-          <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">{inst.registeredStudents || 128}</span>
-          <span className="text-[11px] text-slate-500 block mt-0.5">91.4% Institute Pass Rate</span>
+          <span className="text-[10px] text-slate-400 uppercase font-semibold block">Round 1 Enrolled Count</span>
+          <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">{inst.registeredStudents || 8}</span>
+          <span className="text-[11px] text-slate-500 block mt-0.5">100% Verified Candidates</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <span className="text-[10px] text-slate-400 uppercase font-semibold block">Regional Hub Allocation</span>
-          <span className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1 block">South Hub</span>
-          <span className="text-[11px] text-slate-500 block mt-0.5">Host Campus: IIM Bangalore</span>
+          <span className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1 block">Regional Hub</span>
+          <span className="text-[11px] text-slate-500 block mt-0.5">Host Campus: Regional Hub (Assigned Center)</span>
         </div>
       </div>
 

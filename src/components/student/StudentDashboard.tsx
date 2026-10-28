@@ -4,6 +4,7 @@ import { QuizTaker } from './QuizTaker';
 import { CaseDeckSubmitter } from './CaseDeckSubmitter';
 import { DocRequirementInfo } from '../common/DocRequirementInfo';
 import { ParticipantLoginPage } from '../auth/ParticipantLoginPage';
+import { InstitutePortal } from '../institute/InstitutePortal';
 import { OFFICIAL_CASE_TRACKS, OFFICIAL_INSTRUCTION_DOCS, CaseTrack } from '../../data/caseTracks';
 import { fetchRegistrationByNumber, fetchProgramQuestionsOrdered, fetchParticipantTrackSelection } from '../../lib/supabase';
 import { CSRBootcampRegistration, QuizQuestion } from '../../types';
@@ -81,11 +82,33 @@ export const StudentDashboard: React.FC = () => {
     isQuizActive,
     setIsQuizActive,
     updateUserProfile,
+    setActiveView,
   } = useCompetition();
 
   // Enforce real participant authentication - no mock data in production
   if (!participantUser) {
     return <ParticipantLoginPage onLoginSuccess={(part) => loginParticipantSession(part)} />;
+  }
+
+  const isCoordinator =
+    currentUser.role === 'institute_coordinator' ||
+    Boolean(
+      participantUser && (
+        (participantUser.program && participantUser.program.toLowerCase().includes('coordinator')) ||
+        (participantUser.program && participantUser.program.toLowerCase().includes('faculty')) ||
+        (participantUser as any).role === 'institute_coordinator'
+      )
+    );
+
+  // If logged-in user is an institutional coordinator, immediately forward to Institute Portal
+  useEffect(() => {
+    if (isCoordinator) {
+      setActiveView('institute');
+    }
+  }, [isCoordinator, setActiveView]);
+
+  if (isCoordinator) {
+    return <InstitutePortal />;
   }
 
   const [activeSubView, setActiveSubView] = useState<'overview' | 'quiz' | 'case_deck'>(() => {

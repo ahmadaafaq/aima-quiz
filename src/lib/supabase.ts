@@ -483,14 +483,46 @@ export async function signInWithEmailPassword(
       .single();
 
     if (profileError || !profileData) {
-      // Create profile fallback from user metadata if available
+      // Query participants table to get authoritative name, organization, registration number & role
+      const { data: partRow } = await supabase
+        .from('participants')
+        .select('*')
+        .eq('email', cleanEmail)
+        .maybeSingle();
+
+      const { data: regRow } = await supabase
+        .from('registrations')
+        .select('*')
+        .or(`coordinator_email.eq.${cleanEmail},candidate_email.eq.${cleanEmail}`)
+        .maybeSingle();
+
       const meta = authData.user.user_metadata || {};
+      const isExplicitFacultyCoordinator =
+        meta.role === 'institute_coordinator' ||
+        (partRow && !partRow.is_team_leader && partRow.registration_mode === 'institute' &&
+          Boolean(
+            (partRow.program && partRow.program.toLowerCase().includes('faculty')) ||
+            (partRow.program && partRow.program.toLowerCase().includes('coordinator')) ||
+            (partRow as any).role === 'institute_coordinator'
+          )) ||
+        Boolean(regRow?.coordinator_email && regRow.coordinator_email.toLowerCase().trim() === cleanEmail);
+
+      const assignedRole: UserProfileRow['role'] = isExplicitFacultyCoordinator
+        ? 'institute_coordinator'
+        : (partRow?.is_team_leader || meta.role === 'team_leader' ? 'team_leader' : (meta.role || 'student'));
+
       const fallbackProfile: UserProfileRow = {
         id: authData.user.id,
-        email: authData.user.email || email,
-        role: meta.role || 'student',
-        name: meta.name || email.split('@')[0],
-        is_team_leader: meta.role === 'team_leader',
+        email: cleanEmail,
+        role: assignedRole,
+        name: partRow?.name || regRow?.coordinator_name || meta.name || cleanEmail.split('@')[0],
+        mobile: partRow?.mobile || regRow?.coordinator_phone || meta.mobile || null,
+        organization_name: partRow?.institute_name || regRow?.institute_name || meta.organizationName || null,
+        registration_number: partRow?.registration_number || regRow?.registration_number || meta.registrationNumber || null,
+        program: partRow?.program || (isExplicitFacultyCoordinator ? 'Faculty / Institutional Coordinator' : null),
+        semester: partRow?.semester || null,
+        enrolment_number: partRow?.enrolment_number || null,
+        is_team_leader: !isExplicitFacultyCoordinator && Boolean(partRow?.is_team_leader || meta.role === 'team_leader'),
       };
       return { success: true, user: authData.user, profile: fallbackProfile, session: authData.session };
     }

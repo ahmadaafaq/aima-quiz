@@ -1,6 +1,17 @@
 {
   "redirects": [
     {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "aima-quiz.vercel.app"
+        }
+      ],
+      "destination": "https://research.aima.in/$1",
+      "permanent": false
+    },
+    {
       "source": "/checkout/:token*",
       "destination": "https://aima-payments-hub.vercel.app/checkout/:token*",
       "permanent": false

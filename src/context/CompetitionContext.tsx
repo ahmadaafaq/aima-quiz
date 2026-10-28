@@ -484,11 +484,15 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const isTeamLeader = isSolo ? false : Boolean(participant.is_team_leader);
     const isExplicitFacultyCoordinator =
       !isTeamLeader &&
-      participant.registration_mode === 'institute' &&
+      (participant.registration_mode === 'institute' || Boolean((participant as any).coordinator_email)) &&
       Boolean(
         (participant.program && participant.program.toLowerCase().includes('faculty')) ||
-        (participant.program && participant.program.toLowerCase().includes('institutional coordinator')) ||
-        (participant as any).role === 'institute_coordinator'
+        (participant.program && participant.program.toLowerCase().includes('coordinator')) ||
+        (participant as any).role === 'institute_coordinator' ||
+        (cachedReg && (
+          cachedReg.coordinator?.email?.toLowerCase().trim() === participant.email.toLowerCase().trim() ||
+          (cachedReg as any).coordinator_email?.toLowerCase().trim() === participant.email.toLowerCase().trim()
+        ))
       );
 
     const userRole: UserRole = isExplicitFacultyCoordinator
@@ -1304,10 +1308,25 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Guard: If a student/participant is logged in, ensure they are in the student workspace, never stranded on institute portal
+  // Guard: If an institute coordinator is logged in, ensure they are in the institute portal.
+  // If a student is logged in, ensure they are in the student workspace.
   useEffect(() => {
-    if (participantUser && currentUser.role !== 'institute_coordinator' && activeView === 'institute') {
-      setActiveView('student');
+    const isCoordinator =
+      currentUser.role === 'institute_coordinator' ||
+      Boolean(
+        participantUser && (
+          (participantUser.program && participantUser.program.toLowerCase().includes('coordinator')) ||
+          (participantUser.program && participantUser.program.toLowerCase().includes('faculty')) ||
+          (participantUser as any).role === 'institute_coordinator'
+        )
+      );
+
+    if (participantUser) {
+      if (isCoordinator && (activeView === 'student' || activeView === 'workspace' || activeView === 'student_dashboard')) {
+        setActiveView('institute');
+      } else if (!isCoordinator && activeView === 'institute') {
+        setActiveView('student');
+      }
     }
   }, [participantUser, currentUser.role, activeView]);
 

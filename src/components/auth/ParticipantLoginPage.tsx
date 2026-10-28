@@ -272,7 +272,6 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
           coordinator_email: prof.email,
         };
         loginParticipantSession(participantRow);
-        switchRole('institute_coordinator');
         onLoginSuccess?.(participantRow);
       }
     } else {
@@ -299,7 +298,6 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
         setActiveView('evaluator');
         break;
       case 'institute_coordinator':
-        switchRole('institute_coordinator');
         setActiveView('institute');
         break;
       case 'student':
