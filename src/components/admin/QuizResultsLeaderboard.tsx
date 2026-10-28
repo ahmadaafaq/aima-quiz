@@ -144,6 +144,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'qualified' | 'disqualified'>('all');
+  const [rankingMode, setRankingMode] = useState<'round_1' | 'combined'>('combined');
   const [selectedAttemptForReview, setSelectedAttemptForReview] = useState<QuizAttempt | null>(null);
   const [modalQuestions, setModalQuestions] = useState<QuizQuestion[]>([]);
   const [isLoadingAttemptDetails, setIsLoadingAttemptDetails] = useState<boolean>(false);
@@ -929,21 +930,78 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     return [...teamEntries, ...soloList];
   }, [enrichedLeaderboard, effectiveCutoff]);
 
+  // Enrich leaderboard entries with Presentation Score & Combined Grand Totals
+  const leaderboardWithCombinedScores = useMemo(() => {
+    return groupedLeaderboard.map((row) => {
+      const jury = getRowJuryScorecard(row);
+      const dbEval = dbJuryEvaluations.find(
+        d =>
+          (row.registrationNumber && d.registration_number === row.registrationNumber) ||
+          (row.teamId && d.team_id === row.teamId) ||
+          (row.email && d.candidate_email && d.candidate_email.toLowerCase() === row.email.toLowerCase().trim()) ||
+          (row.members && row.members.some((m: any) =>
+            (m.registrationNumber && d.registration_number === m.registrationNumber) ||
+            (m.email && d.candidate_email && d.candidate_email.toLowerCase() === m.email.toLowerCase().trim())
+          ))
+      );
+      const dbScore =
+        dbEval?.total_score !== undefined && dbEval?.total_score !== null && Number(dbEval.total_score) > 0
+          ? Number(dbEval.total_score)
+          : undefined;
+      const presentationScore = jury?.livePresentationScore ?? dbScore;
+      const hasPresentation = presentationScore !== undefined;
+      const validPresentationScore = hasPresentation ? Number(presentationScore) : 0;
+      const quizScore = Number(row.score) || 0;
+      const tieBreakerScore = Number(row.analyticalScore) || 0;
+      const combinedScore = quizScore + validPresentationScore;
+      const presentationTrackName = jury?.trackName || dbEval?.track_name;
+
+      return {
+        ...row,
+        presentationScore,
+        hasPresentation,
+        validPresentationScore,
+        presentationTrackName,
+        quizScore,
+        tieBreakerScore,
+        combinedScore,
+      };
+    });
+  }, [groupedLeaderboard, dbJuryEvaluations, offlineRoundResults]);
+
   // Official Ranking Sorting:
-  // 1. Total Score (desc)
-  // 2. Reserve Tie-Breaker Score (desc - Q26 to Q30)
+  // When rankingMode === 'combined':
+  // 1. Grand Combined Total Score (desc - Screening Quiz 100 + Case Presentation 100 = 200 pts)
+  // 2. Offline Case Presentation Score evaluated by Jury (desc - 100 pts)
+  // 3. 5 Reserve Analytical Tie-Breaker Questions Score (desc - Q26 to Q30, 20 pts)
+  // 4. Screening Quiz Score (desc - 100 pts)
+  // 5. Lowest Time Taken in Quiz (asc)
+  // 6. Lowest Tab Switches (asc)
+  //
+  // When rankingMode === 'round_1':
+  // 1. Screening Quiz Score (desc - 100 pts)
+  // 2. 5 Reserve Analytical Tie-Breaker Questions Score (desc - Q26 to Q30, 20 pts)
   // 3. Lowest Time Taken (asc)
   // 4. Lowest Tab Switches (asc)
   const sortedLeaderboard = useMemo(() => {
-    return [...groupedLeaderboard].sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      const aTie = a.analyticalScore ?? 0;
-      const bTie = b.analyticalScore ?? 0;
-      if (bTie !== aTie) return bTie - aTie;
-      if (a.timeTaken !== b.timeTaken) return a.timeTaken - b.timeTaken;
-      return a.tabSwitches - b.tabSwitches;
+    return [...leaderboardWithCombinedScores].sort((a, b) => {
+      if (rankingMode === 'combined') {
+        if (b.combinedScore !== a.combinedScore) return b.combinedScore - a.combinedScore;
+        if (b.validPresentationScore !== a.validPresentationScore) {
+          return b.validPresentationScore - a.validPresentationScore;
+        }
+        if (b.tieBreakerScore !== a.tieBreakerScore) return b.tieBreakerScore - a.tieBreakerScore;
+        if (b.quizScore !== a.quizScore) return b.quizScore - a.quizScore;
+        if (a.timeTaken !== b.timeTaken) return a.timeTaken - b.timeTaken;
+        return a.tabSwitches - b.tabSwitches;
+      } else {
+        if (b.quizScore !== a.quizScore) return b.quizScore - a.quizScore;
+        if (b.tieBreakerScore !== a.tieBreakerScore) return b.tieBreakerScore - a.tieBreakerScore;
+        if (a.timeTaken !== b.timeTaken) return a.timeTaken - b.timeTaken;
+        return a.tabSwitches - b.tabSwitches;
+      }
     });
-  }, [groupedLeaderboard]);
+  }, [leaderboardWithCombinedScores, rankingMode]);
 
   // Filtered by Search & Status
   const filteredList = useMemo(() => {
@@ -972,8 +1030,11 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
   // Telemetry Aggregates
   const totalSubmissions = sortedLeaderboard.length;
-  const topScore = sortedLeaderboard.length > 0 ? sortedLeaderboard[0].score : 0;
-  const avgScore = totalSubmissions > 0 ? Math.round(sortedLeaderboard.reduce((a, b) => a + b.score, 0) / totalSubmissions) : 0;
+  const topScore = sortedLeaderboard.length > 0 ? sortedLeaderboard[0].quizScore : 0;
+  const avgScore = totalSubmissions > 0 ? Math.round(sortedLeaderboard.reduce((a, b) => a + b.quizScore, 0) / totalSubmissions) : 0;
+  const topCombinedScore = sortedLeaderboard.length > 0 ? sortedLeaderboard[0].combinedScore : 0;
+  const avgCombinedScore = totalSubmissions > 0 ? Math.round(sortedLeaderboard.reduce((a, b) => a + b.combinedScore, 0) / totalSubmissions) : 0;
+  const evaluatedPresentationCount = sortedLeaderboard.filter(r => r.hasPresentation).length;
   const qualifiedCount = sortedLeaderboard.filter(r => r.isQualified).length;
   const passRate = totalSubmissions > 0 ? Math.round((qualifiedCount / totalSubmissions) * 100) : 0;
   const totalTeamEntries = sortedLeaderboard.filter(r => r.isTeam).length;
@@ -1158,7 +1219,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
   const handleExportMeritList = () => {
     const headers = [
-      'Rank',
+      rankingMode === 'combined' ? 'Final Merit Rank' : 'Quiz Rank',
       'Entry Type',
       'Candidate / Team ID',
       'Name',
@@ -1166,18 +1227,36 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       'Institute',
       'Affiliated Team',
       'Team Members Count',
-      'Screening Quiz Score (Avg/Total)',
-      'Tie-Breaker Score (20)',
+      'Screening Quiz Score (100)',
+      '5 Tie-Breaker Questions Score (20)',
       'Case Presentation (100)',
       'Presentation Track',
+      'Grand Combined Total (200)',
+      'Ranking Mode',
+      'Award / Merit Status',
       'Time Taken (s)',
       'Tab Switches',
-      'Qualification Status',
+      'Round 1 Gate Status',
     ];
     const rows = filteredList.map((r, idx) => {
-      const jury = getRowJuryScorecard(r);
+      const rankNum = idx + 1;
+      const awardStatus =
+        rankingMode === 'combined'
+          ? (rankNum === 1
+            ? '1st Winner (Gold Prize)'
+            : rankNum === 2
+              ? '1st Runner-Up (Silver Prize)'
+              : rankNum === 3
+                ? '2nd Runner-Up (Bronze Prize)'
+                : r.hasPresentation
+                  ? 'Grand Finalist'
+                  : r.isQualified
+                    ? 'R2 Qualifier (Pending Jury)'
+                    : 'Below Cutoff')
+          : (r.isQualified ? 'QUALIFIED FOR STAGE 2' : 'BELOW CUTOFF');
+
       return [
-        idx + 1,
+        rankNum,
         r.isTeam ? 'Team Entry' : 'Solo Entry',
         r.id,
         `"${r.name}"`,
@@ -1185,10 +1264,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         `"${r.instituteName}"`,
         `"${r.teamName}"`,
         r.isTeam ? r.members.length : 1,
-        r.score,
-        r.analyticalScore,
-        jury?.livePresentationScore !== undefined ? jury.livePresentationScore : 'Pending Jury',
-        jury?.trackName ? `"${jury.trackName}"` : 'Pending Selection',
+        r.quizScore,
+        r.tieBreakerScore,
+        r.hasPresentation ? r.presentationScore : 'Pending Jury',
+        r.presentationTrackName ? `"${r.presentationTrackName}"` : 'Pending Selection',
+        r.combinedScore,
+        rankingMode === 'combined' ? 'Grand Finale Combined (Quiz + Presentation + Tie-Breaker)' : 'Round 1 Quiz Rank',
+        `"${awardStatus}"`,
         r.timeTaken,
         r.tabSwitches,
         r.isQualified ? 'QUALIFIED FOR STAGE 2' : 'BELOW CUTOFF',
@@ -1199,12 +1281,16 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `AIMA_Quiz_Leaderboard_MeritList_${Date.now()}.csv`);
+    link.setAttribute('download', `AIMA_Official_Merit_List_${rankingMode === 'combined' ? 'GrandFinale' : 'Round1'}_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
-    addAuditLog('Merit List Exported', 'Quiz', `Super Admin exported official leaderboard of ${filteredList.length} rankers with screening and presentation marks`);
+    addAuditLog(
+      'Merit List Exported',
+      'Quiz',
+      `Super Admin exported official leaderboard of ${filteredList.length} rankers in "${rankingMode === 'combined' ? 'Grand Finale Combined' : 'Round 1 Quiz'}" mode with 5 reserve tie-breaker scores`
+    );
   };
 
   return (
@@ -1251,11 +1337,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-            <span>Top Score (Team / Solo)</span>
+            <span>{rankingMode === 'combined' ? 'Top Grand Total (Quiz + Presentation)' : 'Top Score (Team / Solo)'}</span>
             <Medal className="w-4 h-4 text-amber-500" />
           </div>
           <div className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-            {totalSubmissions > 0 ? `${topScore}/100` : '--/100'}
+            {totalSubmissions > 0
+              ? (rankingMode === 'combined' ? `${topCombinedScore}/200` : `${topScore}/100`)
+              : '--'}
           </div>
           <div className="text-xs text-amber-600 font-medium mt-1 truncate max-w-[280px]">
             {totalSubmissions > 0 ? `Rank 1: ${sortedLeaderboard[0]?.name || 'N/A'}` : 'No evaluated attempts yet'}
@@ -1264,33 +1352,87 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-            <span>Average Score</span>
+            <span>{rankingMode === 'combined' ? 'Average Combined Score' : 'Average Score'}</span>
             <TrendingUp className="w-4 h-4 text-blue-500" />
           </div>
           <div className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-            {totalSubmissions > 0 ? `${avgScore}/100` : '--/100'}
+            {totalSubmissions > 0
+              ? (rankingMode === 'combined' ? `${avgCombinedScore}/200` : `${avgScore}/100`)
+              : '--'}
           </div>
           <div className="text-xs text-blue-600 font-medium mt-1">
-            Active Cutoff: {effectiveCutoff}% pass ({Math.round((selectedProgram?.totalMarks || 100) * (effectiveCutoff / 100))} pts)
+            {rankingMode === 'combined'
+              ? 'Quiz (100) + Case Deck (100) + 5 Tie-Breakers'
+              : `Active Cutoff: ${effectiveCutoff}% pass (${Math.round((selectedProgram?.totalMarks || 100) * (effectiveCutoff / 100))} pts)`}
           </div>
         </div>
 
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-            <span>Qualification Pass Rate</span>
+            <span>{rankingMode === 'combined' ? 'Jury Evaluated Presentations' : 'Qualification Pass Rate'}</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-            {totalSubmissions > 0 ? `${passRate}%` : '0%'}
+            {totalSubmissions > 0
+              ? (rankingMode === 'combined' ? `${evaluatedPresentationCount}/${totalSubmissions}` : `${passRate}%`)
+              : '0'}
           </div>
           <div className="text-xs text-emerald-600 font-medium mt-1">
-            {qualifiedCount} qualified of {totalSubmissions} entries
+            {rankingMode === 'combined'
+              ? `${totalSubmissions > 0 ? Math.round((evaluatedPresentationCount / totalSubmissions) * 100) : 0}% offline presentations scored by jury`
+              : `${qualifiedCount} qualified of ${totalSubmissions} entries`}
           </div>
         </div>
       </div>
 
-      {/* Control Bar: Filter, Program Selector, Configurable Cutoff & Results Publishing */}
+      {/* Control Bar: Ranking Mode Switcher, Filter, Program Selector & Configurable Cutoff */}
       <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+        {/* Official Ranking Mode Switcher */}
+        <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 pl-1">
+            <Sliders className="w-4 h-4 text-amber-500 shrink-0" />
+            <div>
+              <span className="text-xs font-extrabold text-slate-900 dark:text-white block">
+                Leaderboard Tabulation Mode:
+              </span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                {rankingMode === 'combined'
+                  ? 'Grand Finale Mode: Combines Screening Quiz (100) + Case Presentation (100) = 200 pts, broken by 5 Analytical Tie-Breakers.'
+                  : 'Stage 1 Qualifier Mode: Ranks strictly by Screening Quiz (100 pts) with 5 Analytical Tie-Breakers to gate R2 candidates.'}
+              </span>
+            </div>
+          </div>
+          <div className="inline-flex p-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs self-start md:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => setRankingMode('combined')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                rankingMode === 'combined'
+                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Trophy className="w-3.5 h-3.5" />
+              <span>Grand Finale Combined Rank</span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-black/20 text-white font-black uppercase">
+                Final Merit
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setRankingMode('round_1')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                rankingMode === 'round_1'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>Round 1 Quiz Rank (Qualifiers)</span>
+            </button>
+          </div>
+        </div>
+
         {/* Row 1: Program Selector, Search & Status Tabs */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex items-center gap-2 w-full lg:flex-1 min-w-0">
@@ -1478,14 +1620,17 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                 <th className="py-3.5 px-4 text-center">Screening Quiz (100)</th>
                 <th className="py-3.5 px-4 text-center">Chosen Case / Track</th>
                 <th className="py-3.5 px-4 text-center">Case Presentation (100)</th>
-                <th className="py-3.5 px-4 text-center">Stage 2 Gate</th>
+                <th className="py-3.5 px-4 text-center">Combined Grand Total (200)</th>
+                <th className="py-3.5 px-4 text-center">
+                  {rankingMode === 'combined' ? 'Award / Final Merit' : 'Stage 2 Gate'}
+                </th>
                 <th className="py-3.5 px-4 text-center w-48">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400">
+                  <td colSpan={8} className="py-8 text-center text-slate-400">
                     {selectedProgram
                       ? `No evaluated attempts found for "${selectedProgram.title}".`
                       : 'No evaluated quiz attempts found matching criteria.'}
@@ -1710,30 +1855,106 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                           })()}
                         </td>
 
-                        {/* Qualification */}
+                        {/* Combined Grand Total (200) */}
                         <td className="py-3.5 px-4 text-center">
-                          {row.isQualified ? (
-                            <div>
-                              <span className="inline-block px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-white shadow-xs">
-                                Qualified R2
+                          <div className="font-black text-base text-slate-900 dark:text-white">
+                            {row.combinedScore}
+                            <span className="text-[10px] text-slate-400 font-semibold ml-0.5">/200</span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-medium">
+                            {row.hasPresentation ? (
+                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                Q: {row.quizScore} + P: {row.presentationScore}
                               </span>
-                              {row.isTeam && (
-                                <div className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
-                                  Team Avg: {row.score}% (≥{effectiveCutoff}%)
-                                </div>
+                            ) : (
+                              <span className="text-amber-500 font-semibold">
+                                Q: {row.quizScore} (Jury Pending)
+                              </span>
+                            )}
+                          </div>
+                          {row.tieBreakerScore > 0 && (
+                            <div
+                              className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/25 text-[10px] font-bold"
+                              title="Score from 5 Reserve Tie-Breaker Analytical Questions (Q26-Q30)"
+                            >
+                              <Sparkles className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                              <span>⚡ {row.tieBreakerScore}/20 Tie-Breaker</span>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Award / Stage 2 Gate */}
+                        <td className="py-3.5 px-4 text-center">
+                          {rankingMode === 'combined' ? (
+                            <div className="flex flex-col items-center gap-1">
+                              {rank === 1 ? (
+                                <>
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-xs">
+                                    <Trophy className="w-3.5 h-3.5 text-amber-200" />
+                                    <span>1st Winner</span>
+                                  </span>
+                                  <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold">
+                                    🏆 Gold Award
+                                  </span>
+                                </>
+                              ) : rank === 2 ? (
+                                <>
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-slate-400 to-slate-500 text-white shadow-xs">
+                                    <Medal className="w-3.5 h-3.5 text-slate-200" />
+                                    <span>1st Runner-Up</span>
+                                  </span>
+                                  <span className="text-[9px] text-slate-500 font-bold">
+                                    🥈 Silver Award
+                                  </span>
+                                </>
+                              ) : rank === 3 ? (
+                                <>
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-700 to-amber-800 text-white shadow-xs">
+                                    <Award className="w-3.5 h-3.5 text-amber-300" />
+                                    <span>2nd Runner-Up</span>
+                                  </span>
+                                  <span className="text-[9px] text-amber-700 dark:text-amber-400 font-bold">
+                                    🥉 Bronze Award
+                                  </span>
+                                </>
+                              ) : row.hasPresentation ? (
+                                <span className="inline-block px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                  🎖️ Grand Finalist
+                                </span>
+                              ) : row.isQualified ? (
+                                <span className="inline-block px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-white shadow-xs">
+                                  Qualified R2
+                                </span>
+                              ) : (
+                                <span className="inline-block px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                  Below Cutoff
+                                </span>
                               )}
                             </div>
                           ) : (
-                            <div>
-                              <span className="inline-block px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500">
-                                Below Cutoff
-                              </span>
-                              {row.isTeam && (
-                                <div className="text-[9px] text-red-500 font-semibold mt-0.5">
-                                  Team Avg: {row.score}% (&lt;{effectiveCutoff}%)
-                                </div>
-                              )}
-                            </div>
+                            row.isQualified ? (
+                              <div>
+                                <span className="inline-block px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-white shadow-xs">
+                                  Qualified R2
+                                </span>
+                                {row.isTeam && (
+                                  <div className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                                    Team Avg: {row.score}% (≥{effectiveCutoff}%)
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="inline-block px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                  Below Cutoff
+                                </span>
+                                {row.isTeam && (
+                                  <div className="text-[9px] text-red-500 font-semibold mt-0.5">
+                                    Team Avg: {row.score}% (&lt;{effectiveCutoff}%)
+                                  </div>
+                                )}
+                              </div>
+                            )
                           )}
                         </td>
 
@@ -1811,7 +2032,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                           key={`${row.id}_jury_accordion`}
                           className="bg-slate-50/95 dark:bg-slate-900/95 border-b-2 border-red-500/40"
                         >
-                          <td colSpan={7} className="p-4 sm:p-6">
+                          <td colSpan={8} className="p-4 sm:p-6">
                             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-md">
                               {/* Accordion Header Banner */}
                               <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 mb-4 border-b border-slate-200 dark:border-slate-700 gap-3">
