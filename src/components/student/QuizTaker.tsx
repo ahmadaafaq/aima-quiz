@@ -1169,10 +1169,11 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
                 </button>
               ) : (
                 <button
-                  disabled
-                  className="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 cursor-default"
+                  onClick={() => setShowSubmitModal(true)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-md hover:shadow-lg transition flex items-center gap-1.5 cursor-pointer"
                 >
-                  End of Questions
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Submit Final Test</span>
                 </button>
               )}
             </div>
@@ -1213,18 +1214,7 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
 
           {/* Buttons Grid - pt-2 pb-2 px-1 ensures top borders and focus rings are never cut off */}
           <div className="grid grid-cols-5 gap-2 pt-2 pb-2 px-1">
-            {/* Header for Core Scored questions */}
-            {questions.length > 25 && (
-              <div className="col-span-5 pb-0.5">
-                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-0.5">
-                  Core Scored (Q1–Q25)
-                </div>
-              </div>
-            )}
-
             {questions.map((q, idx) => {
-              const displayNum = q.orderIndex || q.qNo || (idx + 1);
-              const isReserve = displayNum >= 26;
               const isAnswered = answers[q.id] !== undefined;
               const isMarked = markedForReview.includes(q.id);
               const isCurrent = currentIndex === idx;
@@ -1233,27 +1223,21 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
               if (isAnswered && isMarked) {
                 btnClass = 'bg-amber-500 text-white font-bold border-amber-600';
               } else if (isAnswered) {
-                btnClass = isReserve
-                  ? 'bg-amber-600 text-white font-bold border-amber-700'
-                  : 'bg-emerald-600 text-white font-bold border-emerald-700';
+                btnClass = 'bg-emerald-600 text-white font-bold border-emerald-700';
               } else if (isMarked) {
                 btnClass = 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-400';
-              } else if (isReserve) {
-                btnClass = 'bg-amber-50/60 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 border-amber-200/60 dark:border-amber-900/40';
               }
 
               return (
-                <React.Fragment key={q.id}>
-
-                  <button
-                    onClick={() => setCurrentIndex(idx)}
-                    className={`h-8 rounded-lg text-xs font-semibold border flex items-center justify-center transition-all cursor-pointer ${btnClass} ${
-                      isCurrent ? 'ring-2 ring-amber-500 ring-offset-2 dark:ring-offset-slate-900 scale-105' : ''
-                    }`}
-                  >
-                    {idx + 1}
-                  </button>
-                </React.Fragment>
+                <button
+                  key={q.id}
+                  onClick={() => setCurrentIndex(idx)}
+                  className={`h-8 rounded-lg text-xs font-semibold border flex items-center justify-center transition-all cursor-pointer ${btnClass} ${
+                    isCurrent ? 'ring-2 ring-amber-500 ring-offset-2 dark:ring-offset-slate-900 scale-105' : ''
+                  }`}
+                >
+                  {idx + 1}
+                </button>
               );
             })}
           </div>
