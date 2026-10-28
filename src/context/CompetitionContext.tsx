@@ -3744,7 +3744,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     // Dispatch registration confirmation email with login credentials
     try {
-      const isSolo = data.track === 'corporate_individual' || (Array.isArray(data.nominees) && data.nominees.length === 1);
+      const isSolo = data.track === 'corporate_individual' && (!data.isOnboardingTeam || (Array.isArray(data.nominees) && data.nominees.length <= 1));
 
       if (isSolo) {
         // Solo / Individual registration -> send exactly one email to this solo person with credentials
@@ -3767,7 +3767,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
           }).catch(e => console.warn('[Email] Solo registration email error:', e));
         }
       } else {
-        // Team registration -> send email to EVERY team member with their own credentials
+        // Team / Institutional registration -> send email to EVERY team member with their own credentials
         if (Array.isArray(data.nominees)) {
           data.nominees.forEach((nominee, idx) => {
             if (nominee.email) {
@@ -3776,7 +3776,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 toName: nominee.name,
                 toEmail: nominee.email,
                 registrationNumber: data.registrationNumber,
-                teamName: data.organizationName,
+                teamName: nominee.teamName || data.organizationName,
                 instituteName: data.organizationName,
                 username: nominee.email,
                 password: memberPassword,
@@ -3786,8 +3786,22 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
             }
           });
         }
-        // If there is a separate institutional coordinator who is not a competing team member, send them the coordinator confirmation
-        if (data.coordinator?.email && !data.nominees?.some(n => n.email?.toLowerCase() === data.coordinator?.email?.toLowerCase())) {
+        // Institutional coordinator confirmation email with their designated password
+        if (data.track === 'institutional' && data.coordinator?.email) {
+          const coordPass = (data.coordinator as any).password || generateDefaultPassword(data.coordinator.name || 'Coordinator', data.coordinator.mobile || '2026');
+          sendRegistrationConfirmation({
+            toName: data.coordinator.name || 'Faculty / Institutional Coordinator',
+            toEmail: data.coordinator.email,
+            registrationNumber: data.registrationNumber,
+            teamName: data.organizationName,
+            instituteName: data.organizationName,
+            username: data.coordinator.email,
+            password: coordPass,
+            isIndividual: false,
+            roleInTeam: 'Faculty / Institutional Coordinator',
+          }).catch(e => console.warn('[Email] Coordinator confirmation email error:', e));
+        } else if (data.coordinator?.email && !data.nominees?.some(n => n.email?.toLowerCase() === data.coordinator?.email?.toLowerCase())) {
+          const coordPass = (data.coordinator as any).password || generateDefaultPassword(data.coordinator.name || 'Coordinator', data.coordinator.mobile || '2026');
           sendRegistrationConfirmation({
             toName: data.coordinator.name || 'Coordinator',
             toEmail: data.coordinator.email,
@@ -3795,7 +3809,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
             teamName: data.organizationName,
             instituteName: data.organizationName,
             username: data.coordinator.email,
-            password: generateDefaultPassword(data.coordinator.name || 'Coordinator', data.coordinator.mobile || '2026'),
+            password: coordPass,
             isIndividual: false,
             roleInTeam: 'Faculty / Institutional Coordinator',
           }).catch(e => console.warn('[Email] Coordinator confirmation email error:', e));

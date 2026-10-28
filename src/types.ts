@@ -652,6 +652,7 @@ export interface CSRBootcampRegistration {
     email: string;
     mobile: string;
     extension?: string;
+    password?: string;
   };
   tierId: '1_3' | '4_7' | '8_plus' | 'inst_5' | 'inst_10' | 'early_bird_free' | 'standard_per_person' | 'comparative_tier' | string;
   tierLabel: string;

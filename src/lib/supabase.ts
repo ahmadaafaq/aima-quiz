@@ -280,7 +280,7 @@ export async function createParticipantAccounts(
     const alreadyInRows = rows.some(r => r.email === coordEmail);
     if (!alreadyInRows) {
       const coordName = reg.coordinator.name || 'Institutional Coordinator';
-      const coordPhone = reg.coordinator.phone || '';
+      const coordPhone = reg.coordinator.mobile || (reg.coordinator as any).phone || '';
       const coordPassword = (reg.coordinator as any).password || generateDefaultPassword(coordName, coordPhone);
       rows.push({
         registration_number: reg.registrationNumber,

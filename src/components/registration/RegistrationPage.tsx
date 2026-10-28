@@ -149,6 +149,9 @@ export const RegistrationPage: React.FC = () => {
   const [coordinatorName, setCoordinatorName] = useState('');
   const [coordinatorEmail, setCoordinatorEmail] = useState('');
   const [coordinatorPhone, setCoordinatorPhone] = useState('');
+  const [coordinatorPassword, setCoordinatorPassword] = useState('');
+  const [showCoordinatorPassword, setShowCoordinatorPassword] = useState(false);
+  const [invalidTeamIndex, setInvalidTeamIndex] = useState<number | null>(null);
 
   // Institute teams: each team has up to 4 participants, institute can have multiple teams
   const [instituteEntryTab, setInstituteEntryTab] = useState<'form' | 'excel'>('form');
@@ -235,6 +238,9 @@ export const RegistrationPage: React.FC = () => {
     setCoordinatorName('');
     setCoordinatorEmail('');
     setCoordinatorPhone('');
+    setCoordinatorPassword('');
+    setShowCoordinatorPassword(false);
+    setInvalidTeamIndex(null);
     setInstituteEntryTab('form');
     setInstituteTeams([
       {
@@ -392,6 +398,12 @@ export const RegistrationPage: React.FC = () => {
     setInstituteTeams((prev) =>
       prev.map((t) => (t.id === teamId ? { ...t, teamName: name } : t))
     );
+    if (invalidTeamIndex !== null) {
+      setInvalidTeamIndex(null);
+    }
+    if (validationError.includes('Please enter a name for Team')) {
+      setValidationError('');
+    }
   };
 
   const handleAddMemberToTeam = (teamId: string) => {
@@ -722,6 +734,17 @@ export const RegistrationPage: React.FC = () => {
         setValidationError('Please enter the Coordinator Phone / Mobile Number.');
         return false;
       }
+      if (!coordinatorPassword.trim() || coordinatorPassword.trim().length < 6) {
+        setValidationError('Please set a coordinator password with at least 6 characters.');
+        setTimeout(() => {
+          const coordEl = document.getElementById('coordinator-password-input');
+          if (coordEl) {
+            coordEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            coordEl.focus();
+          }
+        }, 50);
+        return false;
+      }
       if (instituteTeams.length === 0) {
         setValidationError('Please add at least 1 team with participants.');
         return false;
@@ -730,6 +753,14 @@ export const RegistrationPage: React.FC = () => {
         const team = instituteTeams[t];
         if (!team.teamName.trim()) {
           setValidationError(`Please enter a name for Team #${t + 1}.`);
+          setInvalidTeamIndex(t);
+          setTimeout(() => {
+            const inputEl = document.getElementById(`institute-team-name-input-${team.id}`);
+            if (inputEl) {
+              inputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              inputEl.focus();
+            }
+          }, 60);
           return false;
         }
         if (team.members.length === 0) {
@@ -849,6 +880,10 @@ export const RegistrationPage: React.FC = () => {
     const coordEmail = regMode === 'individual' ? email : coordinatorEmail;
     const coordName = regMode === 'individual' ? name : coordinatorName;
     const coordPhone = regMode === 'individual' ? mobile : coordinatorPhone;
+    const coordPassword =
+      regMode === 'individual'
+        ? password
+        : (coordinatorPassword.trim() || generateDefaultPassword(coordName, coordPhone));
 
     const payload: Omit<
       CSRBootcampRegistration,
@@ -871,6 +906,7 @@ export const RegistrationPage: React.FC = () => {
         name: coordName,
         email: coordEmail,
         mobile: coordPhone,
+        password: coordPassword,
         designation: regMode === 'individual' ? 'Participant / Leader' : 'Faculty Coordinator',
       },
       tierId: IS_EARLY_BIRD_FREE ? 'early_bird_free' : feeCalculation.tierId,
@@ -932,7 +968,7 @@ export const RegistrationPage: React.FC = () => {
       if (result.registration.track === 'institutional' && result.registration.coordinator?.email) {
         nomineeUsers.push({
           email: result.registration.coordinator.email,
-          password: generateDefaultPassword(result.registration.coordinator.name || 'Coordinator', result.registration.coordinator.mobile || '2026'),
+          password: (result.registration.coordinator as any).password || coordinatorPassword || generateDefaultPassword(result.registration.coordinator.name || 'Coordinator', result.registration.coordinator.mobile || '2026'),
           name: result.registration.coordinator.name || 'Institute Coordinator',
           mobile: result.registration.coordinator.mobile,
           organizationName: result.registration.organizationName,
@@ -1019,12 +1055,19 @@ export const RegistrationPage: React.FC = () => {
   // Copy all generated login credentials
   const handleCopyAllCredentials = () => {
     const list = compileNomineesList();
-    const text = list
-      .map(
-        (n, i) =>
-          `[${i + 1}] ${n.name}\nEmail: ${n.email}\nEnrolment: ${n.enrolmentNumber || 'N/A'}\nQuiz Password: ${n.password || 'AimaQuiz@2026'}\n`
-      )
-      .join('\n');
+    const coordLine =
+      (activeCreatedRegistration?.track === 'institutional' || regMode === 'institute') &&
+      (activeCreatedRegistration?.coordinator?.email || coordinatorEmail)
+        ? `[Faculty / Institutional Coordinator]\nName: ${activeCreatedRegistration?.coordinator?.name || coordinatorName || 'Faculty Coordinator'}\nLogin Email: ${activeCreatedRegistration?.coordinator?.email || coordinatorEmail}\nRole: Faculty / Institutional Coordinator\nPassword: ${activeCreatedRegistration?.coordinator?.password || coordinatorPassword || 'Coord@2026'}\n\n-- Nominated Student Teams & Members --\n`
+        : '';
+    const text =
+      coordLine +
+      list
+        .map(
+          (n, i) =>
+            `[${i + 1}] ${n.name}\nTeam: ${n.teamName || 'Team'}\nEmail: ${n.email}\nEnrolment: ${n.enrolmentNumber || 'N/A'}\nQuiz Password: ${n.password || 'AimaQuiz@2026'}\n`
+        )
+        .join('\n');
     navigator.clipboard.writeText(text);
     setCopiedLogins(true);
     setTimeout(() => setCopiedLogins(false), 2500);
@@ -1807,49 +1850,95 @@ export const RegistrationPage: React.FC = () => {
                         />
                       </div>
 
-                      {/* Coordinator Name */}
-                      <div>
-                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                          Coordinator Name <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={coordinatorName}
-                          onChange={(e) => setCoordinatorName(e.target.value)}
-                          placeholder="Dr. / Prof. Full Name"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                          required
-                        />
-                      </div>
+                      {/* Authorized Faculty Coordinator Section */}
+                      <div className="col-span-1 sm:col-span-2 lg:col-span-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                            <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider">
+                              Authorized Faculty Coordinator Credentials
+                            </h4>
+                          </div>
+                          <span className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold">
+                            Coordinator receives official credentials &amp; team management access
+                          </span>
+                        </div>
 
-                      {/* Coordinator Email */}
-                      <div>
-                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                          Coordinator Email <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="email"
-                          value={coordinatorEmail}
-                          onChange={(e) => setCoordinatorEmail(e.target.value)}
-                          placeholder="coordinator@univ.edu"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono text-[11px]"
-                          required
-                        />
-                      </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                          {/* Coordinator Name */}
+                          <div>
+                            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                              Coordinator Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={coordinatorName}
+                              onChange={(e) => setCoordinatorName(e.target.value)}
+                              placeholder="Dr. / Prof. Full Name"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                              required
+                            />
+                          </div>
 
-                      {/* Coordinator Phone */}
-                      <div>
-                        <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                          Coordinator Phone / Mobile <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="tel"
-                          value={coordinatorPhone}
-                          onChange={(e) => setCoordinatorPhone(e.target.value)}
-                          placeholder="+91 98..."
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                          required
-                        />
+                          {/* Coordinator Email */}
+                          <div>
+                            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                              Coordinator Email (Login ID) <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="email"
+                              value={coordinatorEmail}
+                              onChange={(e) => setCoordinatorEmail(e.target.value)}
+                              placeholder="coordinator@univ.edu"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono text-[11px]"
+                              required
+                            />
+                          </div>
+
+                          {/* Coordinator Phone */}
+                          <div>
+                            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                              Coordinator Phone / Mobile <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="tel"
+                              value={coordinatorPhone}
+                              onChange={(e) => setCoordinatorPhone(e.target.value)}
+                              placeholder="+91 98..."
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                              required
+                            />
+                          </div>
+
+                          {/* Set Coordinator Password */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="block font-semibold text-slate-700 dark:text-slate-300">
+                                Set Coordinator Password <span className="text-red-500">*</span>
+                              </label>
+                              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">Min 6 chars</span>
+                            </div>
+                            <div className="relative">
+                              <input
+                                id="coordinator-password-input"
+                                type={showCoordinatorPassword ? 'text' : 'password'}
+                                value={coordinatorPassword}
+                                onChange={(e) => setCoordinatorPassword(e.target.value)}
+                                placeholder="Coord@2026"
+                                className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono text-xs"
+                                required
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowCoordinatorPassword(!showCoordinatorPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1"
+                                title={showCoordinatorPassword ? 'Hide password' : 'Show password'}
+                              >
+                                {showCoordinatorPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1989,15 +2078,27 @@ export const RegistrationPage: React.FC = () => {
                                 {tIdx + 1}
                               </span>
                               <div className="flex-1 min-w-[180px]">
-                                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">
-                                  Team #{tIdx + 1}
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">
+                                    Team #{tIdx + 1}
+                                  </span>
+                                  {invalidTeamIndex === tIdx && (
+                                    <span className="px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-950/80 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 font-bold text-[10px] animate-pulse">
+                                      Team name required
+                                    </span>
+                                  )}
                                 </div>
                                 <input
+                                  id={`institute-team-name-input-${team.id}`}
                                   type="text"
                                   value={team.teamName}
                                   onChange={(e) => handleUpdateInstituteTeamName(team.id, e.target.value)}
                                   placeholder={`e.g. Team ${tIdx + 1} or Synergy`}
-                                  className="font-bold text-sm sm:text-base text-slate-900 dark:text-white bg-transparent border-b border-dashed border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:outline-hidden px-1 py-0.5 w-full max-w-xs"
+                                  className={`font-bold text-sm sm:text-base text-slate-900 dark:text-white transition-all px-1.5 py-1 w-full max-w-xs ${
+                                    invalidTeamIndex === tIdx
+                                      ? 'border-2 border-red-500 bg-red-50/80 dark:bg-red-950/50 ring-2 ring-red-400/50 rounded-lg placeholder-red-400 focus:outline-hidden'
+                                      : 'bg-transparent border-b border-dashed border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:outline-hidden'
+                                  }`}
                                   required
                                 />
                               </div>
@@ -2609,6 +2710,41 @@ export const RegistrationPage: React.FC = () => {
                       <span>{copiedLogins ? 'Copied to Clipboard' : 'Copy All Credentials'}</span>
                     </button>
                   </div>
+
+                  {/* Faculty Coordinator Credentials Card (for Institutional Registration) */}
+                  {(activeCreatedRegistration?.track === 'institutional' || regMode === 'institute') && (activeCreatedRegistration?.coordinator?.email || coordinatorEmail) && (
+                    <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-slate-50/90 dark:from-blue-950/40 dark:via-indigo-950/30 dark:to-slate-900/40 border-2 border-blue-200 dark:border-blue-800 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs font-black shadow-xs">
+                            ★
+                          </span>
+                          <div>
+                            <span className="font-bold text-sm text-slate-900 dark:text-white">
+                              {activeCreatedRegistration?.coordinator?.name || coordinatorName || 'Faculty Coordinator'}
+                            </span>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                              Official Faculty / Institutional Coordinator
+                            </div>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-full bg-blue-600 text-white text-[10px] font-bold tracking-wide shadow-xs">
+                          Coordinator Portal Access
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1 border-t border-blue-100 dark:border-blue-900/50">
+                        <div className="text-slate-600 dark:text-slate-400">
+                          Coordinator Login ID: <strong className="font-mono text-slate-900 dark:text-white">{activeCreatedRegistration?.coordinator?.email || coordinatorEmail}</strong>
+                        </div>
+                        <div className="text-slate-600 dark:text-slate-400">
+                          Coordinator Password: <strong className="font-mono text-blue-600 dark:text-blue-400 font-bold">{activeCreatedRegistration?.coordinator?.password || coordinatorPassword || 'Coord@2026'}</strong>
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Organization: <span className="font-semibold text-slate-700 dark:text-slate-300">{activeCreatedRegistration?.organizationName || instName}</span> • Registration No: <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{activeCreatedRegistration?.registrationNumber}</span>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {compileNomineesList().map((nom, idx) => (
