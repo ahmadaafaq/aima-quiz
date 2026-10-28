@@ -21,20 +21,8 @@ export function checkIsEarlyBirdFree(): boolean {
     return false;
   }
 
-  // 2. UAT / Staging environment (aima-quiz.vercel.app, preview deployments, or localhost):
-  // Charges standard fee for Razorpay Security Audit & Client Demos
-  if (
-    host === 'aima-quiz.vercel.app' ||
-    host.endsWith('.vercel.app') ||
-    host === 'localhost' ||
-    host === '127.0.0.1' ||
-    host === '0.0.0.0'
-  ) {
-    return false;
-  }
-
-  // 3. Live Production (research.aima.in):
-  // Early Bird 100% Free Entry active for real students!
+  // 2. Early Bird 100% Free Entry active universally across both live production (research.aima.in)
+  // and staging/preview deployments (aima-quiz.vercel.app) for all students!
   return true;
 }
 
