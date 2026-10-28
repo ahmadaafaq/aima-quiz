@@ -9,9 +9,11 @@ const SUPABASE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   'sb_publishable_RDIbw6a-RZItDzeY80ylwA_-7XGzb5V';
+const DB_SCHEMA = process.env.VITE_DB_SCHEMA || process.env.DB_SCHEMA || 'public';
 
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
+  db: { schema: DB_SCHEMA },
 });
 
 export default async function handler(req: any, res: any) {

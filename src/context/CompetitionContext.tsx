@@ -61,6 +61,7 @@ import {
   createAndAssignQuestion,
   getLocalProgramQuestionsCache,
   generateDefaultPassword,
+  DB_SCHEMA,
 } from '../lib/supabase';
 import {
   sendRegistrationConfirmation,
@@ -1092,7 +1093,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       .channel('competition_config_realtime')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'competition_config' },
+        { event: '*', schema: DB_SCHEMA, table: 'competition_config' },
         (payload: any) => {
           if (payload?.new && isMounted) {
             const mapped = mapSupabaseRowToAppConfig(payload.new);

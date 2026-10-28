@@ -9,8 +9,11 @@ const SUPABASE_SERVICE_ROLE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   "sb_publishable_RDIbw6a-RZItDzeY80ylwA_-7XGzb5V";
+const DB_SCHEMA = process.env.VITE_DB_SCHEMA || process.env.DB_SCHEMA || "public";
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  db: { schema: DB_SCHEMA },
+});
 
 const APP_URL = process.env.APP_URL || "https://research.aima.in";
 const LOGIN_URL = `${APP_URL.replace(/\/$/, "")}/login`;

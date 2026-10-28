@@ -9,9 +9,11 @@ const SUPABASE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   'sb_publishable_RDIbw6a-RZItDzeY80ylwA_-7XGzb5V';
+const DB_SCHEMA = process.env.VITE_DB_SCHEMA || process.env.DB_SCHEMA || 'public';
 
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
+  db: { schema: DB_SCHEMA },
 });
 
 export default async function handler(req: any, res: any) {
@@ -198,11 +200,18 @@ export default async function handler(req: any, res: any) {
       let instituteName = '';
 
       if (studentId || participantEmail) {
-        const { data: partRow } = await supabaseAdmin
+        const isStudentUuid = typeof studentId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(studentId);
+        let partQuery = supabaseAdmin
           .from('participants')
-          .select('registration_number, name, institute_name, email')
-          .or(`id.eq.${studentId},email.eq.${participantEmail || studentId}`)
-          .maybeSingle();
+          .select('registration_number, name, institute_name, email');
+
+        if (isStudentUuid) {
+          partQuery = partQuery.or(`id.eq.${studentId},email.eq.${participantEmail || studentId}`);
+        } else {
+          partQuery = partQuery.eq('email', participantEmail || studentId);
+        }
+
+        const { data: partRow } = await partQuery.maybeSingle();
 
         if (partRow) {
           regNum = partRow.registration_number || '';
@@ -215,7 +224,12 @@ export default async function handler(req: any, res: any) {
       if (regNum) {
         regQuery = regQuery.eq('registration_number', regNum);
       } else if (teamId) {
-        regQuery = regQuery.or(`registration_number.eq.${teamId},id.eq.${teamId}`);
+        const isTeamUuid = typeof teamId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(teamId);
+        if (isTeamUuid) {
+          regQuery = regQuery.or(`registration_number.eq.${teamId},id.eq.${teamId}`);
+        } else {
+          regQuery = regQuery.eq('registration_number', teamId);
+        }
       }
 
       const { data: regRows } = await regQuery.limit(1);

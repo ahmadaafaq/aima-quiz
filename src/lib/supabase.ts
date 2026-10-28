@@ -6,8 +6,12 @@ export const SUPABASE_URL =
 export const SUPABASE_ANON_KEY =
   (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
   'sb_publishable_RDIbw6a-RZItDzeY80ylwA_-7XGzb5V';
+export const DB_SCHEMA =
+  (import.meta as any).env?.VITE_DB_SCHEMA || 'public';
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  db: { schema: DB_SCHEMA },
+});
 
 // ============================================================
 // PARTICIPANT ACCOUNT TYPES
