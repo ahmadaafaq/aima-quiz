@@ -252,7 +252,7 @@ export async function createParticipantAccounts(
   const errors: string[] = [];
   let created = 0;
 
-  const rows: SupabaseParticipantRow[] = reg.nominees.map((nominee) => {
+  const rows: SupabaseParticipantRow[] = (reg.nominees || []).map((nominee) => {
     const password = nominee.password || generateDefaultPassword(nominee.name, nominee.mobile || '');
     return {
       registration_number: reg.registrationNumber,
@@ -273,6 +273,35 @@ export async function createParticipantAccounts(
       quiz_program_id: reg.quizProgramId || 'qp_case_comp_stage1_2026',
     };
   });
+
+  // Also create/upsert account for institutional coordinator if coordinator info provided
+  if (isInst && reg.coordinator?.email) {
+    const coordEmail = reg.coordinator.email.toLowerCase().trim();
+    const alreadyInRows = rows.some(r => r.email === coordEmail);
+    if (!alreadyInRows) {
+      const coordName = reg.coordinator.name || 'Institutional Coordinator';
+      const coordPhone = reg.coordinator.phone || '';
+      const coordPassword = (reg.coordinator as any).password || generateDefaultPassword(coordName, coordPhone);
+      rows.push({
+        registration_number: reg.registrationNumber,
+        registration_mode: 'institute',
+        institute_name: reg.organizationName,
+        username: coordEmail,
+        email: coordEmail,
+        password_hash: hashPassword(coordPassword),
+        name: coordName,
+        mobile: coordPhone || null,
+        program: 'Faculty / Institutional Coordinator',
+        semester: null,
+        enrolment_number: null,
+        is_team_leader: false,
+        coordinator_name: coordName,
+        coordinator_email: coordEmail,
+        created_at: new Date().toISOString(),
+        quiz_program_id: reg.quizProgramId || 'qp_case_comp_stage1_2026',
+      });
+    }
+  }
 
   for (const row of rows) {
     try {
@@ -366,13 +395,22 @@ export async function signInWithEmailPassword(
       const legacyResult = await loginParticipant(email, plainPassword);
       if (legacyResult.success && legacyResult.participant) {
         const p = legacyResult.participant;
+        const isCoordinator =
+          (p.coordinator_email && p.email.toLowerCase() === p.coordinator_email.toLowerCase()) ||
+          (p.program && p.program.toLowerCase().includes('coordinator')) ||
+          (p as any).role === 'institute_coordinator';
+
+        const assignedRole: UserProfileRow['role'] = isCoordinator
+          ? 'institute_coordinator'
+          : (p.is_team_leader ? 'team_leader' : 'student');
+
         return {
           success: true,
           user: { id: p.id || p.email, email: p.email },
           profile: {
             id: p.id || p.email,
             email: p.email,
-            role: p.is_team_leader ? 'team_leader' : 'student',
+            role: assignedRole,
             name: p.name,
             mobile: p.mobile,
             organization_name: p.institute_name,

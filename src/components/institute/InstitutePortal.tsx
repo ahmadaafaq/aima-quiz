@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCompetition } from '../../context/CompetitionContext';
 import { DocRequirementInfo } from '../common/DocRequirementInfo';
 import { Team } from '../../types';
+import { supabase } from '../../lib/supabase';
 import {
   AlertCircle,
   Award,
@@ -36,7 +37,26 @@ import {
 export const InstitutePortal: React.FC = () => {
   const { institutions, currentUser, teams, createInstitutionalTeam } = useCompetition();
   
-  const inst = institutions[0] || {
+  const currentInstName = currentUser.instituteName || (currentUser as any).organization_name || '';
+  const currentInstEmail = currentUser.email || '';
+
+  const matchedInst = institutions.find(i =>
+    (currentInstEmail && i.coordinatorEmail?.toLowerCase() === currentInstEmail.toLowerCase()) ||
+    (currentInstName && i.name.toLowerCase().includes(currentInstName.toLowerCase())) ||
+    (currentInstName && currentInstName.toLowerCase().includes(i.name.toLowerCase()))
+  );
+
+  const inst = matchedInst || (currentInstName ? {
+    id: 'inst_' + currentInstName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+    name: currentInstName,
+    ranking: 5,
+    coordinatorName: currentUser.name || 'Faculty Coordinator',
+    coordinatorEmail: currentInstEmail || 'coordinator@institute.ac.in',
+    totalStudents: 10,
+    registeredStudents: 9,
+    teamsCreated: 2,
+    totalPaidAmount: 3600,
+  } : institutions[0] || {
     id: 'inst_iimb',
     name: 'Indian Institute of Management Bangalore (IIMB)',
     ranking: 1,
@@ -46,7 +66,31 @@ export const InstitutePortal: React.FC = () => {
     registeredStudents: 128,
     teamsCreated: 34,
     totalPaidAmount: 25600,
-  };
+  });
+
+  const [dbParticipants, setDbParticipants] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchRoster() {
+      try {
+        let query = supabase.from('participants').select('*');
+        if (currentUser.registrationNumber) {
+          query = query.eq('registration_number', currentUser.registrationNumber);
+        } else if (inst.coordinatorEmail) {
+          query = query.eq('coordinator_email', inst.coordinatorEmail);
+        } else if (inst.name) {
+          query = query.ilike('institute_name', `%${inst.name.slice(0, 15)}%`);
+        }
+        const { data } = await query;
+        if (data && data.length > 0) {
+          setDbParticipants(data);
+        }
+      } catch (err) {
+        console.error('Failed to load institute roster:', err);
+      }
+    }
+    fetchRoster();
+  }, [currentUser.registrationNumber, inst.coordinatorEmail, inst.name]);
 
   const [activeTab, setActiveTab] = useState<'roster' | 'teams'>('teams');
   const [searchTerm, setSearchTerm] = useState('');
@@ -101,8 +145,22 @@ export const InstitutePortal: React.FC = () => {
     { id: 's10', name: 'Aditya Sen', studentId: 'IIMB-PGP-25-215', email: 'aditya.s@iimb.ac.in', teamName: '', feePaid: true, r1Score: 87 },
   ];
 
-  // Filtered mock roster
-  const filteredRoster = defaultRoster.filter(s => {
+  const liveRoster = dbParticipants
+    .filter(p => !p.program?.toLowerCase().includes('coordinator') && p.email?.toLowerCase() !== inst.coordinatorEmail.toLowerCase())
+    .map((p, idx) => ({
+      id: p.id || p.email,
+      name: p.name,
+      studentId: p.enrolment_number || ('ASM-' + (p.mobile ? p.mobile.slice(-4) : ('00' + (idx + 1)))),
+      email: p.email,
+      teamName: p.is_team_leader ? `${inst.name} Team Leader` : `${inst.name} Student Nominee`,
+      feePaid: true,
+      r1Score: p.quiz_score || 85,
+    }));
+
+  const activeRoster = liveRoster.length > 0 ? liveRoster : defaultRoster;
+
+  // Filtered roster
+  const filteredRoster = activeRoster.filter(s => {
     const matchesSearch =
       s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -113,16 +171,15 @@ export const InstitutePortal: React.FC = () => {
     return matchesSearch;
   });
 
-  const unpaidCount = defaultRoster.filter(s => !s.feePaid).length;
+  const unpaidCount = activeRoster.filter(s => !s.feePaid).length;
   const totalUnpaidAmount = unpaidCount * 200;
 
   // Institute's teams
   const instituteTeams = teams.filter(
     t =>
-      t.instituteName?.toLowerCase().includes('bangalore') ||
-      t.instituteName?.toLowerCase().includes('iimb') ||
-      t.instituteName === inst.name ||
-      inst.name.toLowerCase().includes(t.instituteName?.toLowerCase() || '')
+      (inst.name && t.instituteName?.toLowerCase().includes(inst.name.toLowerCase())) ||
+      (inst.name && inst.name.toLowerCase().includes(t.instituteName?.toLowerCase() || '___')) ||
+      (inst.coordinatorEmail && (t as any).coordinatorEmail?.toLowerCase() === inst.coordinatorEmail.toLowerCase())
   );
 
   const handleCopyCode = (code: string) => {

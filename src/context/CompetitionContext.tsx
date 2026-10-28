@@ -480,13 +480,21 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       ? (!cachedReg.teamName && (cachedReg.participantCount || cachedReg.nominees?.length || 1) <= 1)
       : false;
     const isTeamLeader = isSolo ? false : Boolean(participant.is_team_leader);
+    const isCoordinator =
+      (participant.coordinator_email && participant.email.toLowerCase().trim() === participant.coordinator_email.toLowerCase().trim()) ||
+      (participant.program && participant.program.toLowerCase().includes('coordinator')) ||
+      (participant as any).role === 'institute_coordinator';
+
+    const userRole: UserRole = isCoordinator
+      ? 'institute_coordinator'
+      : (isTeamLeader ? 'team_leader' : 'student');
 
     return {
       id: userId,
       name: participant.name,
       email: participant.email,
       mobile: participant.mobile || '',
-      role: isTeamLeader ? 'team_leader' : 'student',
+      role: userRole,
       isVerified: true,
       gender: 'Other',
       state: '',
@@ -977,8 +985,12 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     // 4. Async sync full Supabase registration and peers
     syncParticipantData(participant);
 
-    // 5. Navigate to student dashboard immediately
-    setActiveView('student');
+    // 5. Navigate to appropriate portal immediately
+    if (userProfile.role === 'institute_coordinator') {
+      setActiveView('institute');
+    } else {
+      setActiveView('student');
+    }
   };
 
   const logoutParticipant = (targetView: string = 'participant_login') => {

@@ -32,7 +32,7 @@ interface ParticipantLoginPageProps {
 const CAPTCHA_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 
 export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLoginSuccess }) => {
-  const { setActiveView, loginParticipantSession } = useCompetition();
+  const { setActiveView, loginParticipantSession, switchRole } = useCompetition();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -253,6 +253,26 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
         };
         loginParticipantSession(participantRow);
         onLoginSuccess?.(participantRow);
+      } else if (prof.role === 'institute_coordinator') {
+        const participantRow: SupabaseParticipantRow = {
+          registration_number: prof.registration_number || '',
+          registration_mode: 'institute',
+          institute_name: prof.organization_name || "ASM's Institute of Business Management and Research",
+          username: prof.email,
+          email: prof.email,
+          password_hash: '',
+          name: prof.name,
+          mobile: prof.mobile || null,
+          program: prof.program || 'Faculty / Institutional Coordinator',
+          semester: null,
+          enrolment_number: null,
+          is_team_leader: false,
+          coordinator_name: prof.name,
+          coordinator_email: prof.email,
+        };
+        loginParticipantSession(participantRow);
+        switchRole('institute_coordinator');
+        onLoginSuccess?.(participantRow);
       }
     } else {
       const newFails = failedAttempts + 1;
@@ -278,6 +298,7 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
         setActiveView('evaluator');
         break;
       case 'institute_coordinator':
+        switchRole('institute_coordinator');
         setActiveView('institute');
         break;
       case 'student':
