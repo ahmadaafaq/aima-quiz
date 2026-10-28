@@ -20,6 +20,7 @@ const SUPABASE_SERVICE_ROLE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   'sb_publishable_RDIbw6a-RZItDzeY80ylwA_-7XGzb5V';
+const DB_SCHEMA = process.env.VITE_DB_SCHEMA || process.env.DB_SCHEMA || 'public';
 
 if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
   console.warn("WARNING: SUPABASE_SERVICE_ROLE_KEY is not set in environment. Falling back to default key.");
@@ -30,6 +31,7 @@ if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
 
 export const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
+  db: { schema: DB_SCHEMA },
 });
 
 export const app = express();
@@ -1061,11 +1063,18 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
         let instituteName = "";
 
         if (studentId || participantEmail) {
-          const { data: partRow } = await supabaseAdmin
+          const isStudentUuid = typeof studentId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(studentId);
+          let partQuery = supabaseAdmin
             .from("participants")
-            .select("registration_number, name, institute_name, email")
-            .or(`id.eq.${studentId},email.eq.${participantEmail || studentId}`)
-            .maybeSingle();
+            .select("registration_number, name, institute_name, email");
+
+          if (isStudentUuid) {
+            partQuery = partQuery.or(`id.eq.${studentId},email.eq.${participantEmail || studentId}`);
+          } else {
+            partQuery = partQuery.eq("email", participantEmail || studentId);
+          }
+
+          const { data: partRow } = await partQuery.maybeSingle();
 
           if (partRow) {
             regNum = partRow.registration_number || "";
@@ -1078,7 +1087,12 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
         if (regNum) {
           regQuery = regQuery.eq("registration_number", regNum);
         } else if (teamId) {
-          regQuery = regQuery.or(`registration_number.eq.${teamId},id.eq.${teamId}`);
+          const isTeamUuid = typeof teamId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(teamId);
+          if (isTeamUuid) {
+            regQuery = regQuery.or(`registration_number.eq.${teamId},id.eq.${teamId}`);
+          } else {
+            regQuery = regQuery.eq("registration_number", teamId);
+          }
         }
 
         const { data: regRows } = await regQuery.limit(1);
@@ -1127,6 +1141,38 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
     } catch (err: any) {
       console.error("Error in /api/quiz/submit:", err);
       return res.status(500).json({ error: "Failed to evaluate quiz: " + err.message });
+    }
+  });
+
+  // GET /api/quiz-programs: Fetch all quiz programs with live values strictly from quiz_programs table
+  app.get("/api/quiz-programs", async (_req: Request, res: Response) => {
+    try {
+      const { data: programs, error } = await supabaseAdmin
+        .from("quiz_programs")
+        .select("*")
+        .order("created_at", { ascending: false, nullsFirst: false });
+
+      if (error) {
+        return res.status(500).json({ error: "Failed to fetch quiz programs: " + error.message });
+      }
+
+      if (Array.isArray(programs)) {
+        for (const prog of programs) {
+          const totalMarks = Number(prog.total_marks || 100);
+          if (prog.passing_marks !== null && prog.passing_marks !== undefined && totalMarks > 0) {
+            const derivedCutoff = Math.round((Number(prog.passing_marks) / totalMarks) * 100);
+            if (derivedCutoff !== Number(prog.cutoff_score)) {
+              prog.cutoff_score = derivedCutoff;
+              await supabaseAdmin.from("quiz_programs").update({ cutoff_score: derivedCutoff }).eq("id", prog.id);
+            }
+          }
+        }
+      }
+
+      return res.json({ success: true, programs: programs || [] });
+    } catch (err: any) {
+      console.error("quiz-programs fetch error:", err);
+      return res.status(500).json({ error: "Server error: " + err.message });
     }
   });
 
@@ -1236,7 +1282,7 @@ Provide an advisory analysis as JSON matching the schema for jury evaluators. Th
             .update({ raw_data: { ...raw, programOverrides } })
             .eq("id", existingSys.id);
         }
-      } catch {}
+      } catch { }
 
       return res.json({ success: true, programId, isPublished: Boolean(isPublished) });
     } catch (err: any) {

@@ -131,6 +131,7 @@ export interface OfflineRoundResult {
   trackId?: string;
   trackName?: string;
   teamId: string;
+  registrationNumber?: string;
   teamName: string;
   instituteName: string;
   hubId?: RegionHubId;

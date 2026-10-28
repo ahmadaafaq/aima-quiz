@@ -186,10 +186,13 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
       const elem = document.documentElement;
       if (!document.fullscreenElement) {
         if (elem.requestFullscreen) {
-          elem.requestFullscreen().catch(() => {});
+          elem.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
         } else if ((elem as any).webkitRequestFullscreen) {
           (elem as any).webkitRequestFullscreen();
+          setIsFullscreen(true);
         }
+      } else {
+        setIsFullscreen(true);
       }
     } catch (e) {
       console.log('Fullscreen error:', e);
@@ -208,7 +211,9 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
       }
 
       if (document.fullscreenElement && document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
+        document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+      } else {
+        setIsFullscreen(false);
       }
     } catch (e) {
       console.log('Fullscreen exit error:', e);
@@ -218,18 +223,6 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
   const [isFullscreen, setIsFullscreen] = useState(() => {
     return typeof document !== 'undefined' ? Boolean(document.fullscreenElement) : false;
   });
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-    };
-  }, []);
 
   const initialSecondsRemaining = React.useMemo(() => {
     if (existingAttempt || isBeforeStart || isAfterEnd) return 0;
@@ -244,6 +237,46 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
   const [secondsRemaining, setSecondsRemaining] = useState(initialSecondsRemaining);
   const [isCompleted, setIsCompleted] = useState(false);
   const [finalAttempt, setFinalAttempt] = useState<QuizAttempt | null>(null);
+
+  // Track if user explicitly clicked 'Escape' key to exit fullscreen
+  const [showEscapeLockdownOverlay, setShowEscapeLockdownOverlay] = useState(false);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const inFullscreen = Boolean(document.fullscreenElement);
+      setIsFullscreen(inFullscreen);
+      if (inFullscreen) {
+        setShowEscapeLockdownOverlay(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  // Show lockdown overlay ONLY when candidate explicitly clicks/presses 'Escape' key
+  useEffect(() => {
+    if (!hasStartedQuiz || isCompleted) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || e.code === 'Escape') {
+        setShowEscapeLockdownOverlay(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [hasStartedQuiz, isCompleted]);
+
+  const resumeFullscreenFromOverlay = () => {
+    setShowEscapeLockdownOverlay(false);
+    enterFullscreen();
+  };
 
   // Resume immediately if an active session exists (prevents any modal/instruction screen on reload)
   useEffect(() => {
@@ -345,11 +378,14 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
     }
   }, [hasStartedQuiz, answers, markedForReview, currentIndex, isCompleted, existingAttempt, isProgramPaused, isBeforeStart, isAfterEnd, sessionKey, questions]);
 
-  // Tab switch anti-cheat monitoring
+  // Tab switch anti-cheat monitoring (with initial load buffer to prevent false alarms on refresh)
   useEffect(() => {
     if (!hasStartedQuiz || existingAttempt || isProgramPaused || isBeforeStart || isAfterEnd) return;
+    let isReady = false;
+    const readyTimer = setTimeout(() => { isReady = true; }, 1200);
+
     const handleVisibilityChange = () => {
-      if (document.hidden && !isCompleted) {
+      if (isReady && document.hidden && !isCompleted) {
         setTabSwitchCount(prev => {
           const next = prev + 1;
           setTabWarning(true);
@@ -358,7 +394,10 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      clearTimeout(readyTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [hasStartedQuiz, isCompleted, existingAttempt, isProgramPaused, isBeforeStart, isAfterEnd]);
 
   // Countdown timer
@@ -884,27 +923,52 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 4. Active Quiz Examination Workspace
+  // 4. Active Quiz Examination Workspace (Full-Screen Viewport Lockdown)
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-6xl mx-auto p-3 sm:p-6 space-y-4">
-      {/* Resumed / Non-fullscreen Lockdown Banner */}
-      {!isFullscreen && hasStartedQuiz && !isCompleted && (
-        <div className="bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 px-4 py-2.5 rounded-2xl flex items-center justify-between text-xs font-semibold shadow-xs animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <Maximize className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>Assessment lockdown active. Fullscreen mode is required during the examination.</span>
-          </div>
-          <button
-            type="button"
-            onClick={enterFullscreen}
-            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5 shrink-0"
+    <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-950 overflow-y-auto w-screen h-screen">
+      {/* Resumed / Escape Lockdown Overlay (Shown ONLY when candidate hits Escape key) */}
+      {showEscapeLockdownOverlay && !isCompleted && (
+        <div
+          onClick={resumeFullscreenFromOverlay}
+          className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer select-none animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              resumeFullscreenFromOverlay();
+            }}
+            className="max-w-md w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 text-center shadow-2xl space-y-5 animate-in zoom-in-95 duration-200"
           >
-            <Maximize className="w-3.5 h-3.5" />
-            <span>Resume Fullscreen</span>
-          </button>
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 mx-auto flex items-center justify-center shadow-inner">
+              <Maximize className="w-8 h-8 animate-pulse" />
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-black tracking-widest uppercase px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 font-mono">
+                Active Timed Assessment
+              </span>
+              <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-slate-100">
+                Fullscreen Exam Lockdown
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                Your timed assessment is in progress. Examination security protocol requires full-screen mode at all times until final submission.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={resumeFullscreenFromOverlay}
+              className="w-full py-3 px-5 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-amber-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+            >
+              <Maximize className="w-4 h-4" />
+              <span>Click Anywhere to Resume Fullscreen</span>
+            </button>
+          </div>
         </div>
       )}
+
+      <div className="max-w-6xl mx-auto p-3 sm:p-6 space-y-4">
 
       {/* Top Exam Header: Only Title and Timer */}
       <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
@@ -1295,6 +1359,7 @@ export const QuizTaker: React.FC<QuizTakerProps> = ({ onBack, programId }) => {
         </div>
       )}
 
+      </div>
     </div>
   );
 };

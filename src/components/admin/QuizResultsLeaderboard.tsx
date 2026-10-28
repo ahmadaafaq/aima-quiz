@@ -7,7 +7,9 @@ import {
   fetchProgramQuestionsOrdered,
   toggleQuizProgramPublication,
   saveJuryScorecardToDb,
+  fetchJuryEvaluationsFromDb,
 } from '../../lib/supabase';
+import { OFFICIAL_CASE_TRACKS } from '../../data/caseTracks';
 import {
   Trophy,
   Medal,
@@ -92,14 +94,6 @@ export const CASE_STUDY_KPIS = [
   },
 ] as const;
 
-export const PRESENTATION_TRACKS = [
-  'General Management & Corporate Strategy',
-  'Marketing, Brand & Consumer Growth',
-  'Financial Strategy, Valuation & Risk Governance',
-  'Operations, Supply Chain & Logistics',
-  'Human Capital, Leadership & Organizational Transformation',
-];
-
 interface QuizResultsLeaderboardProps {
   initialProgramId?: string;
 }
@@ -131,8 +125,25 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   }, []);
 
   const [selectedProgramId, setSelectedProgramId] = useState<string>(initialProgramId || 'all');
+
+  // Keep 'Case Competition – Stage 1' by default selected
+  useEffect(() => {
+    if ((!selectedProgramId || selectedProgramId === 'all') && quizPrograms && quizPrograms.length > 0) {
+      const stage1Prog = quizPrograms.find(
+        p =>
+          p.code === 'AIMA-CL26-S1-QZ' ||
+          p.id === 'prog_stage1_screening' ||
+          p.title?.toLowerCase().includes('stage 1') ||
+          p.title?.toLowerCase().includes('case competition')
+      );
+      if (stage1Prog) {
+        setSelectedProgramId(stage1Prog.id);
+      }
+    }
+  }, [quizPrograms, selectedProgramId]);
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'qualified' | 'disqualified' | 'violations'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'qualified' | 'disqualified'>('all');
   const [selectedAttemptForReview, setSelectedAttemptForReview] = useState<QuizAttempt | null>(null);
   const [modalQuestions, setModalQuestions] = useState<QuizQuestion[]>([]);
   const [isLoadingAttemptDetails, setIsLoadingAttemptDetails] = useState<boolean>(false);
@@ -144,6 +155,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
   // Expandable Team Accordion State
   const [expandedTeamIds, setExpandedTeamIds] = useState<Set<string>>(new Set());
+  const [activeSquadMembersModal, setActiveSquadMembersModal] = useState<any | null>(null);
 
   const toggleTeamAccordion = (teamId: string, e?: React.MouseEvent) => {
     if (e) {
@@ -175,7 +187,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     notes: string;
     attendanceVerified: boolean;
   }>({
-    track: PRESENTATION_TRACKS[0],
+    track: '',
     evaluatorName: 'AIMA National Jury Panel',
     problemIdentification: 0,
     caseQuestion1: 0,
@@ -189,6 +201,16 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   });
   const [isSavingJury, setIsSavingJury] = useState<boolean>(false);
   const [jurySaveFeedback, setJurySaveFeedback] = useState<{ userId: string; msg: string; isError?: boolean } | null>(null);
+  const [dbJuryEvaluations, setDbJuryEvaluations] = useState<any[]>([]);
+
+  // Fetch live jury evaluations from dedicated DB table
+  useEffect(() => {
+    fetchJuryEvaluationsFromDb('round_2').then(data => {
+      if (data && data.length > 0) {
+        setDbJuryEvaluations(data);
+      }
+    }).catch(err => console.warn('Could not load jury evaluations from DB:', err));
+  }, []);
 
   // Review Modal Compact View Toggle
   const [isCompactReview, setIsCompactReview] = useState<boolean>(true);
@@ -200,14 +222,62 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     teamId?: string;
     registrationNumber?: string;
     teamName?: string;
+    email?: string;
+    members?: any[];
   }) => {
-    return offlineRoundResults.find(
+    // 1. Direct check against live Supabase DB evaluations
+    const dbEval = dbJuryEvaluations.find(
+      d =>
+        (row.registrationNumber && d.registration_number === row.registrationNumber) ||
+        (row.teamId && d.team_id === row.teamId) ||
+        (row.email && d.candidate_email && d.candidate_email.toLowerCase() === row.email.toLowerCase().trim()) ||
+        (row.members && row.members.some((m: any) =>
+          (m.registrationNumber && d.registration_number === m.registrationNumber) ||
+          (m.email && d.candidate_email && d.candidate_email.toLowerCase() === m.email.toLowerCase().trim())
+        ))
+    );
+
+    const contextScorecard = offlineRoundResults.find(
       r =>
         (row.teamId && r.teamId === row.teamId) ||
         (row.registrationNumber && (r as any).registrationNumber === row.registrationNumber) ||
         (row.teamName && row.teamName !== 'Individual Entry' && r.teamName === row.teamName) ||
         r.teamId === row.userId
     );
+
+    if (dbEval) {
+      const kpiSum =
+        (Number(dbEval.problem_identification) || 0) +
+        (Number(dbEval.case_question_1) || 0) +
+        (Number(dbEval.case_question_2) || 0) +
+        (Number(dbEval.case_question_3) || 0) +
+        (Number(dbEval.strategic_alternatives) || 0) +
+        (Number(dbEval.execution_plan) || 0) +
+        (Number(dbEval.case_data_evidence) || 0);
+
+      const dbScore =
+        dbEval.total_score !== undefined && dbEval.total_score !== null && Number(dbEval.total_score) > 0
+          ? Number(dbEval.total_score)
+          : (kpiSum > 0 ? kpiSum : undefined);
+
+      if (dbScore !== undefined || dbEval.evaluated_at) {
+        return {
+          ...contextScorecard,
+          livePresentationScore: dbScore ?? contextScorecard?.livePresentationScore ?? 0,
+          presentationMaxMarks: 100,
+          trackName: dbEval.track_name || contextScorecard?.trackName || 'Track Assigned',
+          trackBadge: dbEval.track_badge || contextScorecard?.trackBadge,
+          trackId: dbEval.track_id || contextScorecard?.trackId,
+          masterCaseTitle: dbEval.master_case_title || contextScorecard?.masterCaseTitle,
+          attendanceVerified: dbEval.attendance_verified ?? contextScorecard?.attendanceVerified ?? true,
+          notes: dbEval.jury_feedback || contextScorecard?.notes || '',
+          qualifiedNextRound: dbEval.is_qualified ?? (dbScore ? dbScore >= 60 : false),
+          evaluatedBy: dbEval.evaluated_by || 'AIMA National Jury Panel',
+        };
+      }
+    }
+
+    return contextScorecard;
   };
 
   // Toggle the jury presentation accordion for a candidate/team (only enabled when round 1 results published)
@@ -225,23 +295,75 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       return;
     }
 
-    if (expandedJuryUserId === row.userId) {
+    const targetRowKey = (row as any).id || row.userId;
+    if (expandedJuryUserId === targetRowKey || expandedJuryUserId === row.userId) {
       setExpandedJuryUserId(null);
       return;
     }
 
+    // 1. Check live jury_evaluations table record from DB
+    const dbEval = dbJuryEvaluations.find(
+      d =>
+        (row.registrationNumber && d.registration_number === row.registrationNumber) ||
+        (row.teamId && d.team_id === row.teamId) ||
+        (row.email && d.candidate_email && d.candidate_email.toLowerCase() === row.email.toLowerCase().trim())
+    );
+
     const existing = getRowJuryScorecard(row);
-    const existingTrack =
+
+    const rawTrackId =
+      dbEval?.track_id ||
       row.userProfile?.selectedTrackId ||
       (row.userProfile as any)?.trackName ||
       (row as any).attemptData?.selectedTrackId ||
-      existing?.trackName ||
-      'General Management & Corporate Strategy';
+      existing?.trackId;
 
-    if (existing) {
+    const matchedOfficial = OFFICIAL_CASE_TRACKS.find(
+      t => t.id === rawTrackId || t.name.toLowerCase() === (dbEval?.track_name || rawTrackId || '').toLowerCase()
+    );
+
+    const resolvedTrackDisplayName = matchedOfficial
+      ? `${matchedOfficial.badge} • ${matchedOfficial.name}`
+      : (dbEval?.track_name || row.userProfile?.selectedTrackName || existing?.trackName || 'General Management & Corporate Strategy');
+
+    if (dbEval && (dbEval.total_score > 0 || dbEval.evaluated_at || dbEval.attendance_verified)) {
+      const rawPId = Number(dbEval.problem_identification) || 0;
+      const rawQ1 = Number(dbEval.case_question_1) || 0;
+      const rawQ2 = Number(dbEval.case_question_2) || 0;
+      const rawQ3 = Number(dbEval.case_question_3) || 0;
+      const rawStrat = Number(dbEval.strategic_alternatives) || 0;
+      const rawExec = Number(dbEval.execution_plan) || 0;
+      const rawDataEv = Number(dbEval.case_data_evidence) || 0;
+      const kpiSum = rawPId + rawQ1 + rawQ2 + rawQ3 + rawStrat + rawExec + rawDataEv;
+
+      const totalVal = Number(dbEval.total_score) || 0;
+
+      // If KPI fields are explicitly present, use them. If only total_score is known but KPI columns are 0, proportion them.
+      const pId = kpiSum > 0 ? rawPId : (totalVal > 0 ? Math.round(totalVal * 0.15) : 0);
+      const q1 = kpiSum > 0 ? rawQ1 : (totalVal > 0 ? Math.round(totalVal * 0.15) : 0);
+      const q2 = kpiSum > 0 ? rawQ2 : (totalVal > 0 ? Math.round(totalVal * 0.15) : 0);
+      const q3 = kpiSum > 0 ? rawQ3 : (totalVal > 0 ? Math.round(totalVal * 0.15) : 0);
+      const strat = kpiSum > 0 ? rawStrat : (totalVal > 0 ? Math.round(totalVal * 0.20) : 0);
+      const exec = kpiSum > 0 ? rawExec : (totalVal > 0 ? Math.round(totalVal * 0.15) : 0);
+      const dataEv = kpiSum > 0 ? rawDataEv : (totalVal > 0 ? Math.max(0, totalVal - (pId + q1 + q2 + q3 + strat + exec)) : 0);
+
+      setJuryFormData({
+        track: resolvedTrackDisplayName,
+        evaluatorName: dbEval.evaluated_by || 'AIMA National Jury Panel',
+        problemIdentification: pId,
+        caseQuestion1: q1,
+        caseQuestion2: q2,
+        caseQuestion3: q3,
+        strategicAlternatives: strat,
+        executionPlan: exec,
+        caseDataEvidence: dataEv,
+        notes: dbEval.jury_feedback || '',
+        attendanceVerified: dbEval.attendance_verified !== false,
+      });
+    } else if (existing) {
       const kpis = (existing as any).kpiScores || (existing as any).kpi_scores || {};
       setJuryFormData({
-        track: existing.trackName || existingTrack,
+        track: resolvedTrackDisplayName,
         evaluatorName: existing.evaluatedBy || 'AIMA National Jury Panel',
         problemIdentification: kpis.problemIdentification ?? (existing.livePresentationScore ? Math.round(existing.livePresentationScore * 0.15) : 0),
         caseQuestion1: kpis.caseQuestion1 ?? (existing.livePresentationScore ? Math.round(existing.livePresentationScore * 0.15) : 0),
@@ -255,7 +377,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       });
     } else {
       setJuryFormData({
-        track: existingTrack,
+        track: resolvedTrackDisplayName,
         evaluatorName: 'AIMA National Jury Panel',
         problemIdentification: 0,
         caseQuestion1: 0,
@@ -268,7 +390,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         attendanceVerified: true,
       });
     }
-    setExpandedJuryUserId(row.userId);
+    setExpandedJuryUserId((row as any).id || row.userId);
   };
 
   // Save the entered KPI scores for case study presentation to Database
@@ -305,11 +427,26 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         totalScore: total,
       };
 
-      const resolvedTrack =
+      const dbEval = dbJuryEvaluations.find(
+        d =>
+          (row.registrationNumber && d.registration_number === row.registrationNumber) ||
+          (row.teamId && d.team_id === row.teamId) ||
+          (row.email && d.candidate_email && d.candidate_email.toLowerCase() === row.email.toLowerCase().trim())
+      );
+
+      const rawTrackId =
+        dbEval?.track_id ||
         row.userProfile?.selectedTrackId ||
         (row.userProfile as any)?.trackName ||
-        juryFormData.track ||
-        'General Management & Corporate Strategy';
+        (row as any).attemptData?.selectedTrackId;
+
+      const matchedOfficial = OFFICIAL_CASE_TRACKS.find(
+        t => t.id === rawTrackId || t.name.toLowerCase() === (dbEval?.track_name || juryFormData.track || '').toLowerCase()
+      );
+
+      const resolvedTrack = matchedOfficial
+        ? `${matchedOfficial.badge} • ${matchedOfficial.name}`
+        : (juryFormData.track || 'General Management & Corporate Strategy');
 
       const scorecardPayload = {
         registrationNumber: row.registrationNumber || '',
@@ -319,7 +456,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         teamName: row.teamName || 'Team Entry',
         instituteName: row.instituteName || 'Management Institute',
         round: 'round_2' as const,
-        trackName: resolvedTrack,
+        trackId: matchedOfficial?.id || dbEval?.track_id || 'operations',
+        trackName: matchedOfficial?.name || dbEval?.track_name || resolvedTrack,
+        trackBadge: matchedOfficial?.badge || dbEval?.track_badge,
+        masterCaseTitle: matchedOfficial?.masterCaseTitle || dbEval?.master_case_title,
         offlineQuizScore: row.score,
         livePresentationScore: total,
         presentationMaxMarks: 100,
@@ -333,11 +473,49 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         kpiScores: kpiPayload,
       };
 
-      // 1. Persist directly to Supabase Database
+      // 1. Persist directly to Supabase Database (jury_evaluations table & registrations)
       const dbRes = await saveJuryScorecardToDb(scorecardPayload);
       if (!dbRes.success) {
         throw new Error(dbRes.error || 'Failed to update database record');
       }
+
+      // Update local dbJuryEvaluations state
+      setDbJuryEvaluations(prev => {
+        const item = {
+          registration_number: scorecardPayload.registrationNumber,
+          team_id: scorecardPayload.teamId,
+          candidate_email: scorecardPayload.candidateEmail,
+          track_id: scorecardPayload.trackId,
+          track_name: scorecardPayload.trackName,
+          track_badge: scorecardPayload.trackBadge,
+          master_case_title: scorecardPayload.masterCaseTitle,
+          problem_identification: pId,
+          case_question_1: q1,
+          case_question_2: q2,
+          case_question_3: q3,
+          strategic_alternatives: strat,
+          execution_plan: exec,
+          case_data_evidence: dataEv,
+          total_score: total,
+          attendance_verified: juryFormData.attendanceVerified,
+          jury_feedback: juryFormData.notes,
+          is_qualified: total >= 60,
+          evaluated_by: scorecardPayload.evaluatedBy,
+          evaluated_at: new Date().toISOString(),
+        };
+        const idx = prev.findIndex(
+          p =>
+            (item.registration_number && p.registration_number === item.registration_number) ||
+            (item.candidate_email && p.candidate_email && p.candidate_email.toLowerCase() === item.candidate_email.toLowerCase()) ||
+            (item.team_id && p.team_id === item.team_id)
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...item };
+          return next;
+        }
+        return [...prev, item];
+      });
 
       // 2. Persist to Context state so UI updates in real-time
       recordOfflineResultsBulk('round_2', [scorecardPayload]);
@@ -354,7 +532,22 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       });
       setTimeout(() => {
         setJurySaveFeedback(null);
-      }, 4000);
+      }, 5000);
+
+      // Automatically close accordion & smoothly scroll up with transition to show listing table
+      setExpandedJuryUserId(null);
+      const targetRowId = (row as any).id || row.userId;
+      setTimeout(() => {
+        const rowElem = document.getElementById(`row-${targetRowId}`) || document.getElementById(`row-${row.userId}`);
+        if (rowElem) {
+          rowElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          const tableElem = document.getElementById('leaderboard-table-container');
+          if (tableElem) {
+            tableElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      }, 120);
     } catch (err: any) {
       console.error('Error saving jury scorecard:', err);
       setJurySaveFeedback({
@@ -423,7 +616,12 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
+      await refreshQuizPrograms();
       await refreshQuizAttempts();
+      const freshEvals = await fetchJuryEvaluationsFromDb('round_2');
+      if (freshEvals && freshEvals.length > 0) {
+        setDbJuryEvaluations(freshEvals);
+      }
     } finally {
       setTimeout(() => setIsRefreshing(false), 500);
     }
@@ -432,18 +630,18 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   // Helper to normalize program status strictly depending on schedule window (matching QuizProgramManager)
   const getNormalizedStatus = (progStatus: string, startDate?: string, endDate?: string): 'active' | 'upcoming' | 'completed' | 'draft' | 'paused' => {
     if (progStatus === 'draft') return 'draft';
+    if (progStatus === 'paused') return 'paused';
 
-    const now = Date.now();
     const s = parseISTTimestamp(startDate);
     const e = parseISTTimestamp(endDate);
+    const now = Date.now();
 
     if (!isNaN(e) && now > e) return 'completed';
     if (!isNaN(s) && now < s) return 'upcoming';
-    if (!isNaN(s) && !isNaN(e) && now >= s && now <= e) return 'active';
-    if (!isNaN(s) && now >= s) return 'active';
+    if (!isNaN(s) && (!isNaN(e) ? now <= e : true) && now >= s) return 'active';
 
-    if (progStatus === 'live' || progStatus === 'active') return 'active';
     if (progStatus === 'completed') return 'completed';
+    if (progStatus === 'live' || progStatus === 'active') return 'active';
     return 'upcoming';
   };
 
@@ -483,15 +681,27 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       if (selectedProgram) {
         const totalMarks = selectedProgram.totalMarks || 100;
         const passingMarks = Math.round(totalMarks * (num / 100));
-        updateQuizProgram(selectedProgram.id, {
+
+        // 1. Immediately lock local cutoff input to the target value
+        setCutoffInput(String(num));
+
+        // 2. Persist to context and AWAIT the database update
+        await updateQuizProgram(selectedProgram.id, {
           cutoffScore: num,
           passingMarks: passingMarks,
         });
+
+        // 3. Keep master competition config aligned
+        updateConfig({ r1CutoffScore: num });
+
         addAuditLog(
           'Quiz Program Cutoff Configured',
           'Quiz',
           `Super Admin updated cutoff for "${selectedProgram.title}" to ${num}% (${passingMarks} pts)`
         );
+
+        // 4. Now safe to re-fetch freshly committed values from DB
+        await refreshQuizPrograms();
       }
       setCutoffSaveSuccess(true);
       setTimeout(() => setCutoffSaveSuccess(false), 2000);
@@ -512,7 +722,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     const nextState = !isResultsPublished;
 
     // 1. Context & Local Cache State
-    updateQuizProgram(selectedProgram.id, {
+    await updateQuizProgram(selectedProgram.id, {
       isResultsPublished: nextState,
       is_results_published: nextState,
     });
@@ -573,12 +783,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         timeTaken,
         tabSwitches,
         isCompleted: true,
+        isQualified: score >= effectiveCutoff,
         submittedAt: attempt.submittedAt || (attempt as any).submitted_at || (attempt as any).completedAt || (attempt as any).createdAt,
         attemptData: attempt,
         userProfile: user,
       };
     });
-  }, [relevantAttempts, users, teams, institutions]);
+  }, [relevantAttempts, users, teams, institutions, effectiveCutoff]);
 
   // 3. Group Leaderboard into Team Entries and Solo Entries
   const groupedLeaderboard = useMemo(() => {
@@ -743,6 +954,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         row.instituteName.toLowerCase().includes(q) ||
         (row.name && row.name.toLowerCase().includes(q)) ||
         (row.email && row.email.toLowerCase().includes(q)) ||
+        (row.userProfile?.selectedTrackName && row.userProfile.selectedTrackName.toLowerCase().includes(q)) ||
         row.members.some((m: any) =>
           m.name.toLowerCase().includes(q) ||
           m.email.toLowerCase().includes(q) ||
@@ -752,8 +964,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       const matchesStatus =
         filterStatus === 'all' ||
         (filterStatus === 'qualified' && row.isQualified) ||
-        (filterStatus === 'disqualified' && !row.isQualified) ||
-        (filterStatus === 'violations' && row.tabSwitches > 0);
+        (filterStatus === 'disqualified' && !row.isQualified);
 
       return matchesSearch && matchesStatus;
     });
@@ -772,32 +983,6 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     ? (selectedProgram.enrolledCount || 0)
     : (quizPrograms.reduce((acc, p) => acc + (p.enrolledCount || 0), 0) || users.length || 76);
 
-  // Modal computations: active row, program questions, and answer stats
-  const activeAttemptRow = useMemo(() => {
-    if (!selectedAttemptForReview) return null;
-    return (
-      enrichedLeaderboard.find(r => r.attemptData.attemptId === selectedAttemptForReview.attemptId) || {
-        userId: selectedAttemptForReview.studentId,
-        name: selectedAttemptForReview.candidateName || 'Candidate',
-        email: selectedAttemptForReview.participantEmail || 'N/A',
-        studentIdCardNumber: selectedAttemptForReview.registrationNumber,
-        registrationNumber: selectedAttemptForReview.registrationNumber || 'AIMA-CL26-00000',
-        instituteName: selectedAttemptForReview.instituteName || 'National Management Institute',
-        instituteCity: 'India',
-        teamName: 'Individual Entry',
-        teamId: selectedAttemptForReview.teamId,
-        score: selectedAttemptForReview.score,
-        analyticalScore: selectedAttemptForReview.analyticalScore,
-        timeTaken: selectedAttemptForReview.timeTakenSeconds,
-        tabSwitches: selectedAttemptForReview.tabSwitchCount,
-        isCompleted: selectedAttemptForReview.isCompleted,
-        isQualified: selectedAttemptForReview.score >= effectiveCutoff,
-        attemptData: selectedAttemptForReview,
-        userProfile: undefined,
-      }
-    );
-  }, [selectedAttemptForReview, enrichedLeaderboard, effectiveCutoff]);
-
   // Target Quiz Program for the active attempt (SINGLE SOURCE OF TRUTH)
   const modalProgram = useMemo(() => {
     if (!selectedAttemptForReview) return null;
@@ -807,9 +992,57 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
   const isNegativeMarking = Boolean(modalProgram?.negativeMarking);
   const negativeMarks = isNegativeMarking ? Number(modalProgram?.negativeMarksPerQuestion ?? 1) : 0;
-  const programCutoff = Number(modalProgram?.cutoffScore ?? 60);
+  const programCutoff = Number(modalProgram?.cutoffScore ?? effectiveCutoff ?? 60);
   const programTotalMarks = Number(modalProgram?.totalMarks ?? 100);
   const marksPerQuestion = Number(modalProgram?.marksPerQuestion ?? 4);
+
+  // Modal computations: active row, program questions, and answer stats
+  const activeAttemptRow = useMemo(() => {
+    if (!selectedAttemptForReview) return null;
+    const found = enrichedLeaderboard.find(r => r.attemptData.attemptId === selectedAttemptForReview.attemptId);
+
+    // Check if entry exists in groupedLeaderboard (handles both team and solo qualifications)
+    const matchingGrouped = groupedLeaderboard.find(g =>
+      g.isTeam
+        ? g.members?.some(m => m.attemptData.attemptId === selectedAttemptForReview.attemptId)
+        : (g.userId === (found?.userId || selectedAttemptForReview.studentId || selectedAttemptForReview.userId))
+    );
+
+    const score = Number(found?.score ?? selectedAttemptForReview.score ?? 0);
+    // Candidate qualifies if their score meets program cutoff, effective cutoff, or their team qualified
+    const isQualified = Boolean(
+      score >= programCutoff ||
+      score >= effectiveCutoff ||
+      (matchingGrouped && matchingGrouped.isQualified)
+    );
+
+    if (found) {
+      return {
+        ...found,
+        isQualified,
+      };
+    }
+
+    return {
+      userId: selectedAttemptForReview.studentId,
+      name: selectedAttemptForReview.candidateName || 'Candidate',
+      email: selectedAttemptForReview.participantEmail || 'N/A',
+      studentIdCardNumber: selectedAttemptForReview.registrationNumber,
+      registrationNumber: selectedAttemptForReview.registrationNumber || 'AIMA-CL26-00000',
+      instituteName: selectedAttemptForReview.instituteName || 'National Management Institute',
+      instituteCity: 'India',
+      teamName: 'Individual Entry',
+      teamId: selectedAttemptForReview.teamId,
+      score: selectedAttemptForReview.score,
+      analyticalScore: selectedAttemptForReview.analyticalScore,
+      timeTaken: selectedAttemptForReview.timeTakenSeconds,
+      tabSwitches: selectedAttemptForReview.tabSwitchCount,
+      isCompleted: selectedAttemptForReview.isCompleted,
+      isQualified,
+      attemptData: selectedAttemptForReview,
+      userProfile: undefined,
+    };
+  }, [selectedAttemptForReview, enrichedLeaderboard, groupedLeaderboard, programCutoff, effectiveCutoff]);
 
   const attemptQuestions = useMemo(() => {
     if (modalQuestions.length > 0) return modalQuestions;
@@ -1051,7 +1284,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
             {totalSubmissions > 0 ? `${passRate}%` : '0%'}
           </div>
           <div className="text-xs text-emerald-600 font-medium mt-1">
-            {qualifiedCount} qualified of {totalSubmissions} entries ({totalTeamEntries} teams • {totalSoloEntries} solo • {totalCandidateAttempts} attempts)
+            {qualifiedCount} qualified of {totalSubmissions} entries
           </div>
         </div>
       </div>
@@ -1094,7 +1327,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 overflow-x-auto overflow-y-hidden w-full lg:w-auto shrink-0 py-0.5">
-            {(['all', 'qualified', 'disqualified', 'violations'] as const).map(st => {
+            {(['all', 'qualified', 'disqualified'] as const).map(st => {
               const count =
                 st === 'all'
                   ? sortedLeaderboard.length
@@ -1215,19 +1448,36 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         </div>
       </div>
 
+      {/* Jury Evaluation Save Feedback Banner */}
+      {jurySaveFeedback && (
+        <div className={`p-4 rounded-2xl flex items-center justify-between gap-3 text-xs font-bold shadow-sm animate-in fade-in transition-all ${jurySaveFeedback.isError
+          ? 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30'
+          : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30'
+          }`}>
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{jurySaveFeedback.msg}</span>
+          </div>
+          <button
+            onClick={() => setJurySaveFeedback(null)}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Leaderboard Table */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
+      <div id="leaderboard-table-container" className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden scroll-mt-6">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table id="leaderboard-table" className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-bold uppercase tracking-wider">
                 <th className="py-3.5 px-4 text-center w-16">Rank</th>
                 <th className="py-3.5 px-4">Candidate / Team & B-School</th>
-                <th className="py-3.5 px-4">Affiliated Squad / Entry</th>
                 <th className="py-3.5 px-4 text-center">Screening Quiz (100)</th>
+                <th className="py-3.5 px-4 text-center">Chosen Case / Track</th>
                 <th className="py-3.5 px-4 text-center">Case Presentation (100)</th>
-                <th className="py-3.5 px-4 text-center">Time Taken</th>
-                <th className="py-3.5 px-4 text-center">Integrity Status</th>
                 <th className="py-3.5 px-4 text-center">Stage 2 Gate</th>
                 <th className="py-3.5 px-4 text-center w-48">Action</th>
               </tr>
@@ -1235,7 +1485,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-slate-400">
+                  <td colSpan={7} className="py-8 text-center text-slate-400">
                     {selectedProgram
                       ? `No evaluated attempts found for "${selectedProgram.title}".`
                       : 'No evaluated quiz attempts found matching criteria.'}
@@ -1245,11 +1495,40 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                 filteredList.map((row, idx) => {
                   const rank = idx + 1;
                   const isTop3 = rank <= 3;
-                  const minutes = Math.floor(row.timeTaken / 60);
-                  const seconds = row.timeTaken % 60;
                   const rowJuryResult = getRowJuryScorecard(row);
-                  const isExpanded = expandedJuryUserId === row.id;
+                  const isExpanded = expandedJuryUserId === row.id || expandedJuryUserId === row.userId;
                   const isTeamExpanded = expandedTeamIds.has(row.id);
+
+                  // Resolve Chosen / Selected Case for this candidate or team
+                  const rowDbEval = dbJuryEvaluations.find(
+                    d =>
+                      (row.registrationNumber && d.registration_number === row.registrationNumber) ||
+                      (row.teamId && d.team_id === row.teamId) ||
+                      (row.email && d.candidate_email && d.candidate_email.toLowerCase() === row.email.toLowerCase().trim()) ||
+                      (row.members && row.members.some((m: any) =>
+                        (m.registrationNumber && d.registration_number === m.registrationNumber) ||
+                        (m.email && d.candidate_email && d.candidate_email.toLowerCase() === m.email.toLowerCase().trim())
+                      ))
+                  );
+
+                  const rowContextTeam = teams.find(
+                    t => (row.teamId && t.id === row.teamId) || (row.teamName && t.name === row.teamName)
+                  );
+
+                  const rawTrackId =
+                    rowDbEval?.track_id ||
+                    rowContextTeam?.selectedTrackId ||
+                    row.userProfile?.selectedTrackId ||
+                    (row as any).attemptData?.selectedTrackId ||
+                    row.members?.find((m: any) => m.userProfile?.selectedTrackId)?.userProfile?.selectedTrackId;
+
+                  const matchedTrack = OFFICIAL_CASE_TRACKS.find(
+                    t => t.id === rawTrackId || t.name.toLowerCase() === (rowDbEval?.track_name || '').toLowerCase()
+                  );
+
+                  const trackDisplayBadge = matchedTrack?.badge || rowDbEval?.track_badge || (rawTrackId ? 'TRACK' : null);
+                  const trackDisplayName = matchedTrack?.name || rowDbEval?.track_name || rowContextTeam?.selectedTrackName || row.userProfile?.selectedTrackName;
+                  const masterCaseTitle = matchedTrack?.masterCaseTitle || rowDbEval?.master_case_title;
 
                   const liveFormTotal =
                     (Number(juryFormData.problemIdentification) || 0) +
@@ -1263,21 +1542,19 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                   return (
                     <React.Fragment key={row.id}>
                       <tr
+                        id={`row-${row.id}`}
                         onClick={() => {
                           if (row.isTeam) {
-                            toggleTeamAccordion(row.id);
+                            setActiveSquadMembersModal(row);
                           } else if (row.attemptData) {
                             handleOpenReview(row.attemptData);
                           }
                         }}
-                        className={`cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition group ${
-                          isTop3 ? 'bg-amber-500/5 dark:bg-amber-500/5' : ''
-                        } ${isExpanded ? 'bg-red-50/40 dark:bg-red-950/20' : ''} ${
-                          isTeamExpanded ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''
-                        }`}
+                        className={`cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition group ${isTop3 ? 'bg-amber-500/5 dark:bg-amber-500/5' : ''
+                          } ${isExpanded ? 'bg-red-50/40 dark:bg-red-950/20' : ''}`}
                         title={
                           row.isTeam
-                            ? 'Click to expand / collapse squad member attempts'
+                            ? 'Click anywhere on row to view squad members and attempt details'
                             : "Click anywhere on row to view candidate's attempted quiz details"
                         }
                       >
@@ -1348,34 +1625,6 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                           )}
                         </td>
 
-                        {/* Affiliated Squad / Entry */}
-                        <td className="py-3.5 px-4">
-                          {row.isTeam ? (
-                            <div>
-                              <button
-                                type="button"
-                                onClick={(e) => toggleTeamAccordion(row.id, e)}
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition border cursor-pointer ${
-                                  isTeamExpanded
-                                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
-                                }`}
-                              >
-                                <Users className="w-3.5 h-3.5" />
-                                <span>{isTeamExpanded ? 'Hide Squad' : `Show ${row.members.length} Members`}</span>
-                                {isTeamExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                              </button>
-                              <div className="text-[10px] text-slate-400 mt-1 truncate max-w-[150px]" title={row.members.map((m: any) => m.name).join(', ')}>
-                                {row.members.map((m: any) => m.name.split(' ')[0]).join(', ')}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="font-mono text-slate-400 text-xs">
-                              Individual Entry
-                            </span>
-                          )}
-                        </td>
-
                         {/* Screening Quiz Score */}
                         <td className="py-3.5 px-4 text-center">
                           <div className="font-black text-base text-slate-900 dark:text-white">
@@ -1392,58 +1641,73 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                           )}
                         </td>
 
+                        {/* Chosen / Selected Case */}
+                        <td className="py-3.5 px-4 text-center">
+                          {!row.isQualified ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700">
+                              Below Cutoff
+                            </span>
+                          ) : trackDisplayName ? (
+                            <div className="inline-flex flex-col items-center max-w-[210px] mx-auto text-left">
+                              <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                                {trackDisplayBadge && (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 shrink-0">
+                                    {trackDisplayBadge}
+                                  </span>
+                                )}
+                                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                                  {trackDisplayName}
+                                </span>
+                              </div>
+                              {masterCaseTitle && (
+                                <span
+                                  className="text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate max-w-[200px] mt-0.5"
+                                  title={masterCaseTitle}
+                                >
+                                  📌 {masterCaseTitle}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              <span>Pending Selection</span>
+                            </span>
+                          )}
+                        </td>
+
                         {/* Case Presentation (100) */}
                         <td className="py-3.5 px-4 text-center">
-                          {rowJuryResult?.livePresentationScore !== undefined ? (
-                            <div>
-                              <div className="font-black text-base text-emerald-600 dark:text-emerald-400">
-                                {rowJuryResult.livePresentationScore}
-                                <span className="text-[10px] text-slate-400 font-semibold ml-0.5">/100</span>
-                              </div>
-                              <div
-                                className="text-[10px] text-slate-500 font-medium truncate max-w-[130px] mx-auto"
-                                title={rowJuryResult.trackName}
-                              >
-                                {rowJuryResult.trackName?.split('&')[0]?.trim() || 'Track Assigned'}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
-                              Pending Jury
-                            </span>
-                          )}
-                        </td>
+                          {(() => {
+                            const dbScore =
+                              rowDbEval?.total_score !== undefined && rowDbEval?.total_score !== null && Number(rowDbEval.total_score) > 0
+                                ? Number(rowDbEval.total_score)
+                                : undefined;
+                            const presentationScore = rowJuryResult?.livePresentationScore ?? dbScore;
+                            const presentationTrackName = rowJuryResult?.trackName || rowDbEval?.track_name || matchedTrack?.name;
 
-                        {/* Time Taken */}
-                        <td className="py-3.5 px-4 text-center font-mono text-slate-600 dark:text-slate-300">
-                          <div>
-                            {minutes}m {seconds < 10 ? '0' : ''}{seconds}s
-                          </div>
-                          {row.isTeam && (
-                            <div className="text-[9px] text-slate-400 font-semibold mt-0.5">
-                              Avg / Member
-                            </div>
-                          )}
-                        </td>
-
-                        {/* Integrity */}
-                        <td className="py-3.5 px-4 text-center">
-                          {row.tabSwitches === 0 ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                              <ShieldCheck className="w-3 h-3" />
-                              Clean (0)
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-600 border border-red-500/20">
-                              <ShieldAlert className="w-3 h-3" />
-                              {row.tabSwitches} Switches
-                            </span>
-                          )}
-                          {row.isTeam && (
-                            <div className="text-[9px] text-slate-400 mt-0.5">
-                              Team Total
-                            </div>
-                          )}
+                            if (presentationScore !== undefined) {
+                              return (
+                                <div>
+                                  <div className="font-black text-base text-emerald-600 dark:text-emerald-400">
+                                    {presentationScore}
+                                    <span className="text-[10px] text-slate-400 font-semibold ml-0.5">/100</span>
+                                  </div>
+                                  <div
+                                    className="text-[10px] text-slate-500 font-medium truncate max-w-[130px] mx-auto"
+                                    title={presentationTrackName}
+                                  >
+                                    {presentationTrackName?.split('&')[0]?.trim() || 'Track Assigned'}
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                                Pending Jury
+                              </span>
+                            );
+                          })()}
                         </td>
 
                         {/* Qualification */}
@@ -1481,22 +1745,25 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                           >
                             {row.isTeam ? (
                               <button
-                                onClick={(e) => toggleTeamAccordion(row.id, e)}
-                                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs border cursor-pointer ${
-                                  isTeamExpanded
-                                    ? 'bg-blue-600 text-white border-blue-600'
-                                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-                                }`}
-                                title="Expand / collapse individual team member attempts"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveSquadMembersModal(row);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold text-xs border border-blue-200/80 dark:border-blue-800/80 transition shadow-2xs cursor-pointer"
+                                title="Click to view all squad members & attempt details in modal"
                               >
                                 <Users className="w-3.5 h-3.5" />
-                                <span>Members ({row.members.length})</span>
-                                {isTeamExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                <span>{row.members.length}</span>
                               </button>
                             ) : (
                               <button
-                                onClick={() => row.attemptData && handleOpenReview(row.attemptData)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition shadow-2xs cursor-pointer border border-slate-200 dark:border-slate-700"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (row.attemptData) handleOpenReview(row.attemptData);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition shadow-2xs cursor-pointer border border-slate-200 dark:border-slate-700"
                                 title="Inspect attempted questions & answers"
                               >
                                 <Eye className="w-3.5 h-3.5 text-slate-500" />
@@ -1510,15 +1777,14 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                 if (!isResultsPublished) return;
                                 handleToggleJuryAccordion(row);
                               }}
-                              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs border ${
-                                !isResultsPublished
-                                  ? 'opacity-45 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700'
-                                  : isExpanded
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition shadow-2xs border ${!isResultsPublished
+                                ? 'opacity-45 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700'
+                                : isExpanded
                                   ? 'bg-red-600 text-white border-red-600 ring-2 ring-red-400/30 cursor-pointer'
-                                  : rowJuryResult?.livePresentationScore !== undefined
-                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 cursor-pointer'
-                                  : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer'
-                              }`}
+                                  : (rowJuryResult?.livePresentationScore !== undefined || (rowDbEval?.total_score !== undefined && rowDbEval?.total_score !== null && Number(rowDbEval.total_score) > 0))
+                                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 cursor-pointer'
+                                    : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer'
+                                }`}
                               title={
                                 !isResultsPublished
                                   ? 'Publish Round 1 Online Quiz Results first to enable Stage 2 Case Study Presentation Jury evaluation'
@@ -1539,139 +1805,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                         </td>
                       </tr>
 
-                      {/* Expandable Squad Members Accordion (For Teams) */}
-                      {row.isTeam && isTeamExpanded && (
-                        <tr
-                          key={`${row.id}_team_members`}
-                          className="bg-slate-50/90 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800"
-                        >
-                          <td colSpan={9} className="p-3 sm:p-5">
-                            <div className="bg-white dark:bg-slate-800/95 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-4 sm:p-5 shadow-xs">
-                              {/* Accordion Header */}
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-3 border-b border-slate-100 dark:border-slate-700/60 gap-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
-                                    <Users className="w-4 h-4" />
-                                  </span>
-                                  <div>
-                                    <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                                      <span>{row.teamName} — Squad Member Submissions</span>
-                                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                                        {row.members.length} Completed {row.members.length === 1 ? 'Attempt' : 'Attempts'}
-                                      </span>
-                                    </h4>
-                                    <p className="text-[11px] text-slate-500 mt-0.5">
-                                      Stage 2 Gate governed by team cumulative average: <strong className={row.score >= effectiveCutoff ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}>{row.score}%</strong> (Cutoff Threshold: {effectiveCutoff}%)
-                                    </p>
-                                  </div>
-                                </div>
-                                
-                                <button
-                                  type="button"
-                                  onClick={(e) => toggleTeamAccordion(row.id, e)}
-                                  className="self-end sm:self-auto text-[11px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition flex items-center gap-1 cursor-pointer"
-                                >
-                                  <ChevronUp className="w-3.5 h-3.5" />
-                                  <span>Collapse Squad</span>
-                                </button>
-                              </div>
-
-                              {/* Members Grid */}
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {row.members.map((member: any, mIdx: number) => (
-                                  <div
-                                    key={member.userId || mIdx}
-                                    className="bg-slate-50/80 dark:bg-slate-900/60 rounded-xl p-3.5 border border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600 transition flex flex-col justify-between gap-3 shadow-2xs"
-                                  >
-                                    <div>
-                                      <div className="flex items-start justify-between gap-2">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-red-500 to-amber-500 text-white font-black text-xs flex items-center justify-center shrink-0 uppercase shadow-2xs">
-                                            {member.name.slice(0, 2)}
-                                          </div>
-                                          <div className="min-w-0">
-                                            <div className="text-xs font-bold text-slate-900 dark:text-white truncate flex items-center gap-1.5">
-                                              <span title={member.name}>{member.name}</span>
-                                              {member.isTeamLeader && (
-                                                <span className="text-[8px] font-black uppercase px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 shrink-0">
-                                                  Leader
-                                                </span>
-                                              )}
-                                            </div>
-                                            <div className="text-[10px] text-slate-400 font-mono truncate" title={member.email}>
-                                              {member.email}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      {/* Individual Marks & Stats */}
-                                      <div className="grid grid-cols-3 gap-1.5 mt-3 p-2 rounded-lg bg-white dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/50 text-center">
-                                        <div>
-                                          <div className="text-[9px] uppercase font-bold text-slate-400">Score</div>
-                                          <div className="text-xs font-black text-slate-900 dark:text-white mt-0.5">
-                                            {member.score}<span className="text-[9px] text-slate-400 font-normal">/100</span>
-                                          </div>
-                                        </div>
-                                        <div>
-                                          <div className="text-[9px] uppercase font-bold text-slate-400">Tie-Breaker</div>
-                                          <div className="text-xs font-bold text-amber-600 dark:text-amber-400 mt-0.5">
-                                            ⚡ {member.analyticalScore}<span className="text-[9px] text-slate-400 font-normal">/20</span>
-                                          </div>
-                                        </div>
-                                        <div>
-                                          <div className="text-[9px] uppercase font-bold text-slate-400">Time</div>
-                                          <div className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 mt-0.5">
-                                            {Math.floor(member.timeTaken / 60)}m {member.timeTaken % 60}s
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      {/* Integrity & Submitted timestamp */}
-                                      <div className="flex items-center justify-between text-[10px] text-slate-500 mt-2.5 px-0.5">
-                                        <div>
-                                          {member.tabSwitches === 0 ? (
-                                            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
-                                              <ShieldCheck className="w-3 h-3" /> Clean
-                                            </span>
-                                          ) : (
-                                            <span className="inline-flex items-center gap-1 text-red-500 font-bold">
-                                              <ShieldAlert className="w-3 h-3" /> {member.tabSwitches} switches
-                                            </span>
-                                          )}
-                                        </div>
-                                        {member.submittedAt && (
-                                          <div className="text-slate-400 text-[10px]">
-                                            {formatISTDateTime(member.submittedAt)}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    {/* View Attempt Button */}
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenReview(member.attemptData)}
-                                      className="w-full py-1.5 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200 dark:border-slate-600"
-                                    >
-                                      <Eye className="w-3.5 h-3.5 text-slate-500" />
-                                      <span>View Member Attempt</span>
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-
                       {/* Expandable Jury Presentation Evaluation Accordion */}
                       {isExpanded && (
                         <tr
                           key={`${row.id}_jury_accordion`}
                           className="bg-slate-50/95 dark:bg-slate-900/95 border-b-2 border-red-500/40"
                         >
-                          <td colSpan={9} className="p-4 sm:p-6">
+                          <td colSpan={7} className="p-4 sm:p-6">
                             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-md">
                               {/* Accordion Header Banner */}
                               <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 mb-4 border-b border-slate-200 dark:border-slate-700 gap-3">
@@ -1684,32 +1824,14 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                       Jury Scorecard: Evaluation of Case Study Presentation (100% Weightage)
                                     </h4>
                                   </div>
-                                  <p className="text-[11px] text-slate-500 mt-1 flex flex-wrap items-center gap-1.5">
-                                    <span>Team: <strong className="text-slate-800 dark:text-slate-200">{row.teamName}</strong></span>
-                                    <span>•</span>
-                                    <span>Candidate: <strong className="text-slate-800 dark:text-slate-200">{row.name}</strong> ({row.instituteName})</span>
-                                    <span className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold border border-blue-500/20 text-[10px]">
-                                      Track: {row.userProfile?.selectedTrackId || (row.userProfile as any)?.trackName || juryFormData.track || 'General Management & Corporate Strategy'}
-                                    </span>
-                                  </p>
                                 </div>
 
-                                {/* Live Auto-calculated Total Badge */}
-                                <div className="flex items-center gap-3">
-                                  <div className="text-right">
-                                    <div className="text-[10px] uppercase font-bold text-slate-400">Calculated Total</div>
-                                    <div className="text-xl font-black text-slate-900 dark:text-white">
-                                      <span className={liveFormTotal >= 60 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
-                                        {liveFormTotal}
-                                      </span>
-                                      <span className="text-xs text-slate-400 font-semibold ml-0.5">/ 100</span>
-                                    </div>
-                                  </div>
-                                  <div className={`px-2.5 py-1 rounded-xl text-xs font-bold uppercase tracking-wider ${liveFormTotal >= 60
-                                      ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                                      : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
-                                    }`}>
-                                    {liveFormTotal >= 60 ? 'Passing / Qualified' : 'Below 60'}
+                                {/* Live Auto-calculated Total */}
+                                <div className="text-right">
+                                  <div className="text-[10px] uppercase font-bold text-slate-400">Calculated Total</div>
+                                  <div className="text-xl font-black text-slate-900 dark:text-white">
+                                    <span>{liveFormTotal}</span>
+                                    <span className="text-xs text-slate-400 font-semibold ml-0.5">/ 100</span>
                                   </div>
                                 </div>
                               </div>
@@ -1810,8 +1932,8 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                     {/* Feedback Message */}
                                     {jurySaveFeedback && (jurySaveFeedback.userId === row.userId || jurySaveFeedback.userId === row.id) && (
                                       <div className={`text-xs font-bold mt-2 p-2 rounded-lg ${jurySaveFeedback.isError
-                                          ? 'bg-red-500/10 text-red-600 border border-red-500/20'
-                                          : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                                        ? 'bg-red-500/10 text-red-600 border border-red-500/20'
+                                        : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
                                         }`}>
                                         {jurySaveFeedback.msg}
                                       </div>
@@ -1861,6 +1983,183 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         </div>
       </div>
 
+      {/* Squad Members Modal (Triggered from Headcount / Members Button in ACTION Column) */}
+      {activeSquadMembersModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div
+            className="bg-white dark:bg-slate-900 w-full max-w-3xl max-h-[88vh] rounded-3xl shadow-[0_25px_70px_rgba(0,0,0,0.55)] border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden animate-in zoom-in-95"
+            role="dialog"
+            aria-modal="true"
+          >
+            {/* Modal Header */}
+            <div className="p-5 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white flex items-center justify-between shrink-0 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/20 flex items-center justify-center text-blue-300 shrink-0">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-400">
+                      {activeSquadMembersModal.registrationNumber || activeSquadMembersModal.teamId || 'TEAM ENTRY'}
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/30">
+                      {activeSquadMembersModal.members?.length || 1} {activeSquadMembersModal.members?.length === 1 ? 'Member' : 'Members'}
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2 mt-0.5">
+                    <span>{activeSquadMembersModal.teamName}</span>
+                    <span className="text-xs text-slate-300 font-normal">
+                      • {activeSquadMembersModal.instituteName}
+                    </span>
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveSquadMembersModal(null)}
+                className="w-8 h-8 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 flex items-center justify-center cursor-pointer transition-colors"
+                title="Close modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Subheader / Summary Cockpit */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+              <div className="flex items-center gap-4">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Team Score Avg</span>
+                  <div className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <span>{activeSquadMembersModal.score}%</span>
+                    <span className="text-[10px] text-slate-400 font-normal">({activeSquadMembersModal.score}/100)</span>
+                  </div>
+                </div>
+                <div className="h-6 w-px bg-slate-200 dark:bg-slate-700" />
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Stage 2 Cutoff</span>
+                  <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                    ≥ {effectiveCutoff}%
+                  </div>
+                </div>
+                <div className="h-6 w-px bg-slate-200 dark:bg-slate-700" />
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Qualification</span>
+                  <div className="mt-0.5">
+                    {activeSquadMembersModal.isQualified ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Qualified R2
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+                        Below Cutoff
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Body: Squad Member Cards */}
+            <div className="p-5 space-y-3 overflow-y-auto flex-1">
+              {activeSquadMembersModal.members?.map((member: any, mIdx: number) => (
+                <div
+                  key={member.userId || mIdx}
+                  className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs"
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-red-500 to-amber-500 text-white font-black text-sm flex items-center justify-center shrink-0 uppercase shadow-xs">
+                      {(member.name || 'MB').slice(0, 2)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-slate-900 dark:text-white truncate">
+                          {member.name}
+                        </span>
+                        {member.isTeamLeader && (
+                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                            Leader
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate mt-0.5">
+                        {member.email}
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1">
+                        {member.tabSwitches === 0 ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold">
+                            <ShieldCheck className="w-3 h-3" /> Clean
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-rose-500 font-semibold">
+                            <ShieldAlert className="w-3 h-3" /> {member.tabSwitches} tab switches
+                          </span>
+                        )}
+                        {member.submittedAt && (
+                          <span>Submitted: {formatISTDateTime(member.submittedAt)}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                    {/* Scores Box */}
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 text-center">
+                      <div>
+                        <div className="text-[9px] uppercase font-bold text-slate-400">Score</div>
+                        <div className="text-xs font-black text-slate-900 dark:text-white">
+                          {member.score}<span className="text-[9px] text-slate-400 font-normal">/100</span>
+                        </div>
+                      </div>
+                      <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
+                      <div>
+                        <div className="text-[9px] uppercase font-bold text-slate-400">Tie-Breaker</div>
+                        <div className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                          ⚡ {member.analyticalScore}<span className="text-[9px] text-slate-400 font-normal">/20</span>
+                        </div>
+                      </div>
+                      <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
+                      <div>
+                        <div className="text-[9px] uppercase font-bold text-slate-400">Time</div>
+                        <div className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">
+                          {Math.floor((member.timeTaken || 0) / 60)}m {(member.timeTaken || 0) % 60}s
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* View Attempt Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (member.attemptData) {
+                          handleOpenReview(member.attemptData);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+                      title="Inspect full attempted questions and answers"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>View</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 shrink-0">
+              <span>Showing {activeSquadMembersModal.members?.length || 1} member submissions for {activeSquadMembersModal.teamName}</span>
+              <button
+                type="button"
+                onClick={() => setActiveSquadMembersModal(null)}
+                className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Candidate Attempt Review Modal */}
       {selectedAttemptForReview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -1885,11 +2184,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                         {activeAttemptRow?.name || 'Candidate Attempt Review'}
                       </h3>
                       <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                          activeAttemptRow?.isQualified
-                            ? 'bg-emerald-500 text-white shadow-xs'
-                            : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/25'
-                        }`}
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${activeAttemptRow?.isQualified
+                          ? 'bg-emerald-500 text-white shadow-xs'
+                          : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/25'
+                          }`}
                       >
                         {activeAttemptRow?.isQualified ? (
                           <span>✓ Passed</span>
@@ -1995,21 +2293,18 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                     type="button"
                     onClick={() => setIsCompactReview(true)}
                     className={`px-3 py-1 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${isCompactReview
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
                       }`}
                   >
                     <span>Compact Mode</span>
-                    <span className="px-1.5 py-0.2 text-[9px] font-black bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 rounded">
-                      Decluttered
-                    </span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setIsCompactReview(false)}
                     className={`px-3 py-1 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${!isCompactReview
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
                       }`}
                   >
                     <span>Full 4-Option View</span>

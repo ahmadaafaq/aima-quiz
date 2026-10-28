@@ -113,48 +113,22 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
   const [allowReview, setAllowReview] = useState<boolean>(true);
   const [isSavingProgram, setIsSavingProgram] = useState<boolean>(false);
 
-  // Helper to normalize program status: explicit admin status takes precedence over date checks
+  // Helper to determine program status: purely dependent on start & end dates (single source of truth)
   const getNormalizedStatus = (progStatus: string, startDate?: string, endDate?: string): 'active' | 'upcoming' | 'completed' | 'draft' | 'paused' => {
     if (progStatus === 'draft') return 'draft';
-    if (progStatus === 'live' || progStatus === 'active') return 'active';
-    if (progStatus === 'completed') return 'completed';
-    if (progStatus === 'upcoming') return 'upcoming';
     if (progStatus === 'paused') return 'paused';
 
-    const now = Date.now();
     const s = parseISTTimestamp(startDate);
     const e = parseISTTimestamp(endDate);
+    const now = Date.now();
 
     if (!isNaN(e) && now > e) return 'completed';
     if (!isNaN(s) && now < s) return 'upcoming';
-    if (!isNaN(s) && !isNaN(e) && now >= s && now <= e) return 'active';
-    if (!isNaN(s) && now >= s) return 'active';
+    if (!isNaN(s) && (!isNaN(e) ? now <= e : true) && now >= s) return 'active';
 
+    if (progStatus === 'completed') return 'completed';
+    if (progStatus === 'live' || progStatus === 'active') return 'active';
     return 'upcoming';
-  };
-
-  const [statusChangeFeedback, setStatusChangeFeedback] = useState<{ id: string; status: string } | null>(null);
-
-  const handleDirectStatusChange = async (prog: QuizProgram, newStatus: 'upcoming' | 'live' | 'completed') => {
-    setStatusChangeFeedback({ id: prog.id, status: newStatus });
-    setTimeout(() => setStatusChangeFeedback(null), 3500);
-
-    const isPub = prog.isResultsPublished !== undefined ? prog.isResultsPublished : (prog as any).is_results_published;
-    updateQuizProgram(prog.id, {
-      status: newStatus,
-      isResultsPublished: isPub,
-      is_results_published: isPub,
-    });
-
-    addAuditLog(
-      'Quiz Status Updated',
-      'Quiz',
-      `Super Admin changed status of "${prog.title}" to ${newStatus.toUpperCase()}`
-    );
-
-    try {
-      await refreshQuizPrograms();
-    } catch {}
   };
 
   const openCreateModal = () => {
@@ -592,52 +566,27 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                       <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">
                         {prog.code || 'AIMA-QZ'}
                       </span>
-                      {/* Direct One-Click Status Controls */}
-                      <div className="inline-flex items-center p-0.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs">
-                        <button
-                          type="button"
-                          onClick={() => handleDirectStatusChange(prog, 'upcoming')}
-                          className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                            normStatus === 'upcoming'
-                              ? 'bg-blue-600 text-white shadow-xs'
-                              : 'text-slate-500 hover:text-blue-600 dark:hover:text-blue-400'
-                          }`}
-                          title="Set status to UPCOMING"
-                        >
+                      {/* Date-driven Dynamic Status Badge */}
+                      {normStatus === 'active' ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white shadow-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                          Live
+                        </span>
+                      ) : normStatus === 'upcoming' ? (
+                        <span className="inline-flex items-center px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-600 text-white shadow-xs">
                           Upcoming
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDirectStatusChange(prog, 'live')}
-                          className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 ${
-                            normStatus === 'active' || prog.status === 'live'
-                              ? 'bg-emerald-600 text-white shadow-xs'
-                              : 'text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400'
-                          }`}
-                          title="Set status to LIVE (Accessible immediately to candidates)"
-                        >
-                          {(normStatus === 'active' || prog.status === 'live') && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          )}
-                          <span>Live</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDirectStatusChange(prog, 'completed')}
-                          className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                            normStatus === 'completed' || prog.status === 'completed'
-                              ? 'bg-purple-600 text-white shadow-xs'
-                              : 'text-slate-500 hover:text-purple-600 dark:hover:text-purple-400'
-                          }`}
-                          title="Set status to COMPLETED"
-                        >
+                        </span>
+                      ) : normStatus === 'completed' ? (
+                        <span className="inline-flex items-center px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-600 text-white shadow-xs">
                           Completed
-                        </button>
-                      </div>
-
-                      {statusChangeFeedback?.id === prog.id && (
-                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
-                          ✓ Set to {statusChangeFeedback.status.toUpperCase()}
+                        </span>
+                      ) : normStatus === 'draft' ? (
+                        <span className="inline-flex items-center px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                          Draft
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                          Paused
                         </span>
                       )}
                       <span className="text-[10px] font-bold text-slate-400 uppercase">
@@ -692,10 +641,7 @@ export const QuizProgramManager: React.FC<QuizProgramManagerProps> = ({
                   <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60">
                     <span className="text-[10px] text-slate-400 font-semibold block">Duration & Marks</span>
                     <span className="font-bold text-slate-900 dark:text-white mt-0.5 block">
-                      {prog.durationMinutes || 45}m • {prog.totalMarks || 100} pts
-                      <span className="text-[10px] text-slate-500 font-normal ml-1">
-                        ({prog.marksPerQuestion ?? Math.round(Number(prog.totalMarks || 100) / Math.max(1, Number(prog.totalQuestions || 25)))}m/q)
-                      </span>
+                      {prog.durationMinutes}m • {prog.totalMarks || 100} pts
                     </span>
                   </div>
                   <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60">
