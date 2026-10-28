@@ -276,26 +276,41 @@ function getRegistrationConfirmationEmail(p: {
             </tr>
           </table>
 
-          <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed #cbd5e1; font-size: 13px; line-height: 1.6; color: #334155; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-            <strong style="color: #0f172a; display: block; margin-bottom: 4px; font-size: 13px;">Venue:</strong>
-            ICFAI Business School (IBS), Bengaluru<br/>
-            ICFAI Foundation for Higher Education (IFHE)<br/>
-            #231, Near Check Post, Mysore Road,<br/>
-            Kengeri, Bengaluru – 560060, Karnataka
-          </div>
+          <!-- Prominently Highlighted Venue Address Card -->
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top: 16px; background-color: #fefce8; border: 2px solid #eab308; border-radius: 8px;">
+            <tr>
+              <td style="padding: 16px 18px;">
+                <div style="font-size: 12px; font-weight: 800; color: #854d0e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">
+                  📍 OFFICIAL COMPETITION VENUE (PLEASE NOTE THE VENUE ADDRESS)
+                </div>
+                <div style="font-size: 17px; font-weight: 800; color: #0f172a; line-height: 1.4; margin-bottom: 4px;">
+                  ICFAI Business School (IBS), Bengaluru
+                </div>
+                <div style="font-size: 14px; font-weight: 700; color: #1e3a8a; margin-bottom: 8px;">
+                  ICFAI Foundation for Higher Education (IFHE)
+                </div>
+                <div style="font-size: 14px; font-weight: 600; color: #1e293b; line-height: 1.5; margin-bottom: 14px; background-color: #ffffff; padding: 10px 14px; border-radius: 6px; border: 1px solid #fde047;">
+                  🏢 <strong>#231, Near Check Post, Mysore Road, Kengeri, Bengaluru – 560060, Karnataka</strong>
+                </div>
 
-          <!-- Google Calendar Button -->
-          <div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed #cbd5e1;">
-            <table cellpadding="0" cellspacing="0" border="0">
-              <tr>
-                <td style="border-radius: 6px; background-color: #ffffff; border: 1.5px solid #2563eb;">
-                  <a href="${gcalUrl}" target="_blank" style="display: inline-block; padding: 7px 16px; color: #2563eb !important; font-size: 13px; font-weight: 700; text-decoration: none; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                    <span style="color: #2563eb !important;">📅 Add to Google Calendar</span>
-                  </a>
-                </td>
-              </tr>
-            </table>
-          </div>
+                <!-- Action Links (Maps & Calendar) -->
+                <table cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="padding-right: 10px; padding-bottom: 6px;">
+                      <a href="https://maps.google.com/?q=ICFAI+Business+School+IBS+Bengaluru+Kengeri+Check+Post+Mysore+Road" target="_blank" style="display: inline-block; background-color: #1e40af; color: #ffffff !important; padding: 8px 16px; border-radius: 6px; font-size: 12.5px; font-weight: 700; text-decoration: none; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                        <span style="color: #ffffff !important;">🗺️ Open in Google Maps &rarr;</span>
+                      </a>
+                    </td>
+                    <td style="padding-bottom: 6px;">
+                      <a href="${gcalUrl}" target="_blank" style="display: inline-block; background-color: #ffffff; border: 1.5px solid #2563eb; color: #2563eb !important; padding: 7px 14px; border-radius: 6px; font-size: 12.5px; font-weight: 700; text-decoration: none; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                        <span style="color: #2563eb !important;">📅 Add to Google Calendar</span>
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
 
         </td>
       </tr>
@@ -418,7 +433,24 @@ function getRegistrationConfirmationEmail(p: {
     `
   );
 
-  const text = `Dear ${participantName},\n\nGreetings from AIMA–India Case Research Centre (ICRC)!\n\nWe are delighted to welcome you to the AIMA–ICRC India Case League 2026 – South Zone Student Case Competition, being organised in collaboration with ICFAI Business School (IBS), Bengaluru, on Thursday, 29 October 2026.\n\nThank you for registering for this exciting initiative. The India Case League aims to bring students together to apply classroom learning to real-world business challenges, demonstrate analytical and decision-making abilities, and present innovative solutions before an academic and industry jury.\n\nWe look forward to your enthusiastic participation in this day-long competition.\n\nYOUR PARTICIPANT PORTAL LOGIN CREDENTIALS:\nPortal Login Link: ${loginPageUrl}\nUsername / Email: ${username}\nPassword: ${password}\nRegistration Ref: ${p.regNumber}\n${isSolo ? 'Track: Solo / Individual' : 'Team: ' + p.teamName}\nInstitution: ${p.instituteName}\n${p.roleInTeam ? 'Role in Team: ' + p.roleInTeam + '\n' : ''}\nVENUE AND REPORTING DETAILS:\nDate: Thursday, 29 October 2026\nReporting Time: 9:00 AM\nProgramme Duration: 9:00 AM – 6:00 PM\n\nVenue:\nICFAI Business School (IBS), Bengaluru\nICFAI Foundation for Higher Education (IFHE)\n#231, Near Check Post, Mysore Road,\nKengeri, Bengaluru – 560060, Karnataka\n\nGoogle Calendar Link: ${gcalUrl}\n\nTENTATIVE PROGRAMME SCHEDULE:\n9:00 – 10:00 AM: Registration and Welcome\n10:00 – 10:30 AM: Competition Briefing and Rules\n10:45 – 11:15 AM: National Online Business & Case Quiz\n11:30 – 11:40 AM: Case Distribution and Instructions\n11:40 – 1:00 PM: Case Preparation\n1:00 – 1:30 PM: Lunch Break\n1:30 – 4:00 PM: Case Analysis, Presentations and Jury Interaction\n4:15 – 5:30 PM: Results and Felicitation\n(The programme timings may be adjusted slightly by the organisers to facilitate the smooth conduct of the competition.)\n\nIMPORTANT INSTRUCTIONS FOR PARTICIPANTS:\n- Carry your laptop: Every participating team must bring laptops, preferably with fully charged batteries and charging adapters, for the quiz, case analysis and preparation of presentations.\n- Carry your institute identity card: All participants must carry a valid student identity card issued by their respective institution for verification during registration.\n- Report on time: Participants are requested to reach the venue by 9:00 AM to complete registration and attend the competition briefing.\n- Full-day participation: This is a complete day-long competition. All participants are expected to remain available until the conclusion of the results and felicitation session at approximately 6:00 PM.\n- Follow competition guidelines: Teams must adhere to the instructions communicated during the briefing, including the rules governing the use of case materials, preparation of presentations and interaction with the jury.\n\nHOSPITALITY ARRANGEMENTS:\nComplimentary refreshments, snacks and lunch will be provided to all registered participants during the programme.\n\nWe encourage you to come prepared for a stimulating day of learning, teamwork, competition and interaction with fellow management students.\n\nWe sincerely appreciate the support of ICFAI Business School, Bengaluru, in hosting the South Zone competition.\n\nWe wish you and your team a rewarding experience and look forward to welcoming you on 29 October 2026.\n\nFrom Classrooms to Boardrooms. From Ideas to National Impact.\n\nWarm regards,\nTeam AIMA–ICRC\nIndia Case Research Centre\nAll India Management Association (AIMA)\nNew Delhi\n\nDisclaimer: This email is intended solely for the named recipient. If you received it by mistake, please inform the sender, delete it, and refrain from using, forwarding, or disclosing its contents or attachments.`;
+  const text = `Dear ${participantName},\n\nGreetings from AIMA–India Case Research Centre (ICRC)!\n\nWe are delighted to welcome you to the AIMA–ICRC India Case League 2026 – South Zone Student Case Competition, being organised in collaboration with ICFAI Business School (IBS), Bengaluru, on Thursday, 29 October 2026.\n\nThank you for registering for this exciting initiative. The India Case League aims to bring students together to apply classroom learning to real-world business challenges, demonstrate analytical and decision-making abilities, and present innovative solutions before an academic and industry jury.\n\nWe look forward to your enthusiastic participation in this day-long competition.\n\nYOUR PARTICIPANT PORTAL LOGIN CREDENTIALS:\nPortal Login Link: ${loginPageUrl}\nUsername / Email: ${username}\nPassword: ${password}\nRegistration Ref: ${p.regNumber}\n${isSolo ? 'Track: Solo / Individual' : 'Team: ' + p.teamName}\nInstitution: ${p.instituteName}\n${p.roleInTeam ? 'Role in Team: ' + p.roleInTeam + '\n' : ''}\nVENUE AND REPORTING DETAILS:
+Date: Thursday, 29 October 2026
+Reporting Time: 9:00 AM
+Programme Duration: 9:00 AM – 6:00 PM
+
+======================================================================
+📍 OFFICIAL COMPETITION VENUE (PLEASE NOTE THE VENUE ADDRESS):
+ICFAI Business School (IBS), Bengaluru
+ICFAI Foundation for Higher Education (IFHE)
+#231, Near Check Post, Mysore Road, Kengeri,
+Bengaluru – 560060, Karnataka
+
+🗺️ Google Maps Location:
+https://maps.google.com/?q=ICFAI+Business+School+IBS+Bengaluru+Kengeri+Check+Post+Mysore+Road
+
+📅 Add to Google Calendar:
+${gcalUrl}
+======================================================================\n\nTENTATIVE PROGRAMME SCHEDULE:\n9:00 – 10:00 AM: Registration and Welcome\n10:00 – 10:30 AM: Competition Briefing and Rules\n10:45 – 11:15 AM: National Online Business & Case Quiz\n11:30 – 11:40 AM: Case Distribution and Instructions\n11:40 – 1:00 PM: Case Preparation\n1:00 – 1:30 PM: Lunch Break\n1:30 – 4:00 PM: Case Analysis, Presentations and Jury Interaction\n4:15 – 5:30 PM: Results and Felicitation\n(The programme timings may be adjusted slightly by the organisers to facilitate the smooth conduct of the competition.)\n\nIMPORTANT INSTRUCTIONS FOR PARTICIPANTS:\n- Carry your laptop: Every participating team must bring laptops, preferably with fully charged batteries and charging adapters, for the quiz, case analysis and preparation of presentations.\n- Carry your institute identity card: All participants must carry a valid student identity card issued by their respective institution for verification during registration.\n- Report on time: Participants are requested to reach the venue by 9:00 AM to complete registration and attend the competition briefing.\n- Full-day participation: This is a complete day-long competition. All participants are expected to remain available until the conclusion of the results and felicitation session at approximately 6:00 PM.\n- Follow competition guidelines: Teams must adhere to the instructions communicated during the briefing, including the rules governing the use of case materials, preparation of presentations and interaction with the jury.\n\nHOSPITALITY ARRANGEMENTS:\nComplimentary refreshments, snacks and lunch will be provided to all registered participants during the programme.\n\nWe encourage you to come prepared for a stimulating day of learning, teamwork, competition and interaction with fellow management students.\n\nWe sincerely appreciate the support of ICFAI Business School, Bengaluru, in hosting the South Zone competition.\n\nWe wish you and your team a rewarding experience and look forward to welcoming you on 29 October 2026.\n\nFrom Classrooms to Boardrooms. From Ideas to National Impact.\n\nWarm regards,\nTeam AIMA–ICRC\nIndia Case Research Centre\nAll India Management Association (AIMA)\nNew Delhi\n\nDisclaimer: This email is intended solely for the named recipient. If you received it by mistake, please inform the sender, delete it, and refrain from using, forwarding, or disclosing its contents or attachments.`;
 
   return { subject, html, text };
 }

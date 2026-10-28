@@ -34,13 +34,30 @@ interface RecipientTask {
   roleInTeam: string;
 }
 
+function decodeStoredPassword(hash?: string): string | null {
+  if (hash && hash.startsWith("aima_")) {
+    try {
+      return Buffer.from(hash.slice(5), "base64").toString("utf-8");
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function generateDefaultPassword(name: string, mobile: string): string {
+  const first = (name || "participant").trim().split(" ")[0].toLowerCase();
+  const last4 = (mobile || "0000").replace(/\D/g, "").slice(-4);
+  return `${first}@${last4}#AIMA2026`;
+}
+
 export async function collectRecipients(): Promise<{
   recipients: RecipientTask[];
   registrations: any[];
 }> {
   const { data: registrations, error } = await supabase
     .from("registrations")
-    .select("id, registration_number, registration_mode, candidate_name, candidate_email, candidate_phone, team_name, institute_name, nominees, raw_data")
+    .select("id, registration_number, registration_mode, candidate_name, candidate_email, candidate_phone, coordinator_name, coordinator_email, coordinator_phone, team_name, institute_name, nominees, raw_data")
     .neq("registration_number", "AIMA_SYSTEM_QUIZ_CONFIG")
     .order("created_at", { ascending: true });
 
@@ -48,7 +65,20 @@ export async function collectRecipients(): Promise<{
     throw new Error(`Failed to fetch registrations: ${error.message}`);
   }
 
+  // Fetch all participants to resolve authoritative passwords from password_hash
+  const { data: participants } = await supabase
+    .from("participants")
+    .select("email, name, password_hash, is_team_leader, program");
+  
+  const partMap = new Map<string, any>();
+  for (const p of participants || []) {
+    if (p.email) {
+      partMap.set(p.email.toLowerCase().trim(), p);
+    }
+  }
+
   const recipients: RecipientTask[] = [];
+  const seenEmails = new Set<string>();
 
   for (const reg of registrations || []) {
     const rawData = reg.raw_data || {};
@@ -76,17 +106,22 @@ export async function collectRecipients(): Promise<{
 
     if (nominees.length === 0) {
       // Solo candidate without explicit nominee array
-      const cEmail =
+      const cEmail = (
         reg.candidate_email ||
         rawData.candidate_email ||
-        rawData.coordinator?.email;
+        rawData.coordinator?.email
+      )?.trim()?.toLowerCase();
       const cName =
         reg.candidate_name ||
         rawData.candidate_name ||
         rawData.coordinator?.name ||
         "Participant";
 
-      if (cEmail && cEmail.includes("@")) {
+      if (cEmail && cEmail.includes("@") && !cEmail.includes("@.") && !seenEmails.has(cEmail)) {
+        seenEmails.add(cEmail);
+        const p = partMap.get(cEmail);
+        const decoded = p ? decodeStoredPassword(p.password_hash) : null;
+
         recipients.push({
           registrationId: reg.id,
           registrationNumber: reg.registration_number,
@@ -94,17 +129,20 @@ export async function collectRecipients(): Promise<{
           teamName,
           isIndividual: true,
           toName: cName,
-          toEmail: cEmail.trim().toLowerCase(),
-          password: defaultPassword,
+          toEmail: cEmail,
+          password: decoded || defaultPassword,
           roleInTeam: "Individual Candidate",
         });
       }
     } else {
       for (const nom of nominees) {
         const nomEmail = (nom.email || "").trim().toLowerCase();
-        if (!nomEmail || !nomEmail.includes("@")) continue;
+        if (!nomEmail || !nomEmail.includes("@") || nomEmail.includes("@.") || seenEmails.has(nomEmail)) continue;
+        seenEmails.add(nomEmail);
 
-        const nomPass = nom.password || defaultPassword;
+        const p = partMap.get(nomEmail);
+        const decoded = p ? decodeStoredPassword(p.password_hash) : null;
+        const nomPass = decoded || nom.password || generateDefaultPassword(nom.name || "participant", nom.mobile || "") || defaultPassword;
         const nomName = nom.name || "Participant";
         const role = nom.isTeamLeader
           ? "Team Leader"
@@ -124,6 +162,41 @@ export async function collectRecipients(): Promise<{
           roleInTeam: role,
         });
       }
+    }
+
+    // Also include institutional coordinator with coordinator username & password
+    const coordEmail = (
+      reg.coordinator_email ||
+      rawData.coordinator?.email ||
+      (reg.registration_mode === "institute" ? reg.candidate_email : null)
+    )?.trim()?.toLowerCase();
+    const coordName =
+      reg.coordinator_name ||
+      rawData.coordinator?.name ||
+      reg.candidate_name;
+    const coordPhone =
+      reg.coordinator_phone ||
+      rawData.coordinator?.phone ||
+      reg.candidate_phone ||
+      "";
+
+    if (coordEmail && coordEmail.includes("@") && !coordEmail.includes("@.") && !seenEmails.has(coordEmail)) {
+      seenEmails.add(coordEmail);
+      const p = partMap.get(coordEmail);
+      const decoded = p ? decodeStoredPassword(p.password_hash) : null;
+      const fallbackPw = generateDefaultPassword(coordName || "coordinator", coordPhone);
+
+      recipients.push({
+        registrationId: reg.id,
+        registrationNumber: reg.registration_number,
+        instituteName: instName,
+        teamName,
+        isIndividual: false,
+        toName: coordName || "Faculty / Institutional Coordinator",
+        toEmail: coordEmail,
+        password: decoded || fallbackPw,
+        roleInTeam: "Faculty / Institutional Coordinator",
+      });
     }
   }
 
