@@ -223,7 +223,13 @@ export const StudentDashboard: React.FC = () => {
     : currentTeam?.r2Submission;
 
   const myCert = Array.isArray(certificates)
-    ? certificates.find(c => c.recipientId === currentUser.id || c.teamName === currentTeam?.name)
+    ? certificates.find(
+        c =>
+          c.recipientId === currentUser.id ||
+          (currentUser.email && c.recipientEmail?.toLowerCase() === currentUser.email?.toLowerCase()) ||
+          (currentTeam?.name && c.teamName?.toLowerCase() === currentTeam.name.toLowerCase()) ||
+          (currentTeam?.id && c.teamId === currentTeam.id)
+      )
     : undefined;
 
   const assignedHubId = currentTeam?.assignedHub || currentUser.assignedHub || 'north';
@@ -1759,6 +1765,42 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
           </div>
         </div>
       </div>
+
+      {/* Official Certificate Announcement Banner */}
+      {myCert && (
+        <div className="rounded-3xl p-5 sm:p-6 bg-gradient-to-r from-amber-500/15 via-blue-500/10 to-emerald-500/15 border-2 border-amber-500/40 dark:border-amber-400/30 shadow-lg relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex items-start sm:items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white shrink-0 shadow-md">
+              <Award className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-black tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30">
+                  {myCert.achievement}
+                </span>
+                <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                  ID: {myCert.certificateNumber}
+                </span>
+              </div>
+              <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white mt-1">
+                Official Credential Issued: {myCert.achievement}
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                Conferred to <strong>{myCert.recipientName || myCert.teamName}</strong> ({myCert.institute}) for India Case League 2026.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5 self-start md:self-auto shrink-0">
+            <button
+              onClick={() => setActiveCertificateModal(myCert)}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <Award className="w-4 h-4" />
+              <span>View &amp; Print Official Certificate</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Two Column Section: Team Formation / Candidate Credentials & Stage Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

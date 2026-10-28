@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useCompetition } from '../../context/CompetitionContext';
-import { QuizAttempt, UserProfile, QuizQuestion } from '../../types';
+import { QuizAttempt, UserProfile, QuizQuestion, CertificateRecord } from '../../types';
 import { parseISTTimestamp, formatISTDateTime } from '../../lib/formatters';
 import {
   fetchQuizAttemptById,
@@ -38,6 +38,7 @@ import {
   BookOpen,
   Building2,
   Mail,
+  Send,
   Sparkles,
   AlertCircle,
   GraduationCap,
@@ -117,6 +118,9 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     addAuditLog,
     offlineRoundResults,
     recordOfflineResultsBulk,
+    certificates,
+    publishOfficialCertificates,
+    setActiveCertificateModal,
   } = useCompetition();
 
   useEffect(() => {
@@ -1003,6 +1007,156 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     });
   }, [leaderboardWithCombinedScores, rankingMode]);
 
+  // Certificate Publishing & Dispatch Cockpit States
+  const [showCertificateCockpit, setShowCertificateCockpit] = useState<boolean>(false);
+  const [selectionTopPercentage, setSelectionTopPercentage] = useState<number>(25);
+  const [isPublishingCerts, setIsPublishingCerts] = useState<boolean>(false);
+  const [isEmailingCerts, setIsEmailingCerts] = useState<boolean>(false);
+  const [certPublishStatus, setCertPublishStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [certSearchQuery, setCertSearchQuery] = useState<string>('');
+  const [certFilterCategory, setCertFilterCategory] = useState<'all' | 'achievement' | 'selection' | 'participation'>('all');
+
+  // Compute official certificates based on calculated rankings
+  const selectionCutoffRank = Math.max(2, Math.ceil(sortedLeaderboard.length * (selectionTopPercentage / 100)));
+
+  const computedCertificates = useMemo(() => {
+    return sortedLeaderboard.map((item, idx) => {
+      const rank = idx + 1;
+      let achievement: string = 'CERTIFICATE OF PARTICIPATION';
+      let category: 'achievement' | 'selection' | 'participation' = 'participation';
+
+      if (rank === 1) {
+        achievement = 'CERTIFICATE OF ACHIEVEMENT - TOP 1 POSITION';
+        category = 'achievement';
+      } else if (rank <= selectionCutoffRank) {
+        achievement = 'CERTIFICATE OF SELECTION - GRAND FINALE';
+        category = 'selection';
+      } else {
+        achievement = 'CERTIFICATE OF PARTICIPATION';
+        category = 'participation';
+      }
+
+      const recipientName = item.name;
+      const recipientEmail = item.email || item.members?.[0]?.email || '';
+      const teamName = item.isTeam ? item.name : (item.userProfile?.teamName || item.name);
+      const institute = item.instituteName || item.userProfile?.instituteName || 'ICFAI Business School (IBS) Bengaluru';
+      const certNum = `AIMA-ICL-2026-${category.toUpperCase().slice(0, 3)}-${String(rank).padStart(3, '0')}-${Math.floor(1000 + (rank * 137) % 9000)}`;
+
+      const cert: CertificateRecord = {
+        id: `cert_${item.id || idx}_${category}`,
+        certificateNumber: certNum,
+        recipientName,
+        recipientEmail,
+        recipientRole: item.isTeam ? 'Team Leader' : 'Participant',
+        recipientId: item.isTeam ? item.members?.[0]?.id || item.id : item.id,
+        teamId: item.id,
+        teamName,
+        institute,
+        achievement,
+        certificateCategory: category,
+        selectionTopPercentage,
+        issueDate: '29 October 2026',
+        qrVerificationUrl: `https://research.aima.in/verify/${certNum}`,
+        authorizedSignatory: 'DR. ANUJA PANDEY',
+        signatoryTitle: 'HEAD AIMA ICRC',
+      };
+
+      return {
+        ...item,
+        rank,
+        category,
+        certificate: cert,
+      };
+    });
+  }, [sortedLeaderboard, selectionTopPercentage, selectionCutoffRank]);
+
+  // Handlers for certificate publication
+  const handlePublishToWorkspacesOnly = async () => {
+    try {
+      setIsPublishingCerts(true);
+      setCertPublishStatus(null);
+      // Collect certificates for both the team entry and all squad members
+      const allCerts: CertificateRecord[] = [];
+      computedCertificates.forEach(c => {
+        allCerts.push(c.certificate);
+        if (c.isTeam && c.members && c.members.length > 0) {
+          c.members.forEach((m: any, mIdx: number) => {
+            const memberCertNum = `${c.certificate.certificateNumber}-M${mIdx + 1}`;
+            allCerts.push({
+              ...c.certificate,
+              id: `cert_${m.id || m.email || mIdx}_${c.category}`,
+              certificateNumber: memberCertNum,
+              recipientName: m.name,
+              recipientEmail: m.email || '',
+              recipientId: m.id,
+              recipientRole: 'Squad Member',
+              qrVerificationUrl: `https://research.aima.in/verify/${memberCertNum}`,
+            });
+          });
+        }
+      });
+
+      const res = await publishOfficialCertificates(allCerts, { sendEmails: false });
+      setCertPublishStatus({
+        type: 'success',
+        message: `Successfully published ${res.publishedCount} official certificates directly to participant workspaces!`,
+      });
+    } catch (err: any) {
+      setCertPublishStatus({
+        type: 'error',
+        message: err?.message || 'Failed to publish certificates to student workspaces.',
+      });
+    } finally {
+      setIsPublishingCerts(false);
+    }
+  };
+
+  const handlePublishAndEmailDispatch = async () => {
+    try {
+      setIsEmailingCerts(true);
+      setCertPublishStatus(null);
+      const allCerts: CertificateRecord[] = [];
+      computedCertificates.forEach(c => {
+        allCerts.push(c.certificate);
+        if (c.isTeam && c.members && c.members.length > 0) {
+          c.members.forEach((m: any, mIdx: number) => {
+            const memberCertNum = `${c.certificate.certificateNumber}-M${mIdx + 1}`;
+            allCerts.push({
+              ...c.certificate,
+              id: `cert_${m.id || m.email || mIdx}_${c.category}`,
+              certificateNumber: memberCertNum,
+              recipientName: m.name,
+              recipientEmail: m.email || '',
+              recipientId: m.id,
+              recipientRole: 'Squad Member',
+              qrVerificationUrl: `https://research.aima.in/verify/${memberCertNum}`,
+            });
+          });
+        }
+      });
+
+      const res = await publishOfficialCertificates(allCerts, { sendEmails: true });
+      setCertPublishStatus({
+        type: 'success',
+        message: `Successfully published ${res.publishedCount} certificates to workspaces and dispatched ${res.emailSentCount} emails over Falconide SMTP relay!`,
+      });
+    } catch (err: any) {
+      setCertPublishStatus({
+        type: 'error',
+        message: err?.message || 'Failed to publish and dispatch certificates.',
+      });
+    } finally {
+      setIsEmailingCerts(false);
+    }
+  };
+
+  const handleOpenRowCertificate = (row: any, rank: number) => {
+    const match = computedCertificates.find(c => c.id === row.id) || computedCertificates[rank - 1];
+    if (match) {
+      setActiveCertificateModal(match.certificate);
+    }
+  };
+
   // Filtered by Search & Status
   const filteredList = useMemo(() => {
     return sortedLeaderboard.filter((row) => {
@@ -1325,10 +1479,18 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
           </button>
           <button
             onClick={handleExportMeritList}
-            className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition flex items-center gap-2 cursor-pointer"
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition flex items-center gap-2 cursor-pointer border border-slate-700"
           >
             <Download className="w-4 h-4" />
             <span>Export Official Merit List CSV</span>
+          </button>
+          <button
+            onClick={() => setShowCertificateCockpit(true)}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 text-xs font-bold shadow-md hover:shadow-lg transition flex items-center gap-2 cursor-pointer"
+            title="Configure selection percentage, preview, publish to student workspaces, and dispatch emails"
+          >
+            <Award className="w-4 h-4 text-slate-950" />
+            <span>Publish &amp; Dispatch Certificates</span>
           </button>
         </div>
       </div>
@@ -1991,6 +2153,20 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                 <span>View</span>
                               </button>
                             )}
+
+                            {/* View Row Certificate Preview */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenRowCertificate(row, rank);
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 font-bold text-xs border border-amber-300/80 dark:border-amber-700/80 transition shadow-2xs cursor-pointer"
+                              title="Preview or print official certificate for this candidate / team"
+                            >
+                              <Award className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                              <span className="hidden xl:inline">Cert</span>
+                            </button>
 
                             <button
                               disabled={!isResultsPublished}
@@ -2818,6 +2994,321 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                 Close Review
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────────────
+          CERTIFICATE PUBLICATION & EMAIL DISPATCH COCKPIT MODAL
+      ───────────────────────────────────────────────────────────────────────────── */}
+      {showCertificateCockpit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md overflow-y-auto">
+          <div className="relative w-full max-w-5xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden my-auto max-h-[92vh] flex flex-col animate-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-white flex items-center gap-2">
+                    <span>Certificate Publication &amp; Email Dispatch Cockpit</span>
+                    <span className="text-[10px] uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      Official AIMA–ICRC
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Generate and publish official certificates to participant workspaces and dispatch via Falconide SMTP relay.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowCertificateCockpit(false);
+                  setCertPublishStatus(null);
+                }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Scrollable Content */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50 dark:bg-slate-950/50">
+
+              {/* Status Alert */}
+              {certPublishStatus && (
+                <div
+                  className={`p-4 rounded-xl border flex items-center justify-between gap-3 text-xs font-semibold ${
+                    certPublishStatus.type === 'success'
+                      ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30'
+                      : 'bg-rose-500/10 text-rose-800 dark:text-rose-300 border-rose-500/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{certPublishStatus.message}</span>
+                  </div>
+                  <button
+                    onClick={() => setCertPublishStatus(null)}
+                    className="text-slate-500 hover:text-slate-700 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* Configuration Section: Grand Finale Selection Top % */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Sliders className="w-4 h-4 text-amber-500" />
+                      <span>Grand Finale Selection Threshold (Top Percentage)</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Configures the percentage cutoff for teams advancing to the Grand Finale to receive the official Selection Certificate.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Cutoff:</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={5}
+                        max={100}
+                        step={1}
+                        value={selectionTopPercentage}
+                        onChange={e => setSelectionTopPercentage(Math.max(1, Math.min(100, Number(e.target.value) || 25)))}
+                        className="w-20 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-extrabold text-xs text-center focus:ring-2 focus:ring-amber-500"
+                      />
+                      <span className="absolute right-2.5 top-1.5 text-xs text-slate-400 font-bold pointer-events-none">%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preset Chips */}
+                <div className="flex items-center gap-2 flex-wrap pt-1">
+                  <span className="text-[11px] font-semibold text-slate-500">Quick Presets:</span>
+                  {[15, 20, 25, 30, 40, 50].map(pct => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => setSelectionTopPercentage(pct)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        selectionTopPercentage === pct
+                          ? 'bg-amber-500 text-slate-950 font-extrabold shadow-xs'
+                          : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      Top {pct}% {pct === 25 ? '★ Recommended' : ''}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 4 Summary Telemetry Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                  <div className="flex items-center justify-between text-amber-700 dark:text-amber-300 text-xs font-bold">
+                    <span>🥇 Achievement (Top 1)</span>
+                    <Trophy className="w-4 h-4 text-amber-500" />
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+                    1 Team
+                  </div>
+                  <div className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5 truncate">
+                    Rank 1: {computedCertificates[0]?.name || 'N/A'}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30">
+                  <div className="flex items-center justify-between text-blue-700 dark:text-blue-300 text-xs font-bold">
+                    <span>🏆 Selection (Grand Finale)</span>
+                    <Medal className="w-4 h-4 text-blue-500" />
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+                    {Math.max(0, selectionCutoffRank - 1)} Teams
+                  </div>
+                  <div className="text-[10px] text-blue-700 dark:text-blue-400 mt-0.5">
+                    Ranks 2 to {selectionCutoffRank} (Top {selectionTopPercentage}%)
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-200/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700">
+                  <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-xs font-bold">
+                    <span>📜 Participation</span>
+                    <FileText className="w-4 h-4 text-slate-500" />
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+                    {Math.max(0, computedCertificates.length - selectionCutoffRank)} Teams
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    Ranks {selectionCutoffRank + 1} to {computedCertificates.length}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                  <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-300 text-xs font-bold">
+                    <span>📨 Total Active Roster</span>
+                    <Users className="w-4 h-4 text-emerald-500" />
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+                    {computedCertificates.length} Teams
+                  </div>
+                  <div className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-0.5">
+                    {rankingMode === 'combined' ? 'Grand Combined Ranks' : 'Quiz Screening Ranks'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Recipient Preview Table with Filters */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
+                <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Filter By Type:</span>
+                    {[
+                      { id: 'all', label: `All (${computedCertificates.length})` },
+                      { id: 'achievement', label: 'Achievement (1)' },
+                      { id: 'selection', label: `Selection (${Math.max(0, selectionCutoffRank - 1)})` },
+                      { id: 'participation', label: `Participation (${Math.max(0, computedCertificates.length - selectionCutoffRank)})` },
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setCertFilterCategory(tab.id as any)}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          certFilterCategory === tab.id
+                            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                            : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      placeholder="Search recipient, team, institute..."
+                      value={certSearchQuery}
+                      onChange={e => setCertSearchQuery(e.target.value)}
+                      className="pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder-slate-400 w-full sm:w-64 focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="max-h-72 overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 dark:bg-slate-800/80 sticky top-0 border-b border-slate-200 dark:border-slate-700 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
+                      <tr>
+                        <th className="py-2.5 px-3 text-center">Rank</th>
+                        <th className="py-2.5 px-3">Recipient / Team</th>
+                        <th className="py-2.5 px-3">Institution</th>
+                        <th className="py-2.5 px-3 text-center">Score</th>
+                        <th className="py-2.5 px-3">Assigned Certificate Type</th>
+                        <th className="py-2.5 px-3 text-center">Preview</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {computedCertificates
+                        .filter(item => {
+                          if (certFilterCategory !== 'all' && item.category !== certFilterCategory) return false;
+                          if (!certSearchQuery) return true;
+                          const q = certSearchQuery.toLowerCase();
+                          return (
+                            item.name.toLowerCase().includes(q) ||
+                            item.instituteName.toLowerCase().includes(q) ||
+                            (item.email && item.email.toLowerCase().includes(q))
+                          );
+                        })
+                        .map(item => (
+                          <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition">
+                            <td className="py-2.5 px-3 text-center font-bold">
+                              {item.rank === 1 ? '🥇 1' : item.rank === 2 ? '🥈 2' : item.rank === 3 ? '🥉 3' : item.rank}
+                            </td>
+                            <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100">
+                              <div className="truncate max-w-[200px]">{item.name}</div>
+                              <div className="text-[10px] text-slate-400 font-mono">{item.email || 'team-member@email.com'}</div>
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300 truncate max-w-[200px]">
+                              {item.instituteName}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-bold text-slate-800 dark:text-slate-200">
+                              {rankingMode === 'combined' ? `${item.combinedScore}/200` : `${item.quizScore}/100`}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              {item.category === 'achievement' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500 text-slate-950 shadow-2xs">
+                                  <Trophy className="w-3 h-3" /> Top 1 Achievement
+                                </span>
+                              ) : item.category === 'selection' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-300/80 dark:border-blue-700/80">
+                                  <Medal className="w-3 h-3" /> Selection - Grand Finale
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                                  📜 Participation
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => setActiveCertificateModal(item.certificate)}
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition cursor-pointer shadow-2xs"
+                                title="Preview replica of certificate"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Action Footer */}
+            <div className="p-4 sm:p-5 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>
+                  Exact official certificates matching <strong>INDIA CASE LEAGUE 2026 Certificate.pdf</strong> with authentic 5 signatories.
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={handlePublishToWorkspacesOnly}
+                  disabled={isPublishingCerts || isEmailingCerts}
+                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-2xs"
+                  title="Make certificates immediately available on Student Dashboard workspaces"
+                >
+                  <Users className="w-4 h-4 text-amber-500" />
+                  <span>{isPublishingCerts ? 'Publishing...' : 'Publish to Student Workspaces'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePublishAndEmailDispatch}
+                  disabled={isPublishingCerts || isEmailingCerts}
+                  className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  title="Publish to student workspaces AND dispatch email notifications with verified certificate IDs"
+                >
+                  <Send className={`w-4 h-4 text-slate-950 ${isEmailingCerts ? 'animate-pulse' : ''}`} />
+                  <span>{isEmailingCerts ? 'Dispatching...' : 'Publish & Dispatch Emails'}</span>
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}

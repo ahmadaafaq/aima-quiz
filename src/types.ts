@@ -445,11 +445,15 @@ export interface CertificateRecord {
   certificateNumber: string;
   recipientName: string;
   recipientEmail: string;
-  recipientRole: string;
+  recipientRole?: string;
+  recipientId?: string;
   teamId?: string;
   teamName?: string;
   institute: string;
   achievement:
+    | 'CERTIFICATE OF ACHIEVEMENT - TOP 1 POSITION'
+    | 'CERTIFICATE OF SELECTION - GRAND FINALE'
+    | 'CERTIFICATE OF PARTICIPATION'
     | 'National Winner'
     | 'First Runner-Up'
     | 'Second Runner-Up'
@@ -461,11 +465,14 @@ export interface CertificateRecord {
     | 'Round 1 Qualifier'
     | 'Registered Participant'
     | 'Distinguished Jury Member'
-    | 'Institutional Faculty Coordinator';
+    | 'Institutional Faculty Coordinator'
+    | string;
+  certificateCategory?: 'achievement' | 'selection' | 'participation';
+  selectionTopPercentage?: number;
   issueDate: string;
   qrVerificationUrl: string;
-  authorizedSignatory: string;
-  signatoryTitle: string;
+  authorizedSignatory?: string;
+  signatoryTitle?: string;
 }
 
 export interface SupportTicket {

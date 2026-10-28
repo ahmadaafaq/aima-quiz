@@ -250,11 +250,13 @@ interface CompetitionContextType {
 
   // Certificates & Results
   certificates: CertificateRecord[];
+  setCertificates: React.Dispatch<React.SetStateAction<CertificateRecord[]>>;
   activeCertificateModal: CertificateRecord | null;
   setActiveCertificateModal: (cert: CertificateRecord | null) => void;
   activeVerifierModal: boolean;
   setActiveVerifierModal: (show: boolean) => void;
   generateCertificate: (cert: Omit<CertificateRecord, 'id' | 'certificateNumber' | 'qrVerificationUrl'>) => CertificateRecord;
+  publishOfficialCertificates: (certs: CertificateRecord[], options?: { sendEmails?: boolean }) => Promise<{ success: boolean; publishedCount: number; emailSentCount: number }>;
   verifyCertificateCode: (certCode: string) => CertificateRecord | undefined;
   declareRound1Results: () => Promise<{ success: boolean; sentCount: number; message: string }>;
   declareFinalResults: () => Promise<{ success: boolean; sentCount: number; message: string }>;
@@ -718,7 +720,18 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [rubricR3, setRubricR3] = useState<RubricCriterion[]>(ROUND_3_RUBRIC);
   const [rubricR4, setRubricR4] = useState<RubricCriterion[]>(ROUND_4_RUBRIC);
   const [evaluations, setEvaluations] = useState<Evaluation[]>(MOCK_EVALUATIONS);
-  const [certificates, setCertificates] = useState<CertificateRecord[]>(MOCK_CERTIFICATES);
+  const [certificates, setCertificates] = useState<CertificateRecord[]>(() => {
+    try {
+      const cached = localStorage.getItem('aima_published_certificates');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn('Error reading aima_published_certificates from localStorage', e);
+    }
+    return MOCK_CERTIFICATES;
+  });
   const [payments, setPayments] = useState<PaymentRecord[]>(MOCK_PAYMENTS);
   const [announcements, setAnnouncements] = useState<Announcement[]>(MOCK_ANNOUNCEMENTS);
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>(MOCK_SUPPORT_TICKETS);
@@ -2708,6 +2721,57 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return newCert;
   };
 
+  const publishOfficialCertificates = async (
+    certs: CertificateRecord[],
+    options?: { sendEmails?: boolean }
+  ): Promise<{ success: boolean; publishedCount: number; emailSentCount: number }> => {
+    setCertificates(prev => {
+      const existingMap = new Map(prev.map(c => [c.id || c.certificateNumber, c]));
+      certs.forEach(c => existingMap.set(c.id || c.certificateNumber, c));
+      const combined = Array.from(existingMap.values());
+      try {
+        localStorage.setItem('aima_published_certificates', JSON.stringify(combined));
+      } catch (err) {
+        console.warn('Error saving published certificates to localStorage', err);
+      }
+      return combined;
+    });
+
+    addAuditLog(
+      'Certificates Published',
+      'System',
+      `Published ${certs.length} official certificates to participant workspaces.`
+    );
+
+    let emailSentCount = 0;
+    if (options?.sendEmails) {
+      const emailList = certs
+        .filter(c => Boolean(c.recipientEmail))
+        .map(c => ({
+          name: c.recipientName,
+          email: c.recipientEmail,
+          teamName: c.teamName || c.recipientName,
+          achievement: c.achievement,
+          certNumber: c.certificateNumber,
+          certVerifyUrl: c.qrVerificationUrl,
+        }));
+
+      await broadcastFinalResults(emailList);
+      emailSentCount = emailList.length;
+      addAuditLog(
+        'Certificates Dispatched via Email',
+        'System',
+        `Dispatched ${emailSentCount} official certificates via Falconide SMTP.`
+      );
+    }
+
+    return {
+      success: true,
+      publishedCount: certs.length,
+      emailSentCount,
+    };
+  };
+
   const verifyCertificateCode = (certCode: string): CertificateRecord | undefined => {
     const cleaned = certCode.trim().toUpperCase();
     return certificates.find(c => c.certificateNumber.toUpperCase() === cleaned || c.id === certCode);
@@ -3872,11 +3936,13 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         registerCSRBootcamp,
         updateCSRPayment,
         certificates,
+        setCertificates,
         activeCertificateModal,
         setActiveCertificateModal,
         activeVerifierModal,
         setActiveVerifierModal,
         generateCertificate,
+        publishOfficialCertificates,
         verifyCertificateCode,
         declareRound1Results,
         declareFinalResults,
