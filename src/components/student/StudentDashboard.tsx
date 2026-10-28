@@ -72,6 +72,7 @@ export const StudentDashboard: React.FC = () => {
     setCertificates,
     quizPrograms,
     refreshQuizPrograms,
+    activeCertificateModal,
     setActiveCertificateModal,
     setActiveSupportModal,
     setActiveVerifierModal,
