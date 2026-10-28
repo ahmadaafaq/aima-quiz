@@ -2076,6 +2076,14 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                       <tr
                         id={`row-${row.id}`}
                         onClick={() => {
+                          const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+                          if (isMobile) {
+                            if (!isJuryDisabled) {
+                              handleToggleJuryAccordion(row);
+                              return;
+                            }
+                          }
+
                           if (row.isTeam) {
                             setActiveSquadMembersModal(row);
                           } else if (row.attemptData) {
@@ -2086,8 +2094,8 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                           } ${isExpanded ? 'bg-red-50/40 dark:bg-red-950/20' : ''}`}
                         title={
                           row.isTeam
-                            ? 'Click anywhere on row to view squad members and attempt details'
-                            : "Click anywhere on row to view candidate's attempted quiz details"
+                            ? 'Click anywhere on row to enter jury marks or view squad members'
+                            : "Click anywhere on row to enter jury marks or view candidate's attempt"
                         }
                       >
                         {/* Rank */}
@@ -2117,7 +2125,14 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                             <div>
                               <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-red-600 transition">
                                 <span className="group-hover:underline">{row.teamName}</span>
-                                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 shrink-0 flex items-center gap-1">
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveSquadMembersModal(row);
+                                  }}
+                                  className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 shrink-0 flex items-center gap-1 cursor-pointer hover:bg-blue-500/20 transition"
+                                  title="Click to view squad members"
+                                >
                                   <Users className="w-2.5 h-2.5" />
                                   Team ({row.members.length} {row.members.length === 1 ? 'member' : 'members'})
                                 </span>
@@ -2131,6 +2146,40 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                   <span>Latest: {formatISTDateTime(row.submittedAt)}</span>
                                 </div>
                               )}
+
+                              {/* Mobile Quick Jury Button directly under team name */}
+                              <div className="mt-2 md:hidden">
+                                <button
+                                  type="button"
+                                  disabled={isJuryDisabled}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!isJuryDisabled) {
+                                      handleToggleJuryAccordion(row);
+                                    }
+                                  }}
+                                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs border ${
+                                    isJuryDisabled
+                                      ? 'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
+                                      : (rowJuryResult?.livePresentationScore !== undefined || (rowDbEval?.total_score !== undefined && rowDbEval?.total_score !== null && Number(rowDbEval.total_score) > 0))
+                                        ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 active:scale-95'
+                                        : 'bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800 hover:bg-red-100 active:scale-95'
+                                  }`}
+                                  title={juryDisabledReason}
+                                >
+                                  <Sliders className="w-3.5 h-3.5" />
+                                  <span>
+                                    {(rowJuryResult?.livePresentationScore !== undefined || (rowDbEval?.total_score !== undefined && rowDbEval?.total_score !== null && Number(rowDbEval.total_score) > 0))
+                                      ? `Edit Jury Score (${rowJuryResult?.livePresentationScore ?? rowDbEval?.total_score}/100)`
+                                      : 'Enter Jury Marks (100)'}
+                                  </span>
+                                  {isJuryDisabled ? (
+                                    <Lock className="w-3 h-3 text-slate-400 ml-0.5" />
+                                  ) : (
+                                    <ChevronDown className="w-3.5 h-3.5 ml-0.5" />
+                                  )}
+                                </button>
+                              </div>
                             </div>
                           ) : (
                             <div>
@@ -2153,6 +2202,40 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                                   <span>Submitted: {formatISTDateTime(row.submittedAt)}</span>
                                 </div>
                               )}
+
+                              {/* Mobile Quick Jury Button directly under candidate name */}
+                              <div className="mt-2 md:hidden">
+                                <button
+                                  type="button"
+                                  disabled={isJuryDisabled}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!isJuryDisabled) {
+                                      handleToggleJuryAccordion(row);
+                                    }
+                                  }}
+                                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs border ${
+                                    isJuryDisabled
+                                      ? 'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
+                                      : (rowJuryResult?.livePresentationScore !== undefined || (rowDbEval?.total_score !== undefined && rowDbEval?.total_score !== null && Number(rowDbEval.total_score) > 0))
+                                        ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 active:scale-95'
+                                        : 'bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800 hover:bg-red-100 active:scale-95'
+                                  }`}
+                                  title={juryDisabledReason}
+                                >
+                                  <Sliders className="w-3.5 h-3.5" />
+                                  <span>
+                                    {(rowJuryResult?.livePresentationScore !== undefined || (rowDbEval?.total_score !== undefined && rowDbEval?.total_score !== null && Number(rowDbEval.total_score) > 0))
+                                      ? `Edit Jury Score (${rowJuryResult?.livePresentationScore ?? rowDbEval?.total_score}/100)`
+                                      : 'Enter Jury Marks (100)'}
+                                  </span>
+                                  {isJuryDisabled ? (
+                                    <Lock className="w-3 h-3 text-slate-400 ml-0.5" />
+                                  ) : (
+                                    <ChevronDown className="w-3.5 h-3.5 ml-0.5" />
+                                  )}
+                                </button>
+                              </div>
                             </div>
                           )}
                         </td>
