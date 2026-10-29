@@ -1117,10 +1117,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
   // Count candidates / teams who have both Round 1 quiz score and Round 2 jury marks
   const countWithBothRounds = useMemo(() => {
-    return (enrichedGroupedLeaderboard || []).filter(
+    return (leaderboardWithCombinedScores || []).filter(
       r => (Number(r.score) > 0 || r.isCompleted) && r.hasPresentation
     ).length;
-  }, [enrichedGroupedLeaderboard]);
+  }, [leaderboardWithCombinedScores]);
 
   // Official Ranking Sorting:
   // When rankingMode === 'combined':
