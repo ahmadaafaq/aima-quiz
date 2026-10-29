@@ -3,6 +3,7 @@ import { useCompetition } from '../../context/CompetitionContext';
 import { DocRequirementInfo } from '../common/DocRequirementInfo';
 import { Team } from '../../types';
 import { supabase } from '../../lib/supabase';
+import { parseISTTimestamp, formatQuizScheduleDate } from '../../lib/formatters';
 import {
   AlertCircle,
   Award,
@@ -65,6 +66,18 @@ export const InstitutePortal: React.FC = () => {
     config?.isResultsPublishedR1 ??
     false
   );
+
+  const r1StartDate = stage1Program?.startDate || stage1Program?.startTime || (stage1Program as any)?.start_time || config?.r1QuizStartTime;
+  const r1EndDate = stage1Program?.endDate || stage1Program?.endTime || (stage1Program as any)?.end_time || config?.r1QuizEndTime;
+
+  const now = Date.now();
+  const r1StartMs = parseISTTimestamp(r1StartDate);
+  const r1EndMs = parseISTTimestamp(r1EndDate);
+
+  const isQuizUpcoming = stage1Program?.status === 'draft' || (!isNaN(r1StartMs) && now < r1StartMs);
+  const isQuizLive = stage1Program?.status !== 'draft' && stage1Program?.status !== 'paused' && !isNaN(r1StartMs) && !isNaN(r1EndMs) && now >= r1StartMs && now <= r1EndMs;
+  const openTimeFormatted = r1StartDate ? formatQuizScheduleDate(r1StartDate) : '';
+  const openTimeOnly = openTimeFormatted.includes(',') ? openTimeFormatted.split(',')[1].trim() : openTimeFormatted;
 
   // 2. Locate dynamic live registration for this coordinator or institute
   const matchedReg = csrRegistrations.find(r =>
@@ -626,6 +639,21 @@ export const InstitutePortal: React.FC = () => {
                         <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5 text-xs">
                           <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> {t.r1AvgScore !== undefined ? `Avg ${t.r1AvgScore}%` : 'Qualified'}
                         </span>
+                      ) : isQuizUpcoming ? (
+                        <div className="flex flex-col">
+                          <span className="font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1 mt-0.5 text-[11px]" title={openTimeFormatted ? `Opens ${openTimeFormatted}` : 'Upcoming'}>
+                            <Calendar className="w-3.5 h-3.5 shrink-0 text-blue-500" /> Upcoming
+                          </span>
+                          {openTimeOnly && (
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              Opens {openTimeOnly}
+                            </span>
+                          )}
+                        </div>
+                      ) : isQuizLive ? (
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5 text-[11px]">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" /> Live Now
+                        </span>
                       ) : (
                         <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5 text-[11px]">
                           <Clock className="w-3.5 h-3.5 shrink-0" /> Under Review
@@ -765,7 +793,15 @@ export const InstitutePortal: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-3 font-semibold">
-                      {!isResultsPublished ? (
+                      {isQuizUpcoming ? (
+                        <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1" title={openTimeFormatted ? `Opens ${openTimeFormatted}` : 'Upcoming'}>
+                          <Calendar className="w-3 h-3 text-blue-500" /> Upcoming
+                        </span>
+                      ) : isQuizLive ? (
+                        <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Live Now
+                        </span>
+                      ) : !isResultsPublished ? (
                         <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
                           <Clock className="w-3 h-3" /> Under Review
                         </span>

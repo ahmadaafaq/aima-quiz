@@ -574,7 +574,16 @@ export const StudentDashboard: React.FC = () => {
       return `Round 1 Attempt Recorded (${myAttempt.score}%) • ${isPassedCutoff ? 'Passed' : 'Failed'}`;
     }
     if (config?.activeStage === 'round_1' || !config?.activeStage) {
-      return 'Round 1 Active • Assessment Pending';
+      if (!quizAvailability.isOpen) {
+        if (quizAvailability.label?.startsWith('Opens')) {
+          return `Round 1 Scheduled • ${quizAvailability.label}`;
+        }
+        if (quizAvailability.label === 'Assessment Window Closed') {
+          return 'Round 1 Concluded • Assessment Window Closed';
+        }
+        return `Round 1 • ${quizAvailability.label}`;
+      }
+      return 'Round 1 Active • Assessment Open';
     }
     return `${config.activeStage.replace('_', ' ').toUpperCase()} Active • Stage Progression Underway`;
   };
