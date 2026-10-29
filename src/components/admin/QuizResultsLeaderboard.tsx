@@ -1101,7 +1101,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       const validPresentationScore = hasPresentation ? Number(presentationScore) : 0;
       const quizScore = Number(row.score) || 0;
       const tieBreakerScore = Number(row.analyticalScore) || 0;
-      const combinedScore = quizScore + validPresentationScore;
+      const combinedScore = Math.round((quizScore + validPresentationScore) * 100) / 100;
       const presentationTrackName = jury?.trackName || dbEval?.track_name;
 
       return {
@@ -1382,8 +1382,8 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   const totalSubmissions = sortedLeaderboard.length;
   const topScore = sortedLeaderboard.length > 0 ? sortedLeaderboard[0].quizScore : 0;
   const avgScore = totalSubmissions > 0 ? Math.round(sortedLeaderboard.reduce((a, b) => a + b.quizScore, 0) / totalSubmissions) : 0;
-  const topCombinedScore = sortedLeaderboard.length > 0 ? sortedLeaderboard[0].combinedScore : 0;
-  const avgCombinedScore = totalSubmissions > 0 ? Math.round(sortedLeaderboard.reduce((a, b) => a + b.combinedScore, 0) / totalSubmissions) : 0;
+  const topCombinedScore = sortedLeaderboard.length > 0 ? Number(Number(sortedLeaderboard[0].combinedScore).toFixed(2)) : 0;
+  const avgCombinedScore = totalSubmissions > 0 ? Number((sortedLeaderboard.reduce((a, b) => a + Number(b.combinedScore || 0), 0) / totalSubmissions).toFixed(2)) : 0;
   const evaluatedPresentationCount = sortedLeaderboard.filter(r => r.hasPresentation).length;
   const qualifiedCount = sortedLeaderboard.filter(r => r.isQualified).length;
   const passRate = totalSubmissions > 0 ? Math.round((qualifiedCount / totalSubmissions) * 100) : 0;
@@ -1623,10 +1623,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         'Candidate / Team Name': r.name,
         'Contact Email': r.email,
         'Institution': r.instituteName,
-        'Grand Combined Total (200)': r.combinedScore,
-        'Round 1 Screening Quiz Score (100)': r.quizScore,
+        'Grand Combined Total (200)': typeof r.combinedScore === 'number' ? Number(r.combinedScore.toFixed(2)) : r.combinedScore,
+        'Round 1 Screening Quiz Score (100)': typeof r.quizScore === 'number' ? Number(r.quizScore.toFixed(2)) : r.quizScore,
         '5 Analytical Tie-Breakers Score (20)': r.tieBreakerScore,
-        'Round 2 Case Presentation Score (100)': r.hasPresentation ? r.presentationScore : 'Pending Jury Score',
+        'Round 2 Case Presentation Score (100)': r.hasPresentation ? (typeof r.presentationScore === 'number' ? Number(r.presentationScore.toFixed(2)) : r.presentationScore) : 'Pending Jury Score',
         'Case Track Assigned': r.presentationTrackName || 'General / Corporate Strategy',
         'Round 1 Gate Status': r.isQualified ? 'QUALIFIED FOR STAGE 2' : 'BELOW CUTOFF',
         'Time Taken (s)': r.timeTaken,
@@ -1738,7 +1738,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       if (r.isTeam && r.members && r.members.length > 0) {
         r.members.forEach((m: any) => {
           const r1Score = Number(m.score) || 0;
-          const combinedScore = r1Score + r2ScoreVal;
+          const combinedScore = Math.round((r1Score + r2ScoreVal) * 100) / 100;
           const entry = {
             name: m.name,
             email: m.email || '',
@@ -1768,7 +1768,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       } else {
         // Solo entry
         const r1Score = Number(r.quizScore) || 0;
-        const combinedScore = r1Score + r2ScoreVal;
+        const combinedScore = Math.round((r1Score + r2ScoreVal) * 100) / 100;
         const entry = {
           name: r.name,
           email: r.email || '',
@@ -1934,7 +1934,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
           const r1Score = Number(item.score ?? item.quizScore ?? 0);
           const r2ScoreVal = r.hasPresentation ? Number(r.presentationScore) : 0;
           const r2Display = r.hasPresentation ? Number(r.presentationScore) : 'Pending Jury Score';
-          const combinedScore = r1Score + r2ScoreVal;
+          const combinedScore = Math.round((r1Score + r2ScoreVal) * 100) / 100;
           candidateList.push({
             name: item.name,
             email: item.email || 'N/A',
@@ -2739,7 +2739,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                               return (
                                 <div>
                                   <div className="font-black text-base text-emerald-600 dark:text-emerald-400">
-                                    {presentationScore}
+                                    {typeof presentationScore === 'number' ? Number(presentationScore.toFixed(2)) : presentationScore}
                                     <span className="text-[10px] text-slate-400 font-semibold ml-0.5">/100</span>
                                   </div>
                                   <div
@@ -2762,17 +2762,17 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                         {/* Combined Grand Total (200) */}
                         <td className="py-3.5 px-4 text-center">
                           <div className="font-black text-base text-slate-900 dark:text-white">
-                            {row.combinedScore}
+                            {typeof row.combinedScore === 'number' ? Number(row.combinedScore.toFixed(2)) : row.combinedScore}
                             <span className="text-[10px] text-slate-400 font-semibold ml-0.5">/200</span>
                           </div>
                           <div className="text-[10px] text-slate-500 font-medium">
                             {row.hasPresentation ? (
                               <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-                                Q: {row.quizScore} + P: {row.presentationScore}
+                                Q: {typeof row.quizScore === 'number' ? Number(row.quizScore.toFixed(2)) : row.quizScore} + P: {typeof row.presentationScore === 'number' ? Number(row.presentationScore.toFixed(2)) : row.presentationScore}
                               </span>
                             ) : (
                               <span className="text-amber-500 font-semibold">
-                                Q: {row.quizScore} (Jury Pending)
+                                Q: {typeof row.quizScore === 'number' ? Number(row.quizScore.toFixed(2)) : row.quizScore} (Jury Pending)
                               </span>
                             )}
                           </div>
@@ -4228,7 +4228,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                               {item.instituteName}
                             </td>
                             <td className="py-2.5 px-3 text-center font-bold text-slate-800 dark:text-slate-200">
-                              {rankingMode === 'combined' ? `${item.combinedScore}/200` : `${item.quizScore}/100`}
+                              {rankingMode === 'combined' ? `${typeof item.combinedScore === 'number' ? Number(item.combinedScore.toFixed(2)) : item.combinedScore}/200` : `${item.quizScore}/100`}
                             </td>
                             <td className="py-2.5 px-3">
                               {item.category === 'achievement' ? (
