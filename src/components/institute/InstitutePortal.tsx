@@ -69,52 +69,6 @@ export const InstitutePortal: React.FC = () => {
     false
   );
 
-  const isCertificatePublished = Boolean(
-    stage1Program?.isCertificatePublished === true ||
-    (stage1Program as any)?.is_certificate_published === true ||
-    config?.isCertificatePublishedR1 === true ||
-    config?.isCertificatePublished === true ||
-    (matchedReg as any)?.isCertificatePublished === true ||
-    (matchedReg as any)?.raw_data?.isCertificatePublished === true
-  );
-
-  const canViewCertificates = Boolean(isCertificatePublished && isResultsPublished);
-
-  const getCandidateCertificate = (s: any): CertificateRecord => {
-    const sEmail = (s.email || '').toLowerCase().trim();
-    const existing = (certificates || []).find((c: any) => {
-      if (!c) return false;
-      if (c.recipientEmail && c.recipientEmail.toLowerCase().trim() === sEmail) return true;
-      if (c.recipientId && (c.recipientId === s.id || c.recipientId === s.studentId || c.recipientId === s.email)) return true;
-      if (s.studentId && c.certificateNumber && c.certificateNumber.includes(s.studentId)) return true;
-      if (s.studentId && (c as any).registrationNumber === s.studentId) return true;
-      return false;
-    });
-
-    if (existing) return existing;
-
-    const regNumber = matchedReg?.registrationNumber || userRegNum || 'AIMA-CL26-INST';
-    const isPassed = (s.r1Score ?? 0) >= 60;
-    const certNum = `AIMA-2026-CERT-${regNumber.replace(/[^A-Za-z0-9]/g, '')}-${(s.studentId || s.name).slice(0, 4).toUpperCase()}`;
-
-    return {
-      id: `cert_${s.id || s.email}`,
-      certificateNumber: certNum,
-      recipientName: s.name,
-      recipientEmail: s.email,
-      recipientRole: 'Student Nominee',
-      recipientId: s.id || s.email,
-      teamName: s.teamName,
-      institute: instName || "ASM's Institute of Business Management and Research",
-      registrationNumber: regNumber,
-      achievement: isPassed ? 'Round 1 Qualifier' : 'CERTIFICATE OF PARTICIPATION',
-      certificateCategory: isPassed ? 'selection' : 'participation',
-      issueDate: 'October 2026',
-      qrVerificationUrl: `https://research.aima.in/verify/${certNum}`,
-      authorizedSignatory: 'Director, AIMA Case Research Centre',
-    };
-  };
-
   const r1StartDate = stage1Program?.startDate || stage1Program?.startTime || (stage1Program as any)?.start_time || config?.r1QuizStartTime;
   const r1EndDate = stage1Program?.endDate || stage1Program?.endTime || (stage1Program as any)?.end_time || config?.r1QuizEndTime;
 
@@ -155,6 +109,52 @@ export const InstitutePortal: React.FC = () => {
   const coordinatorPhone = matchedReg?.coordinator?.mobile || participantUser?.mobile || currentUser.mobile || '';
 
   const regNominees = Array.isArray(matchedReg?.nominees) ? matchedReg.nominees : [];
+
+  const isCertificatePublished = Boolean(
+    stage1Program?.isCertificatePublished === true ||
+    (stage1Program as any)?.is_certificate_published === true ||
+    config?.isCertificatePublishedR1 === true ||
+    config?.isCertificatePublished === true ||
+    (matchedReg as any)?.isCertificatePublished === true ||
+    (matchedReg as any)?.raw_data?.isCertificatePublished === true
+  );
+
+  const canViewCertificates = Boolean(isCertificatePublished && isResultsPublished);
+
+  const getCandidateCertificate = (s: any): CertificateRecord => {
+    const sEmail = (s.email || '').toLowerCase().trim();
+    const existing = (certificates || []).find((c: any) => {
+      if (!c) return false;
+      if (c.recipientEmail && c.recipientEmail.toLowerCase().trim() === sEmail) return true;
+      if (c.recipientId && (c.recipientId === s.id || c.recipientId === s.studentId || c.recipientId === s.email)) return true;
+      if (s.studentId && c.certificateNumber && c.certificateNumber.includes(s.studentId)) return true;
+      if (s.studentId && (c as any).registrationNumber === s.studentId) return true;
+      return false;
+    });
+
+    if (existing) return existing;
+
+    const regNumber = matchedReg?.registrationNumber || userRegNum || 'AIMA-CL26-INST';
+    const isPassed = (s.r1Score ?? 0) >= 60;
+    const certNum = `AIMA-2026-CERT-${regNumber.replace(/[^A-Za-z0-9]/g, '')}-${(s.studentId || s.name).slice(0, 4).toUpperCase()}`;
+
+    return {
+      id: `cert_${s.id || s.email}`,
+      certificateNumber: certNum,
+      recipientName: s.name,
+      recipientEmail: s.email,
+      recipientRole: 'Student Nominee',
+      recipientId: s.id || s.email,
+      teamName: s.teamName,
+      institute: instName,
+      registrationNumber: regNumber,
+      achievement: isPassed ? 'Round 1 Qualifier' : 'CERTIFICATE OF PARTICIPATION',
+      certificateCategory: isPassed ? 'selection' : 'participation',
+      issueDate: 'October 2026',
+      qrVerificationUrl: `https://research.aima.in/verify/${certNum}`,
+      authorizedSignatory: 'Director, AIMA Case Research Centre',
+    };
+  };
 
   const [dbParticipants, setDbParticipants] = useState<any[]>([]);
 
@@ -222,11 +222,11 @@ export const InstitutePortal: React.FC = () => {
     const baseTeams = dynamicTeamsFromReg.length > 0
       ? dynamicTeamsFromReg
       : teams.filter(
-          t =>
-            (instName && t.instituteName?.toLowerCase().includes(instName.toLowerCase())) ||
-            (instName && instName.toLowerCase().includes(t.instituteName?.toLowerCase() || '___')) ||
-            (coordinatorEmail && (t as any).coordinatorEmail?.toLowerCase() === coordinatorEmail.toLowerCase())
-        );
+        t =>
+          (instName && t.instituteName?.toLowerCase().includes(instName.toLowerCase())) ||
+          (instName && instName.toLowerCase().includes(t.instituteName?.toLowerCase() || '___')) ||
+          (coordinatorEmail && (t as any).coordinatorEmail?.toLowerCase() === coordinatorEmail.toLowerCase())
+      );
 
     return baseTeams.map(t => {
       const memberEmails = (t.members || []).map((m: any) => m.email?.toLowerCase().trim()).filter(Boolean);
@@ -240,7 +240,7 @@ export const InstitutePortal: React.FC = () => {
         : undefined;
 
       const sub = (caseSubmissions || []).find(s => s.teamId === t.id || s.teamId === t.name) || t.r2Submission;
-      
+
       const teamEval = (evaluations || []).find(e => e.teamId === t.id || e.submissionId === sub?.id);
       const offlineResult = (offlineRoundResults || []).find(
         o => (o.round === 'round_2' && (o.teamId === t.id || o.teamName?.toLowerCase() === t.name?.toLowerCase()))
@@ -271,13 +271,13 @@ export const InstitutePortal: React.FC = () => {
       const attempt = (quizAttempts || []).find(
         a => a.participantEmail?.toLowerCase().trim() === email || a.studentId === n.enrolmentNumber
       );
-      
+
       const r1Score = attempt?.score !== undefined ? Number(attempt.score) : undefined;
       const isAttempted = Boolean(attempt?.isCompleted || attempt);
 
       const teamName = n.teamName || 'Institute Nominee';
       const team = instituteTeams.find(t => t.name === teamName);
-      
+
       const r2Score = team?.r2Score;
       const hasDeckSubmitted = Boolean(team?.hasDeckSubmitted);
 
