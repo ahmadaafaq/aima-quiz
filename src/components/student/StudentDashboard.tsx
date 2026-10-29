@@ -290,15 +290,13 @@ export const StudentDashboard: React.FC = () => {
     stage1Program?.isResultsPublished ??
     (stage1Program as any)?.is_results_published ??
     config?.isResultsPublishedR1 ??
-    config?.isPublicResultsPublished ??
     false
   );
 
   const isFinalResultsPublished = Boolean(
     config?.isFinalResultsPublished ||
     (config as any)?.is_final_results_published ||
-    (stage1Program as any)?.isFinalResultsPublished ||
-    (typeof localStorage !== 'undefined' && localStorage.getItem('AIMA_FINAL_RESULTS_PUBLISHED') === 'true')
+    (stage1Program as any)?.isFinalResultsPublished
   );
 
   const [dbJuryEvaluations, setDbJuryEvaluations] = useState<any[]>([]);
@@ -476,11 +474,10 @@ export const StudentDashboard: React.FC = () => {
     (myCert && Array.isArray(certificates) && certificates.some(c => c && (c.certificateNumber === myCert.certificateNumber || c.id === myCert.id)))
   );
 
-  // Participant can view certificate ONLY IF BOTH criteria are strictly satisfied:
-  // 1. Certificate published AND 2. Quiz result published
+  // Participant can view certificate ONLY IF final results are published AND certificate is published:
   const canViewCertificate = Boolean(
     myCert &&
-    isResultsPublished &&
+    isFinalResultsPublished &&
     isCertificatePublished
   );
 
@@ -521,7 +518,15 @@ export const StudentDashboard: React.FC = () => {
   const isPassedCutoff = isTeam
     ? (teamAttemptCount > 0 ? teamAverageScore >= activeCutoffScore : false)
     : (myAttempt ? myAttempt.score >= activeCutoffScore : false);
-  const isQualifiedForRound2 = Boolean(isResultsPublished && isPassedCutoff);
+
+  // Anyone who has completed Round 1 has Round 2 enabled to choose their case track
+  const hasGivenRound1 = Boolean(
+    myAttempt ||
+    (isTeam && teamAttemptCount > 0) ||
+    activeConfirmedTrackId ||
+    Boolean((currentUser as any)?.hasCompletedQuiz || (participantUser as any)?.hasCompletedQuiz)
+  );
+  const isQualifiedForRound2 = Boolean(hasGivenRound1 || (isResultsPublished && isPassedCutoff));
   const isQualifiedForRound3 = Boolean(currentTeam?.r3Qualified || (currentTeam as any)?.r4Qualified);
 
   // Load questions for student review modal when opened
@@ -2968,31 +2973,27 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
                   AIMA Hall Offline Case Defense
                 </h3>
                 <p className="text-xs text-slate-500">
-                  {!myAttempt
-                    ? `Requires completing Round 1 Quiz with a qualifying score (≥${activeCutoffScore}%).`
+                  {!hasGivenRound1
+                    ? 'Please complete Round 1 Quiz to unlock Round 2 track selection and case presentation documents.'
                     : !isResultsPublished
-                      ? 'Track selection for Round 2 will automatically unlock once results are published.'
-                      : `Official results published. Score (${myAttempt.score}%) does not meet the qualifying criteria.`}
+                      ? 'Round 1 attempt submitted. Track selection for Round 2 is unlocked.'
+                      : `Official results published. Score does not meet the qualifying criteria.`}
                 </p>
               </div>
 
               <div
                 className="shrink-0 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs select-none cursor-default"
                 title={
-                  !myAttempt
+                  !hasGivenRound1
                     ? 'Complete Round 1 Quiz First'
-                    : !isResultsPublished
-                      ? 'Round 1 results are awaiting official publication from the admin panel'
-                      : 'Stage 1 Failed'
+                    : 'Round 2 Unlocked'
                 }
               >
                 <Lock className="w-3.5 h-3.5 text-slate-400" />
                 <span>
-                  {!myAttempt
+                  {!hasGivenRound1
                     ? 'Complete Round 1 Quiz First'
-                    : !isResultsPublished
-                      ? 'Results Under Official Review'
-                      : 'Stage 1 Failed'}
+                    : 'Round 2 Unlocked'}
                 </span>
               </div>
             </div>

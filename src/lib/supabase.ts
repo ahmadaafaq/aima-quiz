@@ -1599,7 +1599,7 @@ export function mapSupabaseRowToAppConfig(row: any): Partial<CompetitionConfig> 
     isFinalResultsPublished: Boolean(
       row.is_final_results_published ??
       row.isFinalResultsPublished ??
-      (typeof localStorage !== 'undefined' && localStorage.getItem('AIMA_FINAL_RESULTS_PUBLISHED') === 'true')
+      false
     ),
   };
 }

@@ -71,8 +71,7 @@ export const InstitutePortal: React.FC = () => {
 
   const isFinalResultsPublished = Boolean(
     config?.isFinalResultsPublished ||
-    (config as any)?.is_final_results_published ||
-    (typeof localStorage !== 'undefined' && localStorage.getItem('AIMA_FINAL_RESULTS_PUBLISHED') === 'true')
+    (config as any)?.is_final_results_published
   );
 
   const [dbJuryEvaluations, setDbJuryEvaluations] = useState<any[]>([]);
@@ -135,7 +134,7 @@ export const InstitutePortal: React.FC = () => {
     (matchedReg as any)?.raw_data?.isCertificatePublished === true
   );
 
-  const canViewCertificates = Boolean(isCertificatePublished && isResultsPublished);
+  const canViewCertificates = Boolean(isCertificatePublished && isFinalResultsPublished);
 
   const getCandidateCertificate = (s: any): CertificateRecord => {
     const sEmail = (s.email || '').toLowerCase().trim();
@@ -860,9 +859,13 @@ export const InstitutePortal: React.FC = () => {
 
                     <div>
                       <span className="text-[10px] text-slate-400 uppercase font-semibold block">R2 Case Defense</span>
-                      {t.r2Score !== undefined ? (
+                      {isFinalResultsPublished && t.r2Score !== undefined ? (
                         <span className="font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 mt-0.5 text-xs">
                           <Trophy className="w-3.5 h-3.5 shrink-0" /> {t.r2Score}/100 pts
+                        </span>
+                      ) : t.r2Score !== undefined ? (
+                        <span className="font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 mt-0.5 text-[11px]">
+                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-purple-500" /> Evaluated
                         </span>
                       ) : t.hasDeckSubmitted ? (
                         <span className="font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1 mt-0.5 text-[11px]">
@@ -991,9 +994,17 @@ export const InstitutePortal: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-3 font-semibold">
-                      {s.r1Score !== undefined ? (
-                        <span className={s.r1Score >= 65 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-800 dark:text-slate-200 font-bold'}>
-                          {s.r1Score}% {isResultsPublished && s.r1Score >= 65 ? '★' : ''}
+                      {isResultsPublished ? (
+                        s.r1Score !== undefined ? (
+                          <span className={s.r1Score >= 65 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-800 dark:text-slate-200 font-bold'}>
+                            {s.r1Score}% {s.r1Score >= 65 ? '★' : ''}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic">Not taken</span>
+                        )
+                      ) : s.r1Score !== undefined ? (
+                        <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1" title="Quiz attempt completed. Official results awaiting publication.">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Attempt Completed
                         </span>
                       ) : isQuizUpcoming ? (
                         <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1" title={openTimeFormatted ? `Opens ${openTimeFormatted}` : 'Upcoming'}>
@@ -1003,18 +1014,20 @@ export const InstitutePortal: React.FC = () => {
                         <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Live Now
                         </span>
-                      ) : !isResultsPublished ? (
+                      ) : (
                         <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
                           <Clock className="w-3 h-3" /> Under Review
                         </span>
-                      ) : (
-                        <span className="text-slate-400 italic">Not taken</span>
                       )}
                     </td>
                     <td className="p-3 font-semibold">
-                      {s.r2Score !== undefined ? (
+                      {isFinalResultsPublished && s.r2Score !== undefined ? (
                         <span className="text-purple-600 dark:text-purple-400 font-bold font-mono">
                           {s.r2Score}/100 pts
+                        </span>
+                      ) : s.r2Score !== undefined ? (
+                        <span className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-purple-500" /> Evaluated
                         </span>
                       ) : s.hasDeckSubmitted ? (
                         <span className="text-blue-600 dark:text-blue-400 text-[11px] font-medium flex items-center gap-1">
