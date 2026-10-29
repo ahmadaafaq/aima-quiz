@@ -9,6 +9,7 @@ import {
   toggleQuizProgramPublication,
   saveJuryScorecardToDb,
   fetchJuryEvaluationsFromDb,
+  getLocalRegistrationsCache,
   supabase,
 } from '../../lib/supabase';
 import { OFFICIAL_CASE_TRACKS } from '../../data/caseTracks';
@@ -124,6 +125,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     certificates,
     publishOfficialCertificates,
     setActiveCertificateModal,
+    csrRegistrations,
   } = useCompetition();
 
   useEffect(() => {
@@ -1717,10 +1719,12 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     });
 
     // ─────────────────────────────────────────────────────────────────────────
-    // SHEET 0: All Participants Results (Individual Participant Breakdown)
+    // ─────────────────────────────────────────────────────────────────────────
+    // SHEET 0: All Participants Results (All 244 Nominated Candidates & Attempt Results)
     // S.No, Participant Name, Email, Team, Institute, R1 Result, R2 Result, Combined Result, Rank
     // ─────────────────────────────────────────────────────────────────────────
-    const participantMap = new Map<string, any>();
+    // 1. Build fast lookup index of all completed quiz attempts & leaderboard entries
+    const attemptLookup = new Map<string, any>();
 
     leaderboardWithCombinedScores.forEach((r: any) => {
       const r2ScoreVal = r.hasPresentation ? Number(r.presentationScore) : 0;
@@ -1728,12 +1732,11 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
       if (r.isTeam && r.members && r.members.length > 0) {
         r.members.forEach((m: any) => {
-          const emailKey = (m.email || `${m.name}_${r.id}`).toLowerCase().trim();
           const r1Score = Number(m.score) || 0;
           const combinedScore = r1Score + r2ScoreVal;
-          participantMap.set(emailKey, {
+          const entry = {
             name: m.name,
-            email: m.email || 'N/A',
+            email: m.email || '',
             teamName: r.teamName,
             instituteName: r.instituteName || m.userProfile?.instituteName || 'Independent B-School',
             r1Result: r1Score,
@@ -1745,43 +1748,25 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
             tieBreakerScore: Number(m.analyticalScore) || 0,
             timeTaken: Number(m.timeTaken) || 1800,
             tabSwitches: Number(m.tabSwitches) || 0,
-          });
-        });
+            attempted: true,
+          };
 
-        // Include any registered team members who haven't attempted Round 1 yet
-        const matchingTeam = teams.find(
-          t => (r.teamId && t.id === r.teamId) || (r.teamName && t.name === r.teamName)
-        );
-        if (matchingTeam?.members) {
-          matchingTeam.members.forEach((tm: any) => {
-            const emailKey = (tm.email || `${tm.name}_${matchingTeam.id}`).toLowerCase().trim();
-            if (!participantMap.has(emailKey)) {
-              participantMap.set(emailKey, {
-                name: tm.name,
-                email: tm.email || 'N/A',
-                teamName: r.teamName,
-                instituteName: tm.institute || r.instituteName || 'Independent B-School',
-                r1Result: 'Not Attempted',
-                numericR1Score: -1,
-                r2Result: r2Display,
-                validPresentationScore: r2ScoreVal,
-                combinedResult: r.hasPresentation ? r2ScoreVal : 0,
-                numericCombinedScore: r2ScoreVal,
-                tieBreakerScore: 0,
-                timeTaken: 999999,
-                tabSwitches: 0,
-              });
-            }
-          });
-        }
+          if (m.email) {
+            const em = m.email.toLowerCase().trim();
+            attemptLookup.set(em, entry);
+            attemptLookup.set(em.replace('@gmail.com', '@gamil.com'), entry);
+            attemptLookup.set(em.replace('@gamil.com', '@gmail.com'), entry);
+          }
+          if (m.userId) attemptLookup.set(m.userId, entry);
+          if (m.registrationNumber) attemptLookup.set(`${m.registrationNumber}_${(m.name || '').toLowerCase()}`, entry);
+        });
       } else {
         // Solo entry
-        const emailKey = (r.email || `${r.name}_${r.id}`).toLowerCase().trim();
         const r1Score = Number(r.quizScore) || 0;
         const combinedScore = r1Score + r2ScoreVal;
-        participantMap.set(emailKey, {
+        const entry = {
           name: r.name,
-          email: r.email || 'N/A',
+          email: r.email || '',
           teamName: r.teamName && r.teamName !== 'Individual Entry' ? r.teamName : 'Individual Entry',
           instituteName: r.instituteName || 'Independent B-School',
           r1Result: r1Score,
@@ -1793,36 +1778,192 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
           tieBreakerScore: Number(r.tieBreakerScore) || 0,
           timeTaken: Number(r.timeTaken) || 1800,
           tabSwitches: Number(r.tabSwitches) || 0,
-        });
+          attempted: true,
+        };
+
+        if (r.email) {
+          const em = r.email.toLowerCase().trim();
+          attemptLookup.set(em, entry);
+          attemptLookup.set(em.replace('@gmail.com', '@gamil.com'), entry);
+          attemptLookup.set(em.replace('@gamil.com', '@gmail.com'), entry);
+        }
+        if (r.registrationNumber) attemptLookup.set(r.registrationNumber, entry);
       }
     });
 
-    // Also include any registered students/candidates who have not appeared in quiz attempts
-    users.forEach(u => {
-      if (u.role === 'student' || u.role === 'team_leader' || u.role === 'team_member') {
-        const emailKey = (u.email || '').toLowerCase().trim();
-        if (emailKey && !participantMap.has(emailKey)) {
-          const uTeam = teams.find(t => t.members.some(m => m.email?.toLowerCase().trim() === emailKey));
-          participantMap.set(emailKey, {
-            name: u.name,
-            email: u.email,
-            teamName: uTeam?.name || 'Individual Entry',
-            instituteName: u.instituteName || 'Independent B-School',
+    // 2. Load all registrations from state or cache (matching Admin Dashboard's 112 registrations & 244 candidates)
+    const sourceRegistrations = (csrRegistrations && csrRegistrations.length > 0)
+      ? csrRegistrations
+      : getLocalRegistrationsCache();
+
+    const cleanRegistrations = (sourceRegistrations || []).filter(
+      r => r.registrationNumber !== 'AIMA_SYSTEM_QUIZ_CONFIG'
+    );
+
+    const candidateList: any[] = [];
+    const processedCandidateKeys = new Set<string>();
+
+    cleanRegistrations.forEach((reg: any) => {
+      const raw = reg.raw_data || {};
+      const nominees = (reg.nominees && reg.nominees.length > 0)
+        ? reg.nominees
+        : (raw.nominees && raw.nominees.length > 0 ? raw.nominees : []);
+      const coordinator = reg.coordinator || raw.coordinator;
+      const teamName = reg.teamName || reg.team_name || raw.team_name ||
+        (reg.track === 'institutional' || reg.registration_mode === 'institute'
+          ? (reg.organizationName || reg.organization_name || raw.organization_name || 'Institute Team')
+          : 'Individual Entry');
+      const instituteName = reg.organizationName || reg.organization_name || raw.organization_name ||
+        reg.institutionName || reg.institution_name || raw.institution_name || 'Independent B-School';
+
+      // Check if registration or team has Round 2 presentation score
+      const matchingRow = leaderboardWithCombinedScores.find(
+        (lr: any) => (reg.registrationNumber && lr.registrationNumber === reg.registrationNumber) ||
+                     (lr.teamName && lr.teamName.toLowerCase().trim() === teamName.toLowerCase().trim())
+      );
+      const r2ScoreVal = matchingRow?.hasPresentation ? Number(matchingRow.presentationScore) : 0;
+      const r2Display = matchingRow?.hasPresentation ? Number(matchingRow.presentationScore) : 'Pending Jury Score';
+
+      if (nominees && nominees.length > 0) {
+        nominees.forEach((n: any, idx: number) => {
+          const rawEmail = (n.email || '').toLowerCase().trim();
+          const normEmail = rawEmail.replace('@gamil.com', '@gmail.com');
+          const candName = n.name || coordinator?.name || `Candidate ${idx + 1}`;
+          const uniqueKey = rawEmail || `${candName}_${reg.registrationNumber}_${idx}`;
+
+          if (processedCandidateKeys.has(uniqueKey)) return;
+          processedCandidateKeys.add(uniqueKey);
+
+          const matchedAttempt = attemptLookup.get(rawEmail) ||
+            attemptLookup.get(normEmail) ||
+            attemptLookup.get(`${reg.registrationNumber}_${candName.toLowerCase()}`);
+
+          if (matchedAttempt) {
+            candidateList.push({
+              name: candName,
+              email: n.email || matchedAttempt.email || 'N/A',
+              teamName: teamName,
+              instituteName: n.institution_name || n.institute || instituteName,
+              r1Result: matchedAttempt.r1Result,
+              numericR1Score: matchedAttempt.numericR1Score,
+              r2Result: matchedAttempt.r2Result,
+              validPresentationScore: matchedAttempt.validPresentationScore,
+              combinedResult: matchedAttempt.combinedResult,
+              numericCombinedScore: matchedAttempt.numericCombinedScore,
+              tieBreakerScore: matchedAttempt.tieBreakerScore,
+              timeTaken: matchedAttempt.timeTaken,
+              tabSwitches: matchedAttempt.tabSwitches,
+              attempted: true,
+            });
+          } else {
+            candidateList.push({
+              name: candName,
+              email: n.email || 'N/A',
+              teamName: teamName,
+              instituteName: n.institution_name || n.institute || instituteName,
+              r1Result: 'Not Attempted',
+              numericR1Score: -1,
+              r2Result: r2Display,
+              validPresentationScore: r2ScoreVal,
+              combinedResult: matchingRow?.hasPresentation ? r2ScoreVal : 0,
+              numericCombinedScore: r2ScoreVal,
+              tieBreakerScore: 0,
+              timeTaken: 999999,
+              tabSwitches: 0,
+              attempted: false,
+            });
+          }
+        });
+      } else {
+        // Individual delegation / single candidate
+        const candName = coordinator?.name || reg.contactPersonName || reg.candidateName || raw.candidate_name || reg.full_name || 'Solo Candidate';
+        const rawEmail = (coordinator?.email || reg.candidateEmail || raw.candidate_email || reg.emailAddress || reg.email || '').toLowerCase().trim();
+        const normEmail = rawEmail.replace('@gamil.com', '@gmail.com');
+        const uniqueKey = rawEmail || `${candName}_${reg.registrationNumber}`;
+
+        if (processedCandidateKeys.has(uniqueKey)) return;
+        processedCandidateKeys.add(uniqueKey);
+
+        const matchedAttempt = attemptLookup.get(rawEmail) ||
+          attemptLookup.get(normEmail) ||
+          attemptLookup.get(reg.registrationNumber);
+
+        if (matchedAttempt) {
+          candidateList.push({
+            name: candName,
+            email: rawEmail || matchedAttempt.email || 'N/A',
+            teamName: teamName,
+            instituteName: instituteName,
+            r1Result: matchedAttempt.r1Result,
+            numericR1Score: matchedAttempt.numericR1Score,
+            r2Result: matchedAttempt.r2Result,
+            validPresentationScore: matchedAttempt.validPresentationScore,
+            combinedResult: matchedAttempt.combinedResult,
+            numericCombinedScore: matchedAttempt.numericCombinedScore,
+            tieBreakerScore: matchedAttempt.tieBreakerScore,
+            timeTaken: matchedAttempt.timeTaken,
+            tabSwitches: matchedAttempt.tabSwitches,
+            attempted: true,
+          });
+        } else {
+          candidateList.push({
+            name: candName,
+            email: rawEmail || 'N/A',
+            teamName: teamName,
+            instituteName: instituteName,
             r1Result: 'Not Attempted',
             numericR1Score: -1,
-            r2Result: 'Pending Jury Score',
-            validPresentationScore: 0,
-            combinedResult: 0,
-            numericCombinedScore: 0,
+            r2Result: r2Display,
+            validPresentationScore: r2ScoreVal,
+            combinedResult: matchingRow?.hasPresentation ? r2ScoreVal : 0,
+            numericCombinedScore: r2ScoreVal,
             tieBreakerScore: 0,
             timeTaken: 999999,
             tabSwitches: 0,
+            attempted: false,
           });
         }
       }
     });
 
-    const allParticipantsSorted = Array.from(participantMap.values()).sort((a, b) => {
+    // 3. Fallback: if any attempt from leaderboard was not in sourceRegistrations, add it
+    leaderboardWithCombinedScores.forEach((r: any) => {
+      const checkAndAdd = (item: any, isSolo: boolean) => {
+        const em = (item.email || '').toLowerCase().trim();
+        if (em && !processedCandidateKeys.has(em) && !processedCandidateKeys.has(em.replace('@gamil.com', '@gmail.com'))) {
+          processedCandidateKeys.add(em);
+          const r1Score = Number(item.score ?? item.quizScore ?? 0);
+          const r2ScoreVal = r.hasPresentation ? Number(r.presentationScore) : 0;
+          const r2Display = r.hasPresentation ? Number(r.presentationScore) : 'Pending Jury Score';
+          const combinedScore = r1Score + r2ScoreVal;
+          candidateList.push({
+            name: item.name,
+            email: item.email || 'N/A',
+            teamName: isSolo ? (r.teamName && r.teamName !== 'Individual Entry' ? r.teamName : 'Individual Entry') : r.teamName,
+            instituteName: r.instituteName || 'Independent B-School',
+            r1Result: r1Score,
+            numericR1Score: r1Score,
+            r2Result: r2Display,
+            validPresentationScore: r2ScoreVal,
+            combinedResult: r.hasPresentation ? combinedScore : r1Score,
+            numericCombinedScore: combinedScore,
+            tieBreakerScore: Number(item.analyticalScore ?? item.tieBreakerScore ?? 0),
+            timeTaken: Number(item.timeTaken ?? 1800),
+            tabSwitches: Number(item.tabSwitches ?? 0),
+            attempted: true,
+          });
+        }
+      };
+
+      if (r.isTeam && r.members && r.members.length > 0) {
+        r.members.forEach((m: any) => checkAndAdd(m, false));
+      } else {
+        checkAndAdd(r, true);
+      }
+    });
+
+    // 4. Sort all candidates by official competition tie-breakers
+    const allParticipantsSorted = [...candidateList].sort((a, b) => {
       if (b.numericCombinedScore !== a.numericCombinedScore) {
         return b.numericCombinedScore - a.numericCombinedScore;
       }
