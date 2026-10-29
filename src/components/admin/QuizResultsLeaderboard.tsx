@@ -1806,7 +1806,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     );
 
     const candidateList: any[] = [];
-    const processedCandidateKeys = new Set<string>();
+    const matchedAttemptEmails = new Set<string>();
 
     cleanRegistrations.forEach((reg: any) => {
       const raw = reg.raw_data || {};
@@ -1834,16 +1834,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
           const rawEmail = (n.email || '').toLowerCase().trim();
           const normEmail = rawEmail.replace('@gamil.com', '@gmail.com');
           const candName = n.name || coordinator?.name || `Candidate ${idx + 1}`;
-          const uniqueKey = rawEmail || `${candName}_${reg.registrationNumber}_${idx}`;
-
-          if (processedCandidateKeys.has(uniqueKey)) return;
-          processedCandidateKeys.add(uniqueKey);
 
           const matchedAttempt = attemptLookup.get(rawEmail) ||
             attemptLookup.get(normEmail) ||
             attemptLookup.get(`${reg.registrationNumber}_${candName.toLowerCase()}`);
 
           if (matchedAttempt) {
+            if (matchedAttempt.email) matchedAttemptEmails.add(matchedAttempt.email.toLowerCase().trim());
             candidateList.push({
               name: candName,
               email: n.email || matchedAttempt.email || 'N/A',
@@ -1884,16 +1881,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         const candName = coordinator?.name || reg.contactPersonName || reg.candidateName || raw.candidate_name || reg.full_name || 'Solo Candidate';
         const rawEmail = (coordinator?.email || reg.candidateEmail || raw.candidate_email || reg.emailAddress || reg.email || '').toLowerCase().trim();
         const normEmail = rawEmail.replace('@gamil.com', '@gmail.com');
-        const uniqueKey = rawEmail || `${candName}_${reg.registrationNumber}`;
-
-        if (processedCandidateKeys.has(uniqueKey)) return;
-        processedCandidateKeys.add(uniqueKey);
 
         const matchedAttempt = attemptLookup.get(rawEmail) ||
           attemptLookup.get(normEmail) ||
           attemptLookup.get(reg.registrationNumber);
 
         if (matchedAttempt) {
+          if (matchedAttempt.email) matchedAttemptEmails.add(matchedAttempt.email.toLowerCase().trim());
           candidateList.push({
             name: candName,
             email: rawEmail || matchedAttempt.email || 'N/A',
@@ -1935,8 +1929,8 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     leaderboardWithCombinedScores.forEach((r: any) => {
       const checkAndAdd = (item: any, isSolo: boolean) => {
         const em = (item.email || '').toLowerCase().trim();
-        if (em && !processedCandidateKeys.has(em) && !processedCandidateKeys.has(em.replace('@gamil.com', '@gmail.com'))) {
-          processedCandidateKeys.add(em);
+        if (em && !matchedAttemptEmails.has(em) && !matchedAttemptEmails.has(em.replace('@gamil.com', '@gmail.com'))) {
+          matchedAttemptEmails.add(em);
           const r1Score = Number(item.score ?? item.quizScore ?? 0);
           const r2ScoreVal = r.hasPresentation ? Number(r.presentationScore) : 0;
           const r2Display = r.hasPresentation ? Number(r.presentationScore) : 'Pending Jury Score';
