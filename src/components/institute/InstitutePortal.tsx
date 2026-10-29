@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useCompetition } from '../../context/CompetitionContext';
 import { DocRequirementInfo } from '../common/DocRequirementInfo';
-import { Team } from '../../types';
+import { Team, CertificateRecord } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { parseISTTimestamp, formatQuizScheduleDate } from '../../lib/formatters';
 import {
@@ -49,6 +49,8 @@ export const InstitutePortal: React.FC = () => {
     evaluations,
     offlineRoundResults,
     config,
+    certificates,
+    setActiveCertificateModal,
   } = useCompetition();
 
   const userEmail = (participantUser?.email || participantUser?.coordinator_email || currentUser.email || '').toLowerCase().trim();
@@ -66,6 +68,52 @@ export const InstitutePortal: React.FC = () => {
     config?.isResultsPublishedR1 ??
     false
   );
+
+  const isCertificatePublished = Boolean(
+    stage1Program?.isCertificatePublished === true ||
+    (stage1Program as any)?.is_certificate_published === true ||
+    config?.isCertificatePublishedR1 === true ||
+    config?.isCertificatePublished === true ||
+    (matchedReg as any)?.isCertificatePublished === true ||
+    (matchedReg as any)?.raw_data?.isCertificatePublished === true
+  );
+
+  const canViewCertificates = Boolean(isCertificatePublished && isResultsPublished);
+
+  const getCandidateCertificate = (s: any): CertificateRecord => {
+    const sEmail = (s.email || '').toLowerCase().trim();
+    const existing = (certificates || []).find((c: any) => {
+      if (!c) return false;
+      if (c.recipientEmail && c.recipientEmail.toLowerCase().trim() === sEmail) return true;
+      if (c.recipientId && (c.recipientId === s.id || c.recipientId === s.studentId || c.recipientId === s.email)) return true;
+      if (s.studentId && c.certificateNumber && c.certificateNumber.includes(s.studentId)) return true;
+      if (s.studentId && (c as any).registrationNumber === s.studentId) return true;
+      return false;
+    });
+
+    if (existing) return existing;
+
+    const regNumber = matchedReg?.registrationNumber || userRegNum || 'AIMA-CL26-INST';
+    const isPassed = (s.r1Score ?? 0) >= 60;
+    const certNum = `AIMA-2026-CERT-${regNumber.replace(/[^A-Za-z0-9]/g, '')}-${(s.studentId || s.name).slice(0, 4).toUpperCase()}`;
+
+    return {
+      id: `cert_${s.id || s.email}`,
+      certificateNumber: certNum,
+      recipientName: s.name,
+      recipientEmail: s.email,
+      recipientRole: 'Student Nominee',
+      recipientId: s.id || s.email,
+      teamName: s.teamName,
+      institute: instName || "ASM's Institute of Business Management and Research",
+      registrationNumber: regNumber,
+      achievement: isPassed ? 'Round 1 Qualifier' : 'CERTIFICATE OF PARTICIPATION',
+      certificateCategory: isPassed ? 'selection' : 'participation',
+      issueDate: 'October 2026',
+      qrVerificationUrl: `https://research.aima.in/verify/${certNum}`,
+      authorizedSignatory: 'Director, AIMA Case Research Centre',
+    };
+  };
 
   const r1StartDate = stage1Program?.startDate || stage1Program?.startTime || (stage1Program as any)?.start_time || config?.r1QuizStartTime;
   const r1EndDate = stage1Program?.endDate || stage1Program?.endTime || (stage1Program as any)?.end_time || config?.r1QuizEndTime;
@@ -773,7 +821,8 @@ export const InstitutePortal: React.FC = () => {
                   <th className="p-3">Stage Fee</th>
                   <th className="p-3">R1 Quiz Score</th>
                   <th className="p-3">R2 Case Defense</th>
-                  <th className="p-3 text-right">Combined Result</th>
+                  <th className="p-3">Combined Result</th>
+                  <th className="p-3 text-right">Certificate</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
@@ -826,7 +875,7 @@ export const InstitutePortal: React.FC = () => {
                         <span className="text-slate-400 text-[11px] italic">Pending Defense</span>
                       )}
                     </td>
-                    <td className="p-3 text-right">
+                    <td className="p-3">
                       {isResultsPublished && s.r2Score !== undefined ? (
                         <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">
                           {((s.r1Score || 0) + s.r2Score)}/200
@@ -834,6 +883,29 @@ export const InstitutePortal: React.FC = () => {
                       ) : (
                         <span className="text-slate-400 text-[11px] italic">
                           Results Awaited
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3 text-right">
+                      {canViewCertificates ? (
+                        <button
+                          onClick={() => {
+                            const cert = getCandidateCertificate(s);
+                            setActiveCertificateModal(cert);
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold text-[11px] rounded-lg shadow-2xs hover:shadow-xs transition-all cursor-pointer"
+                          title="View & Download Official AIMA Certificate"
+                        >
+                          <Award className="w-3.5 h-3.5 shrink-0" />
+                          <span>View Cert</span>
+                        </button>
+                      ) : (
+                        <span
+                          className="inline-flex items-center gap-1 text-[11px] text-slate-400 font-medium cursor-not-allowed"
+                          title="Certificates will unlock once results and certificates are published by AIMA"
+                        >
+                          <Lock className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>Locked</span>
                         </span>
                       )}
                     </td>
