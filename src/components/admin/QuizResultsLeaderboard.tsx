@@ -9,6 +9,7 @@ import {
   toggleQuizProgramPublication,
   saveJuryScorecardToDb,
   fetchJuryEvaluationsFromDb,
+  supabase,
 } from '../../lib/supabase';
 import { OFFICIAL_CASE_TRACKS } from '../../data/caseTracks';
 import { sendFinalResultsEmail } from '../../lib/emailService';
@@ -793,6 +794,97 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     );
   };
 
+  // Determine final combined results publication status (Master flag across both rounds)
+  const isFinalResultsPublished = Boolean(
+    config?.isFinalResultsPublished ||
+    (config as any)?.is_final_results_published ||
+    (selectedProgram as any)?.isFinalResultsPublished ||
+    (typeof localStorage !== 'undefined' && localStorage.getItem('AIMA_FINAL_RESULTS_PUBLISHED') === 'true')
+  );
+
+  const [isTogglingFinalResults, setIsTogglingFinalResults] = useState(false);
+
+  const handleTogglePublishFinalResults = async () => {
+    setIsTogglingFinalResults(true);
+    const nextState = !isFinalResultsPublished;
+    try {
+      // 1. LocalStorage immediate persistence
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('AIMA_FINAL_RESULTS_PUBLISHED', String(nextState));
+      }
+
+      // 2. Update Competition Context config
+      await updateConfig({
+        isFinalResultsPublished: nextState,
+        isPublicResultsPublished: true,
+      });
+
+      // 3. Persist system-level override in Supabase registrations table
+      try {
+        const { data: existingSys } = await supabase
+          .from('registrations')
+          .select('*')
+          .eq('registration_number', 'AIMA_SYSTEM_QUIZ_CONFIG')
+          .maybeSingle();
+
+        const raw = existingSys?.raw_data || {};
+        const now = new Date().toISOString();
+        if (existingSys) {
+          await supabase
+            .from('registrations')
+            .update({
+              raw_data: { ...raw, isFinalResultsPublished: nextState, updatedAt: now },
+            })
+            .eq('id', existingSys.id);
+        } else {
+          await supabase.from('registrations').insert([
+            {
+              registration_number: 'AIMA_SYSTEM_QUIZ_CONFIG',
+              contact_email: 'system@aima.in',
+              team_name: 'AIMA System Settings',
+              raw_data: { isFinalResultsPublished: nextState, updatedAt: now },
+              created_at: now,
+              updated_at: now,
+            },
+          ]);
+        }
+      } catch (sysErr) {
+        console.warn('Could not persist final results flag in registrations:', sysErr);
+      }
+
+      // 4. Update competition_config table if possible
+      try {
+        await supabase
+          .from('competition_config')
+          .update({
+            is_public_results_published: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', 'default');
+      } catch (cfgErr) {
+        console.warn('competition_config update notice:', cfgErr);
+      }
+
+      // 5. If selected program exists, also update quiz_programs table
+      if (selectedProgram && selectedProgram.id) {
+        await updateQuizProgram(selectedProgram.id, {
+          isResultsPublished: true,
+          is_results_published: true,
+        });
+        await toggleQuizProgramPublication(selectedProgram.id, true);
+        await refreshQuizPrograms();
+      }
+
+      addAuditLog(
+        nextState ? 'Final Combined Results Published' : 'Final Combined Results Unpublished',
+        'Results',
+        `Super Administrator ${nextState ? 'published' : 'unpublished'} official final combined results (Round 1 Quiz + Round 2 Jury Defense). Visible to candidates and institutions.`
+      );
+    } finally {
+      setIsTogglingFinalResults(false);
+    }
+  };
+
   // 1. Filter attempts strictly based on the selected program with NO fallbacks
   const relevantAttempts = quizAttempts.filter(a => {
     if (!a.isCompleted) return false;
@@ -1022,6 +1114,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       };
     });
   }, [groupedLeaderboard, dbJuryEvaluations, offlineRoundResults]);
+
+  // Count candidates / teams who have both Round 1 quiz score and Round 2 jury marks
+  const countWithBothRounds = useMemo(() => {
+    return (enrichedGroupedLeaderboard || []).filter(
+      r => (Number(r.score) > 0 || r.isCompleted) && r.hasPresentation
+    ).length;
+  }, [enrichedGroupedLeaderboard]);
 
   // Official Ranking Sorting:
   // When rankingMode === 'combined':
@@ -1916,12 +2015,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
             </span>
           </div>
 
-          {/* Publish Results Button (Dependent on Selected Quiz Program) */}
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          {/* Action Buttons: Publish R1 Quiz Results & Publish Final Results (R1 + R2) */}
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+            {/* Publish R1 Quiz Program Results */}
             <button
               onClick={handleTogglePublishResults}
               disabled={selectedProgramId === 'all'}
-              className={`w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs ${selectedProgramId === 'all'
+              className={`w-full sm:w-auto px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs ${selectedProgramId === 'all'
                 ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700 cursor-not-allowed opacity-75'
                 : isResultsPublished
                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'
@@ -1937,21 +2037,57 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
             >
               {selectedProgramId === 'all' ? (
                 <>
-                  <Lock className="w-4 h-4 text-slate-400" />
-                  <span>Select a Quiz to Publish Results</span>
+                  <Lock className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Select Quiz to Publish</span>
                 </>
               ) : isResultsPublished ? (
                 <>
-                  <CheckCircle2 className="w-4 h-4 text-white" />
-                  <span>
-                    ✓ Results Published ({selectedProgram?.code || 'Selected'})
-                  </span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                  <span>✓ R1 Published ({selectedProgram?.code || 'Selected'})</span>
                 </>
               ) : (
                 <>
-                  <AlertTriangle className="w-4 h-4 text-slate-900" />
+                  <AlertTriangle className="w-3.5 h-3.5 text-slate-900" />
+                  <span>Publish R1 Results ({selectedProgram?.code || 'Selected'})</span>
+                </>
+              )}
+            </button>
+
+            {/* Master Final Results (R1 + R2) Publication Button */}
+            <button
+              onClick={handleTogglePublishFinalResults}
+              disabled={isTogglingFinalResults}
+              className={`w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer ${
+                isFinalResultsPublished
+                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-purple-600/20'
+                  : 'bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-black shadow-amber-500/20 ring-2 ring-amber-400/40'
+              }`}
+              title={
+                isFinalResultsPublished
+                  ? 'Final Results are LIVE for candidates and institutions. Click to unpublish.'
+                  : `Click to publish official final combined results (Round 1 Quiz + Round 2 Jury Defense). Students and institutes will immediately see their final marks and rankings.`
+              }
+            >
+              {isTogglingFinalResults ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Updating...</span>
+                </>
+              ) : isFinalResultsPublished ? (
+                <>
+                  <Award className="w-4 h-4 text-amber-300" />
+                  <span>✓ Final Results Published (R1 + R2)</span>
+                </>
+              ) : (
+                <>
+                  <Trophy className="w-4 h-4 text-slate-950" />
                   <span>
-                    Publish Results ({selectedProgram?.code || 'Selected'})
+                    Publish Final Results (R1 + R2)
+                    {countWithBothRounds > 0 && (
+                      <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-md bg-black/20 text-slate-950 font-mono font-bold">
+                        {countWithBothRounds} Ready
+                      </span>
+                    )}
                   </span>
                 </>
               )}

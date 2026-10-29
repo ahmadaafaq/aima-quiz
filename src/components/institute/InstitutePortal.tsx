@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useCompetition } from '../../context/CompetitionContext';
 import { DocRequirementInfo } from '../common/DocRequirementInfo';
 import { Team, CertificateRecord } from '../../types';
-import { supabase } from '../../lib/supabase';
+import { supabase, fetchJuryEvaluationsFromDb } from '../../lib/supabase';
 import { parseISTTimestamp, formatQuizScheduleDate } from '../../lib/formatters';
 import {
   AlertCircle,
@@ -68,6 +68,22 @@ export const InstitutePortal: React.FC = () => {
     config?.isResultsPublishedR1 ??
     false
   );
+
+  const isFinalResultsPublished = Boolean(
+    config?.isFinalResultsPublished ||
+    (config as any)?.is_final_results_published ||
+    (typeof localStorage !== 'undefined' && localStorage.getItem('AIMA_FINAL_RESULTS_PUBLISHED') === 'true')
+  );
+
+  const [dbJuryEvaluations, setDbJuryEvaluations] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchJuryEvaluationsFromDb('round_2').then(data => {
+      if (data && data.length > 0) {
+        setDbJuryEvaluations(data);
+      }
+    }).catch(err => console.warn('Could not load jury evaluations in InstitutePortal:', err));
+  }, []);
 
   const r1StartDate = stage1Program?.startDate || stage1Program?.startTime || (stage1Program as any)?.start_time || config?.r1QuizStartTime;
   const r1EndDate = stage1Program?.endDate || stage1Program?.endTime || (stage1Program as any)?.end_time || config?.r1QuizEndTime;
@@ -229,11 +245,17 @@ export const InstitutePortal: React.FC = () => {
       );
 
     return baseTeams.map(t => {
-      const memberEmails = (t.members || []).map((m: any) => m.email?.toLowerCase().trim()).filter(Boolean);
-      const teamAttempts = (quizAttempts || []).filter(a =>
-        a.isCompleted &&
-        (a.teamId === t.id || (a.participantEmail && memberEmails.includes(a.participantEmail.toLowerCase().trim())))
-      );
+      const memberEmails = (t.members || []).map((m: any) => (m.email || '').toLowerCase().trim()).filter(Boolean);
+      const teamAttempts = (quizAttempts || []).filter(a => {
+        const aCompleted = Boolean(a.isCompleted ?? true);
+        const aEmail = (a.participantEmail || (a as any).participant_email || '').toLowerCase().trim();
+        const aTeam = (a.teamId || (a as any).team_id || '').trim();
+        return aCompleted && (
+          (t.id && aTeam === t.id) ||
+          (matchedReg?.registrationNumber && aTeam.includes(matchedReg.registrationNumber)) ||
+          (aEmail && memberEmails.includes(aEmail))
+        );
+      });
 
       const r1AvgScore = teamAttempts.length > 0
         ? Math.round(teamAttempts.reduce((acc, a) => acc + (Number(a.score) || 0), 0) / teamAttempts.length)
@@ -241,14 +263,45 @@ export const InstitutePortal: React.FC = () => {
 
       const sub = (caseSubmissions || []).find(s => s.teamId === t.id || s.teamId === t.name) || t.r2Submission;
 
-      const teamEval = (evaluations || []).find(e => e.teamId === t.id || e.submissionId === sub?.id);
+      const teamEval = (dbJuryEvaluations || []).find(e => {
+        const cReg = (e.registration_number || e.registrationNumber || '').trim();
+        const cTeam = (e.team_id || e.teamId || '').trim();
+        const cEmail = (e.candidate_email || e.candidateEmail || '').toLowerCase().trim();
+        return (
+          (t.id && (cTeam === t.id || e.teamId === t.id)) ||
+          (matchedReg?.registrationNumber && (cReg === matchedReg.registrationNumber || cTeam.includes(matchedReg.registrationNumber))) ||
+          (cEmail && memberEmails.includes(cEmail))
+        );
+      }) || (evaluations || []).find(e => {
+        const cReg = (e.registrationNumber || (e as any).registration_number || '').trim();
+        const cTeam = (e.teamId || (e as any).team_id || '').trim();
+        const cEmail = (e.candidateEmail || (e as any).candidate_email || '').toLowerCase().trim();
+        return (
+          (t.id && (cTeam === t.id || e.teamId === t.id)) ||
+          (sub?.id && e.submissionId === sub.id) ||
+          (matchedReg?.registrationNumber && (cReg === matchedReg.registrationNumber || cTeam.includes(matchedReg.registrationNumber))) ||
+          (cEmail && memberEmails.includes(cEmail))
+        );
+      });
+
       const offlineResult = (offlineRoundResults || []).find(
-        o => (o.round === 'round_2' && (o.teamId === t.id || o.teamName?.toLowerCase() === t.name?.toLowerCase()))
+        o => (o.round === 'round_2' && (
+          (t.id && o.teamId === t.id) ||
+          (matchedReg?.registrationNumber && (o.registrationNumber === matchedReg.registrationNumber || (o.teamId && o.teamId.includes(matchedReg.registrationNumber)))) ||
+          (o.teamName && t.name && o.teamName.toLowerCase() === t.name.toLowerCase()) ||
+          (o.instituteName && instName && o.instituteName.toLowerCase() === instName.toLowerCase())
+        ))
       );
 
-      const r2Score = teamEval?.totalScore !== undefined
-        ? Number(teamEval.totalScore)
-        : (offlineResult?.score !== undefined ? Number(offlineResult.score) : undefined);
+      const r2Score = teamEval?.total_score !== undefined && teamEval?.total_score !== null && Number(teamEval.total_score) > 0
+        ? Number(teamEval.total_score)
+        : (teamEval?.totalScore !== undefined && teamEval?.totalScore !== null && Number(teamEval.totalScore) > 0
+          ? Number(teamEval.totalScore)
+          : (offlineResult?.livePresentationScore !== undefined && Number(offlineResult.livePresentationScore) > 0
+            ? Number(offlineResult.livePresentationScore)
+            : (offlineResult?.aggregateScore !== undefined && Number(offlineResult.aggregateScore) > 0
+              ? Number(offlineResult.aggregateScore)
+              : undefined)));
 
       const combinedScore = (r1AvgScore !== undefined ? r1AvgScore : 0) + (r2Score !== undefined ? r2Score : 0);
 
@@ -256,30 +309,78 @@ export const InstitutePortal: React.FC = () => {
         ...t,
         r1AvgScore,
         teamAttemptsCount: teamAttempts.length,
-        hasDeckSubmitted: Boolean(sub),
+        hasDeckSubmitted: Boolean(sub || teamEval || offlineResult),
         sub,
         r2Score,
-        combinedScore: (isResultsPublished && r2Score !== undefined) ? combinedScore : undefined,
+        combinedScore: (isFinalResultsPublished && r2Score !== undefined) ? combinedScore : undefined,
       };
     });
-  }, [dynamicTeamsFromReg, teams, instName, coordinatorEmail, quizAttempts, caseSubmissions, evaluations, offlineRoundResults, isResultsPublished]);
+  }, [dynamicTeamsFromReg, teams, instName, coordinatorEmail, quizAttempts, caseSubmissions, evaluations, dbJuryEvaluations, offlineRoundResults, isFinalResultsPublished, matchedReg?.registrationNumber]);
 
   // Real dynamic roster from registration nominees with dynamic attempt data (Fee is ₹0)
   const rosterFromReg = useMemo(() => {
     return regNominees.map((n, idx) => {
       const email = (n.email || '').toLowerCase().trim();
-      const attempt = (quizAttempts || []).find(
-        a => a.participantEmail?.toLowerCase().trim() === email || a.studentId === n.enrolmentNumber
-      );
+      const sId = (n.enrolmentNumber || n.id || '').toLowerCase().trim();
+      const attempt = (quizAttempts || []).find(a => {
+        const aEmail = (a.participantEmail || (a as any).participant_email || '').toLowerCase().trim();
+        const aStudentId = (a.studentId || (a as any).student_id || '').toLowerCase().trim();
+        const aUserId = (a.userId || (a as any).user_id || '').toLowerCase().trim();
+        return (
+          (email && aEmail === email) ||
+          (sId && (aStudentId === sId || aUserId === sId)) ||
+          (email && (aStudentId.includes(email.replace(/[^a-z0-9]/g, '')) || aUserId.includes(email.replace(/[^a-z0-9]/g, ''))))
+        );
+      });
 
       const r1Score = attempt?.score !== undefined ? Number(attempt.score) : undefined;
       const isAttempted = Boolean(attempt?.isCompleted || attempt);
 
       const teamName = n.teamName || 'Institute Nominee';
-      const team = instituteTeams.find(t => t.name === teamName);
+      const team = instituteTeams.find(t => t.name === teamName) || instituteTeams[0];
 
-      const r2Score = team?.r2Score;
-      const hasDeckSubmitted = Boolean(team?.hasDeckSubmitted);
+      // Match jury evaluation specifically for this candidate or team
+      const candidateEval = (dbJuryEvaluations || []).find(e => {
+        const cEmail = (e.candidate_email || e.candidateEmail || '').toLowerCase().trim();
+        const cReg = (e.registration_number || e.registrationNumber || '').trim();
+        const cTeam = (e.team_id || e.teamId || '').trim();
+        return (
+          (email && cEmail === email) ||
+          (matchedReg?.registrationNumber && cReg === matchedReg.registrationNumber) ||
+          (team?.id && (cTeam === team.id || e.teamId === team.id)) ||
+          (cTeam && matchedReg?.registrationNumber && cTeam.includes(matchedReg.registrationNumber))
+        );
+      }) || (evaluations || []).find(e => {
+        const cEmail = (e.candidateEmail || (e as any).candidate_email || '').toLowerCase().trim();
+        const cReg = (e.registrationNumber || (e as any).registration_number || '').trim();
+        const cTeam = (e.teamId || (e as any).team_id || '').trim();
+        return (
+          (email && cEmail === email) ||
+          (matchedReg?.registrationNumber && cReg === matchedReg.registrationNumber) ||
+          (team?.id && (cTeam === team.id || e.teamId === team.id)) ||
+          (cTeam && matchedReg?.registrationNumber && cTeam.includes(matchedReg.registrationNumber))
+        );
+      }) || (offlineRoundResults || []).find(o => {
+        const oReg = (o.registrationNumber || '').trim();
+        const oTeam = (o.teamId || '').trim();
+        return (
+          (matchedReg?.registrationNumber && oReg === matchedReg.registrationNumber) ||
+          (team?.id && oTeam === team.id) ||
+          (oTeam && matchedReg?.registrationNumber && oTeam.includes(matchedReg.registrationNumber))
+        );
+      });
+
+      const r2Score = candidateEval?.total_score !== undefined && candidateEval?.total_score !== null && Number(candidateEval.total_score) > 0
+        ? Number(candidateEval.total_score)
+        : (candidateEval?.totalScore !== undefined && candidateEval?.totalScore !== null && Number(candidateEval.totalScore) > 0
+          ? Number(candidateEval.totalScore)
+          : (candidateEval?.livePresentationScore !== undefined && Number(candidateEval.livePresentationScore) > 0
+            ? Number(candidateEval.livePresentationScore)
+            : (candidateEval?.aggregateScore !== undefined && Number(candidateEval.aggregateScore) > 0
+              ? Number(candidateEval.aggregateScore)
+              : team?.r2Score)));
+
+      const hasDeckSubmitted = Boolean(team?.hasDeckSubmitted || candidateEval);
 
       return {
         id: n.id || n.email || `nom_${idx}`,
@@ -295,23 +396,71 @@ export const InstitutePortal: React.FC = () => {
         hasDeckSubmitted,
       };
     });
-  }, [regNominees, quizAttempts, instituteTeams]);
+  }, [regNominees, quizAttempts, instituteTeams, dbJuryEvaluations, evaluations, offlineRoundResults, matchedReg?.registrationNumber]);
 
   const rosterFromDb = useMemo(() => {
     return dbParticipants
       .filter(p => !p.program?.toLowerCase().includes('coordinator') && p.email?.toLowerCase() !== coordinatorEmail.toLowerCase())
       .map((p, idx) => {
         const email = (p.email || '').toLowerCase().trim();
-        const attempt = (quizAttempts || []).find(
-          a => a.participantEmail?.toLowerCase().trim() === email || a.studentId === p.enrolment_number
-        );
+        const sId = (p.enrolment_number || p.id || '').toLowerCase().trim();
+        const attempt = (quizAttempts || []).find(a => {
+          const aEmail = (a.participantEmail || (a as any).participant_email || '').toLowerCase().trim();
+          const aStudentId = (a.studentId || (a as any).student_id || '').toLowerCase().trim();
+          const aUserId = (a.userId || (a as any).user_id || '').toLowerCase().trim();
+          return (
+            (email && aEmail === email) ||
+            (sId && (aStudentId === sId || aUserId === sId)) ||
+            (email && (aStudentId.includes(email.replace(/[^a-z0-9]/g, '')) || aUserId.includes(email.replace(/[^a-z0-9]/g, ''))))
+          );
+        });
         const r1Score = attempt?.score !== undefined ? Number(attempt.score) : undefined;
         const isAttempted = Boolean(attempt?.isCompleted || attempt);
 
         const teamName = p.is_team_leader ? `${instName} Team Leader` : `${instName} Student Nominee`;
-        const team = instituteTeams.find(t => t.name === teamName);
-        const r2Score = team?.r2Score;
-        const hasDeckSubmitted = Boolean(team?.hasDeckSubmitted);
+        const team = instituteTeams.find(t => t.name === teamName) || instituteTeams[0];
+
+        const candidateEval = (dbJuryEvaluations || []).find(e => {
+          const cEmail = (e.candidate_email || e.candidateEmail || '').toLowerCase().trim();
+          const cReg = (e.registration_number || e.registrationNumber || '').trim();
+          const cTeam = (e.team_id || e.teamId || '').trim();
+          return (
+            (email && cEmail === email) ||
+            (matchedReg?.registrationNumber && cReg === matchedReg.registrationNumber) ||
+            (team?.id && (cTeam === team.id || e.teamId === team.id)) ||
+            (cTeam && matchedReg?.registrationNumber && cTeam.includes(matchedReg.registrationNumber))
+          );
+        }) || (evaluations || []).find(e => {
+          const cEmail = (e.candidateEmail || (e as any).candidate_email || '').toLowerCase().trim();
+          const cReg = (e.registrationNumber || (e as any).registration_number || '').trim();
+          const cTeam = (e.teamId || (e as any).team_id || '').trim();
+          return (
+            (email && cEmail === email) ||
+            (matchedReg?.registrationNumber && cReg === matchedReg.registrationNumber) ||
+            (team?.id && (cTeam === team.id || e.teamId === team.id)) ||
+            (cTeam && matchedReg?.registrationNumber && cTeam.includes(matchedReg.registrationNumber))
+          );
+        }) || (offlineRoundResults || []).find(o => {
+          const oReg = (o.registrationNumber || '').trim();
+          const oTeam = (o.teamId || '').trim();
+          return (
+            (matchedReg?.registrationNumber && oReg === matchedReg.registrationNumber) ||
+            (team?.id && oTeam === team.id) ||
+            (oTeam && matchedReg?.registrationNumber && oTeam.includes(matchedReg.registrationNumber))
+          );
+        });
+
+        const r2Score = candidateEval?.total_score !== undefined && candidateEval?.total_score !== null && Number(candidateEval.total_score) > 0
+          ? Number(candidateEval.total_score)
+          : (candidateEval?.totalScore !== undefined && candidateEval?.totalScore !== null && Number(candidateEval.totalScore) > 0
+            ? Number(candidateEval.totalScore)
+            : (candidateEval?.livePresentationScore !== undefined && Number(candidateEval.livePresentationScore) > 0
+              ? Number(candidateEval.livePresentationScore)
+              : (candidateEval?.aggregateScore !== undefined && Number(candidateEval.aggregateScore) > 0
+                ? Number(candidateEval.aggregateScore)
+                : team?.r2Score)));
+
+        const hasDeckSubmitted = Boolean(team?.hasDeckSubmitted || candidateEval);
 
         return {
           id: p.id || p.email,
@@ -327,7 +476,7 @@ export const InstitutePortal: React.FC = () => {
           hasDeckSubmitted,
         };
       });
-  }, [dbParticipants, coordinatorEmail, instName, quizAttempts, instituteTeams]);
+  }, [dbParticipants, coordinatorEmail, instName, quizAttempts, instituteTeams, dbJuryEvaluations, evaluations, offlineRoundResults, matchedReg?.registrationNumber]);
 
   const activeRoster = rosterFromReg.length > 0
     ? rosterFromReg
@@ -728,7 +877,7 @@ export const InstitutePortal: React.FC = () => {
 
                     <div>
                       <span className="text-[10px] text-slate-400 uppercase font-semibold block">Combined Merit</span>
-                      {isResultsPublished && t.r2Score !== undefined ? (
+                      {isFinalResultsPublished && t.r2Score !== undefined ? (
                         <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5 text-xs">
                           <Award className="w-3.5 h-3.5 shrink-0" /> {t.combinedScore}/200
                         </span>
@@ -842,7 +991,11 @@ export const InstitutePortal: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-3 font-semibold">
-                      {isQuizUpcoming ? (
+                      {s.r1Score !== undefined ? (
+                        <span className={s.r1Score >= 65 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-800 dark:text-slate-200 font-bold'}>
+                          {s.r1Score}% {isResultsPublished && s.r1Score >= 65 ? '★' : ''}
+                        </span>
+                      ) : isQuizUpcoming ? (
                         <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1" title={openTimeFormatted ? `Opens ${openTimeFormatted}` : 'Upcoming'}>
                           <Calendar className="w-3 h-3 text-blue-500" /> Upcoming
                         </span>
@@ -853,10 +1006,6 @@ export const InstitutePortal: React.FC = () => {
                       ) : !isResultsPublished ? (
                         <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
                           <Clock className="w-3 h-3" /> Under Review
-                        </span>
-                      ) : s.r1Score !== undefined ? (
-                        <span className={s.r1Score >= 65 ? 'text-emerald-600' : 'text-slate-500'}>
-                          {s.r1Score}% {s.r1Score >= 65 ? '★' : ''}
                         </span>
                       ) : (
                         <span className="text-slate-400 italic">Not taken</span>
@@ -876,13 +1025,13 @@ export const InstitutePortal: React.FC = () => {
                       )}
                     </td>
                     <td className="p-3">
-                      {isResultsPublished && s.r2Score !== undefined ? (
+                      {isFinalResultsPublished && s.r2Score !== undefined ? (
                         <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">
                           {((s.r1Score || 0) + s.r2Score)}/200
                         </span>
                       ) : (
-                        <span className="text-slate-400 text-[11px] italic">
-                          Results Awaited
+                        <span className="text-slate-400 text-[11px] italic flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-400" /> Results Awaited
                         </span>
                       )}
                     </td>

@@ -1150,8 +1150,32 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     async function loadLiveConfig() {
       try {
         const live = await fetchCompetitionConfigFromSupabase();
+        let isFinalPub = typeof localStorage !== 'undefined' && localStorage.getItem('AIMA_FINAL_RESULTS_PUBLISHED') === 'true';
+        try {
+          const { data: sysRow } = await supabase
+            .from('registrations')
+            .select('raw_data')
+            .eq('registration_number', 'AIMA_SYSTEM_QUIZ_CONFIG')
+            .maybeSingle();
+          if (sysRow?.raw_data?.isFinalResultsPublished !== undefined) {
+            isFinalPub = Boolean(sysRow.raw_data.isFinalResultsPublished);
+            if (typeof localStorage !== 'undefined') {
+              localStorage.setItem('AIMA_FINAL_RESULTS_PUBLISHED', String(isFinalPub));
+            }
+          }
+        } catch {}
+
         if (live && isMounted) {
-          setConfig(prev => ({ ...prev, ...live }));
+          setConfig(prev => ({
+            ...prev,
+            ...live,
+            isFinalResultsPublished: live.isFinalResultsPublished ?? isFinalPub,
+          }));
+        } else if (isMounted) {
+          setConfig(prev => ({
+            ...prev,
+            isFinalResultsPublished: isFinalPub,
+          }));
         }
       } catch (err) {
         console.warn('Initial competition config fetch notice:', err);

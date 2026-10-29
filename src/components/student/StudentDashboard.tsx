@@ -6,7 +6,7 @@ import { DocRequirementInfo } from '../common/DocRequirementInfo';
 import { ParticipantLoginPage } from '../auth/ParticipantLoginPage';
 import { InstitutePortal } from '../institute/InstitutePortal';
 import { OFFICIAL_CASE_TRACKS, OFFICIAL_INSTRUCTION_DOCS, CaseTrack } from '../../data/caseTracks';
-import { fetchRegistrationByNumber, fetchProgramQuestionsOrdered, fetchParticipantTrackSelection } from '../../lib/supabase';
+import { fetchRegistrationByNumber, fetchProgramQuestionsOrdered, fetchParticipantTrackSelection, fetchJuryEvaluationsFromDb } from '../../lib/supabase';
 import { CSRBootcampRegistration, QuizQuestion } from '../../types';
 import { formatQuizScheduleDate, parseISTTimestamp, formatISTDateTime } from '../../lib/formatters';
 import {
@@ -67,6 +67,7 @@ export const StudentDashboard: React.FC = () => {
     makePayment,
     quizAttempts,
     caseSubmissions,
+    offlineRoundResults,
     hubs,
     certificates,
     setCertificates,
@@ -254,24 +255,24 @@ export const StudentDashboard: React.FC = () => {
   const myCert =
     (Array.isArray(certificates)
       ? certificates.find((c) => {
-          if (!c) return false;
-          // Match by email
-          if (currentUser.email && c.recipientEmail && c.recipientEmail.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return true;
-          if (liveRegistration?.email && c.recipientEmail && c.recipientEmail.toLowerCase().trim() === liveRegistration.email.toLowerCase().trim()) return true;
-          if (liveRegistration?.candidate_email && c.recipientEmail && c.recipientEmail.toLowerCase().trim() === liveRegistration.candidate_email.toLowerCase().trim()) return true;
-          // Match by registration number
-          if (currentUser.registrationNumber && (c as any).registrationNumber && (c as any).registrationNumber === currentUser.registrationNumber) return true;
-          if (liveRegistration?.registrationNumber && (c as any).registrationNumber && (c as any).registrationNumber === liveRegistration.registrationNumber) return true;
-          if (currentUser.registrationNumber && c.certificateNumber && c.certificateNumber.includes(currentUser.registrationNumber)) return true;
-          if (liveRegistration?.registrationNumber && c.certificateNumber && c.certificateNumber.includes(liveRegistration.registrationNumber)) return true;
-          // Match by team name
-          if (currentTeam?.name && c.teamName && c.teamName.toLowerCase().trim() === currentTeam.name.toLowerCase().trim()) return true;
-          if (liveRegistration?.teamName && c.teamName && c.teamName.toLowerCase().trim() === liveRegistration.teamName.toLowerCase().trim()) return true;
-          // Match by recipient ID / team ID
-          if (c.recipientId && (c.recipientId === currentUser.id || c.recipientId === currentUser.email)) return true;
-          if (currentTeam?.id && c.teamId && c.teamId === currentTeam.id) return true;
-          return false;
-        })
+        if (!c) return false;
+        // Match by email
+        if (currentUser.email && c.recipientEmail && c.recipientEmail.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return true;
+        if (liveRegistration?.email && c.recipientEmail && c.recipientEmail.toLowerCase().trim() === liveRegistration.email.toLowerCase().trim()) return true;
+        if (liveRegistration?.candidate_email && c.recipientEmail && c.recipientEmail.toLowerCase().trim() === liveRegistration.candidate_email.toLowerCase().trim()) return true;
+        // Match by registration number
+        if (currentUser.registrationNumber && (c as any).registrationNumber && (c as any).registrationNumber === currentUser.registrationNumber) return true;
+        if (liveRegistration?.registrationNumber && (c as any).registrationNumber && (c as any).registrationNumber === liveRegistration.registrationNumber) return true;
+        if (currentUser.registrationNumber && c.certificateNumber && c.certificateNumber.includes(currentUser.registrationNumber)) return true;
+        if (liveRegistration?.registrationNumber && c.certificateNumber && c.certificateNumber.includes(liveRegistration.registrationNumber)) return true;
+        // Match by team name
+        if (currentTeam?.name && c.teamName && c.teamName.toLowerCase().trim() === currentTeam.name.toLowerCase().trim()) return true;
+        if (liveRegistration?.teamName && c.teamName && c.teamName.toLowerCase().trim() === liveRegistration.teamName.toLowerCase().trim()) return true;
+        // Match by recipient ID / team ID
+        if (c.recipientId && (c.recipientId === currentUser.id || c.recipientId === currentUser.email)) return true;
+        if (currentTeam?.id && c.teamId && c.teamId === currentTeam.id) return true;
+        return false;
+      })
       : undefined) ||
     (liveRegistration as any)?.raw_data?.certificate ||
     (liveRegistration as any)?.certificate;
@@ -292,6 +293,51 @@ export const StudentDashboard: React.FC = () => {
     config?.isPublicResultsPublished ??
     false
   );
+
+  const isFinalResultsPublished = Boolean(
+    config?.isFinalResultsPublished ||
+    (config as any)?.is_final_results_published ||
+    (stage1Program as any)?.isFinalResultsPublished ||
+    (typeof localStorage !== 'undefined' && localStorage.getItem('AIMA_FINAL_RESULTS_PUBLISHED') === 'true')
+  );
+
+  const [dbJuryEvaluations, setDbJuryEvaluations] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchJuryEvaluationsFromDb('round_2').then(data => {
+      if (data && data.length > 0) {
+        setDbJuryEvaluations(data);
+      }
+    }).catch(err => console.warn('Could not load jury evaluations in StudentDashboard:', err));
+  }, []);
+
+  const studentJuryEval = useMemo(() => {
+    const email = (currentUser?.email || '').toLowerCase().trim();
+    const regNum = (currentUser?.studentIdCardNumber || (currentUser as any)?.registrationNumber || '').trim();
+    const teamId = currentTeam?.id;
+    const memberEmails = (currentTeam?.members || []).map((m: any) => (m.email || '').toLowerCase().trim()).filter(Boolean);
+
+    return (dbJuryEvaluations || []).find(e => {
+      const cEmail = (e.candidate_email || e.candidateEmail || '').toLowerCase().trim();
+      const cReg = (e.registration_number || e.registrationNumber || '').trim();
+      const cTeam = (e.team_id || e.teamId || '').trim();
+      return (
+        (email && cEmail === email) ||
+        (memberEmails.length > 0 && memberEmails.includes(cEmail)) ||
+        (regNum && cReg === regNum) ||
+        (teamId && (cTeam === teamId || e.teamId === teamId)) ||
+        (regNum && cTeam.includes(regNum))
+      );
+    }) || (offlineRoundResults || []).find(o => {
+      const oReg = (o.registrationNumber || '').trim();
+      const oTeam = (o.teamId || '').trim();
+      return (
+        (regNum && oReg === regNum) ||
+        (teamId && oTeam === teamId) ||
+        (regNum && oTeam.includes(regNum))
+      );
+    });
+  }, [dbJuryEvaluations, offlineRoundResults, currentUser, currentTeam]);
 
   const getQuizAvailability = () => {
     if (!stage1Program) {
@@ -403,7 +449,7 @@ export const StudentDashboard: React.FC = () => {
       (candidateCount * (config?.feeR1R2 || 200))
     );
 
-  const formattedTotalAmount = isComplimentary ? '₹0' : `₹${Number(totalAmountVal || 0).toLocaleString('en-IN')}`;
+  const formattedTotalAmount = '₹0';
   const perStudentAmount = isComplimentary ? 0 : (candidateCount > 0 ? Math.round(totalAmountVal / candidateCount) : 0);
   const formattedPerStudentAmount = isComplimentary ? '₹0' : `₹${perStudentAmount.toLocaleString('en-IN')}`;
 
@@ -2838,6 +2884,72 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
                     </div>
                   )}
                 </div>
+
+                {/* Round 2 Jury Scorecard & Final Results Card (Displayed when jury has evaluated) */}
+                {studentJuryEval && (
+                  <div className={`p-5 rounded-2xl border transition-all ${
+                    isFinalResultsPublished
+                      ? 'bg-gradient-to-r from-purple-500/10 via-emerald-500/10 to-blue-500/10 border-purple-500/30 dark:border-purple-500/40'
+                      : 'bg-amber-500/10 border-amber-500/30'
+                  }`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <Award className={`w-5 h-5 ${isFinalResultsPublished ? 'text-purple-600 dark:text-purple-400' : 'text-amber-600'}`} />
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                            <span>Round 2 Case Defense Scorecard</span>
+                            {isFinalResultsPublished ? (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold border border-emerald-300">
+                                Official Final Results Published ✓
+                              </span>
+                            ) : (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 font-bold border border-amber-300">
+                                Evaluated • Publication Pending
+                              </span>
+                            )}
+                          </h4>
+                          <p className="text-[11px] text-slate-500">
+                            Evaluated by: <span className="font-semibold text-slate-700 dark:text-slate-300">{studentJuryEval.evaluated_by || studentJuryEval.evaluatedBy || 'AIMA National Jury Panel'}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Marks Pill */}
+                      {isFinalResultsPublished ? (
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Round 2 Jury Score</span>
+                            <span className="text-base font-black text-purple-600 dark:text-purple-400 font-mono">
+                              {studentJuryEval.total_score ?? studentJuryEval.livePresentationScore ?? studentJuryEval.aggregateScore}/100
+                            </span>
+                          </div>
+                          <div className="text-right pl-3 border-l border-slate-200 dark:border-slate-700">
+                            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Combined Merit</span>
+                            <span className="text-base font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                              {((myAttempt?.score ?? 0) + Number(studentJuryEval.total_score ?? studentJuryEval.livePresentationScore ?? studentJuryEval.aggregateScore ?? 0))}/200
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-right">
+                          <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" /> Final Results Awaited
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Jury Feedback */}
+                    {(studentJuryEval.jury_feedback || studentJuryEval.notes) && (
+                      <div className="pt-3">
+                        <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Jury Panel Feedback</span>
+                        <p className="text-xs italic text-slate-700 dark:text-slate-300 bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                          "{studentJuryEval.jury_feedback || studentJuryEval.notes}"
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )
           ) : (

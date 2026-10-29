@@ -1594,6 +1594,13 @@ export function mapSupabaseRowToAppConfig(row: any): Partial<CompetitionConfig> 
     isResultsLockedR3: row.is_results_locked_r3,
     isResultsLockedR4: row.is_results_locked_r4,
     isPublicResultsPublished: row.is_public_results_published,
+    isResultsPublishedR1: row.is_results_published_r1 !== undefined ? row.is_results_published_r1 : row.is_public_results_published,
+    isResultsPublishedR2: row.is_results_published_r2,
+    isFinalResultsPublished: Boolean(
+      row.is_final_results_published ??
+      row.isFinalResultsPublished ??
+      (typeof localStorage !== 'undefined' && localStorage.getItem('AIMA_FINAL_RESULTS_PUBLISHED') === 'true')
+    ),
   };
 }
 

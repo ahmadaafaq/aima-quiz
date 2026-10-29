@@ -45,6 +45,8 @@ export const INITIAL_CONFIG: CompetitionConfig = {
   isResultsLockedR3: false,
   isResultsLockedR4: false,
   isPublicResultsPublished: true,
+  isResultsPublishedR1: true,
+  isFinalResultsPublished: false,
 };
 
 export const ROUND_2_RUBRIC: RubricCriterion[] = [

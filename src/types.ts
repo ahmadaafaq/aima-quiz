@@ -604,6 +604,8 @@ export interface CompetitionConfig {
   isResultsLockedR4: boolean;
   isPublicResultsPublished: boolean;
   isResultsPublishedR1?: boolean;
+  isResultsPublishedR2?: boolean;
+  isFinalResultsPublished?: boolean;
 }
 
 export interface CSRBootcampNominee {
