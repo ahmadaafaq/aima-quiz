@@ -340,10 +340,15 @@ export async function loginParticipant(
   plainPassword: string
 ): Promise<{ success: boolean; participant?: SupabaseParticipantRow; error?: string }> {
   try {
+    const cleanEmail = email.toLowerCase().trim();
+    if (cleanEmail === 'co@aima.in') {
+      return { success: false, error: 'Access Denied: The Jury Coordinator login session has concluded.' };
+    }
+
     const { data, error } = await supabase
       .from('participants')
       .select('*')
-      .eq('email', email.toLowerCase().trim())
+      .eq('email', cleanEmail)
       .single();
 
     if (error || !data) {
@@ -398,22 +403,11 @@ export async function signInWithEmailPassword(
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = plainPassword.trim();
 
-  // Special direct credentials for Jury Coordinator
-  if (cleanEmail === 'co@aima.in' && cleanPass === 'co@case#') {
+  // Explicitly block Jury Coordinator access as the evaluation/quiz session has concluded
+  if (cleanEmail === 'co@aima.in') {
     return {
-      success: true,
-      user: { id: 'usr_jury_coordinator_central', email: 'co@aima.in' },
-      profile: {
-        id: 'usr_jury_coordinator_central',
-        email: 'co@aima.in',
-        role: 'admin',
-        name: 'AIMA Jury Coordinator',
-        mobile: '+91 98111 00000',
-        organization_name: 'AIMA Case Research Centre (Jury Station)',
-        registration_number: 'AIMA-JURY-COORD',
-        is_team_leader: false,
-      },
-      session: { access_token: 'aima_jury_sec_' + Date.now().toString(36) },
+      success: false,
+      error: 'Access Denied: The Jury Coordinator login session has concluded.',
     };
   }
 
