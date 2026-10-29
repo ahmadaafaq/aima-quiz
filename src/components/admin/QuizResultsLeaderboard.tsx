@@ -1139,7 +1139,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   // 3. Lowest Time Taken (asc)
   // 4. Lowest Tab Switches (asc)
   const sortedLeaderboard = useMemo(() => {
-    return [...leaderboardWithCombinedScores].sort((a, b) => {
+    const sorted = [...leaderboardWithCombinedScores].sort((a, b) => {
       if (rankingMode === 'combined') {
         if (b.combinedScore !== a.combinedScore) return b.combinedScore - a.combinedScore;
         if (b.validPresentationScore !== a.validPresentationScore) {
@@ -1156,6 +1156,11 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         return a.tabSwitches - b.tabSwitches;
       }
     });
+
+    return sorted.map((row, idx) => ({
+      ...row,
+      officialRank: idx + 1,
+    }));
   }, [leaderboardWithCombinedScores, rankingMode]);
 
   // Certificate Publishing & Dispatch Cockpit States
@@ -2443,7 +2448,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                 </tr>
               ) : (
                 filteredList.map((row, idx) => {
-                  const rank = idx + 1;
+                  const rank = (row as any).officialRank ?? (idx + 1);
                   const isTop3 = rank <= 3;
                   const rowJuryResult = getRowJuryScorecard(row);
                   const isExpanded = expandedJuryUserId === row.id || expandedJuryUserId === row.userId;
