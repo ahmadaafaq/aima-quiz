@@ -450,38 +450,45 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   function buildUserProfileFromParticipant(participant: SupabaseParticipantRow): UserProfile {
     const userId = 'participant_' + participant.email.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const teamId = 'team_participant_' + participant.registration_number;
     const cachedReg = getLocalRegistrationsCache().find(
       (r) => r.registrationNumber === participant.registration_number
     );
     const rawData = (cachedReg as any)?.raw_data || {};
-    const nominee = (rawData.nominees || []).find(
+    const nominee = (rawData.nominees || cachedReg?.nominees || []).find(
       (n: any) => n.email && n.email.toLowerCase().trim() === participant.email.toLowerCase().trim()
     );
+    const nomineeTeamName = (nominee?.teamName || nominee?.team_name || nominee?.team || '').trim();
+    const subTeamSuffix = nomineeTeamName ? nomineeTeamName.toLowerCase().replace(/[^a-z0-9]+/g, '_') : '';
+    const explicitTeamId = (participant as any).team_id || (participant as any).teamId;
+    const teamId = explicitTeamId || ('team_participant_' + participant.registration_number + (subTeamSuffix ? `_${subTeamSuffix}` : ''));
+
     const selectedTrackId =
       (participant as any).selected_track_id ||
       (participant as any).selectedTrackId ||
+      nominee?.selectedTrackId ||
+      nominee?.selected_track_id ||
       (cachedReg as any)?.selectedTrackId ||
-      rawData.selectedTrackId ||
-      nominee?.selectedTrackId;
+      rawData.selectedTrackId;
     const selectedTrackName =
       (participant as any).selected_track_name ||
       (participant as any).selectedTrackName ||
+      nominee?.selectedTrackName ||
+      nominee?.selected_track_name ||
       (cachedReg as any)?.selectedTrackName ||
-      rawData.selectedTrackName ||
-      nominee?.selectedTrackName;
+      rawData.selectedTrackName;
     const trackSelectedAt =
       (participant as any).track_locked_at ||
       (participant as any).trackSelectedAt ||
+      nominee?.trackSelectedAt ||
+      nominee?.track_locked_at ||
       (cachedReg as any)?.trackSelectedAt ||
-      rawData.trackSelectedAt ||
-      nominee?.trackSelectedAt;
+      rawData.trackSelectedAt;
 
     // If registration has participantCount <= 1 and no teamName, candidate is a solo candidate
     const isSolo = cachedReg
       ? (!cachedReg.teamName && (cachedReg.participantCount || cachedReg.nominees?.length || 1) <= 1)
       : false;
-    const isTeamLeader = isSolo ? false : Boolean(participant.is_team_leader);
+    const isTeamLeader = isSolo ? false : Boolean(nominee?.isTeamLeader ?? participant.is_team_leader);
     const isExplicitFacultyCoordinator =
       !isTeamLeader &&
       (participant.registration_mode === 'institute' || Boolean((participant as any).coordinator_email)) &&
@@ -533,11 +540,10 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     };
   }
 
-  function buildSyntheticTeamFromReg(
+  function buildSyntheticTeamsFromReg(
     reg: CSRBootcampRegistration,
     participant?: SupabaseParticipantRow | null
-  ): Team {
-    const teamId = 'team_participant_' + reg.registrationNumber;
+  ): Team[] {
     const isPaid = reg.paymentStatus === 'PAID';
     const isInst =
       reg.track === 'institutional' ||
@@ -562,8 +568,115 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       : (reg.totalPayable ?? (reg as any).total_amount ?? (reg.ratePerPersonOrPackage ? Math.round(reg.ratePerPersonOrPackage * participantCount) : participantCount * 200));
     const perStudentAmount = isComplimentary ? 0 : (participantCount > 0 ? Math.round(totalAmount / participantCount) : 0);
 
-    const teamMembers: TeamMember[] = (reg.nominees && reg.nominees.length > 0)
-      ? reg.nominees.map((n) => {
+    const rawData = (reg as any).raw_data || {};
+    const rawNominees: any[] = rawData.nominees || [];
+    const nominees: any[] = (reg.nominees && reg.nominees.length > 0) ? reg.nominees : rawNominees;
+
+    // Check if nominees contain multiple distinct team names
+    const distinctTeamNames = Array.from(
+      new Set(
+        nominees
+          .map((n: any) => (n.teamName || n.team_name || n.team || '').trim())
+          .filter(Boolean)
+      )
+    );
+
+    if (distinctTeamNames.length > 1) {
+      // Split into separate teams by teamName
+      return distinctTeamNames.map((tName) => {
+        const teamNominees = nominees.filter(
+          (n: any) => (n.teamName || n.team_name || n.team || '').trim().toLowerCase() === tName.toLowerCase()
+        );
+        const cleanName = tName.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+        const teamId = 'team_participant_' + reg.registrationNumber + '_' + cleanName;
+
+        const teamMembers: TeamMember[] = teamNominees.map((n) => {
+          const paymentLabel = isPaid
+            ? (isComplimentary ? 'Early Bird (₹0)' : isInst ? 'Institute Paid' : `Paid ₹${perStudentAmount.toLocaleString('en-IN')}`)
+            : (isInst ? 'Invoice Pending' : `Pending ₹${perStudentAmount.toLocaleString('en-IN')}`);
+          return {
+            studentId: 'participant_' + n.email.replace(/[^a-z0-9]/gi, '_').toLowerCase(),
+            name: n.name,
+            email: n.email,
+            mobile: n.mobile || '',
+            institute: reg.organizationName,
+            isLeader: !!n.isTeamLeader,
+            hasPaid: isPaid,
+            acceptedDeclaration: true,
+            roleInTeam: n.isTeamLeader ? 'Team Leader' : 'Member',
+            paymentLabel,
+            paymentStatus: reg.paymentStatus,
+            amount: perStudentAmount,
+          };
+        });
+
+        const leaderMember = teamMembers.find((m) => m.isLeader) || teamMembers[0];
+
+        // Resolve track specific to this sub-team
+        let subTrackId: string | undefined;
+        let subTrackName: string | undefined;
+        let subTrackLockedAt: string | undefined;
+
+        for (const tm of teamNominees) {
+          const rawN = rawNominees.find((rn: any) => rn.email && rn.email.toLowerCase().trim() === tm.email.toLowerCase().trim());
+          const tid = tm.selectedTrackId || (tm as any).selected_track_id || rawN?.selectedTrackId || rawN?.selected_track_id;
+          const tname = tm.selectedTrackName || (tm as any).selected_track_name || rawN?.selectedTrackName || rawN?.selected_track_name;
+          const ttime = tm.trackSelectedAt || (tm as any).track_locked_at || rawN?.trackSelectedAt || rawN?.track_locked_at;
+          if (tid && !subTrackId) {
+            subTrackId = tid;
+            subTrackName = tname;
+            subTrackLockedAt = ttime;
+          }
+        }
+
+        if (participant && (!subTrackId || !subTrackName)) {
+          const isParticipantInThisTeam = teamNominees.some(
+            (n) => n.email && n.email.toLowerCase().trim() === participant.email.toLowerCase().trim()
+          );
+          if (isParticipantInThisTeam) {
+            subTrackId = subTrackId || (participant as any).selected_track_id || (participant as any).selectedTrackId;
+            subTrackName = subTrackName || (participant as any).selected_track_name || (participant as any).selectedTrackName;
+            subTrackLockedAt = subTrackLockedAt || (participant as any).track_locked_at || (participant as any).trackSelectedAt;
+          }
+        }
+
+        const selectedTrackId = subTrackId || (reg as any).selectedTrackId || (reg as any).selected_track_id || rawData.selectedTrackId;
+        const selectedTrackName = subTrackName || (reg as any).selectedTrackName || (reg as any).selected_track_name || rawData.selectedTrackName;
+        const trackSelectedAt = subTrackLockedAt || (reg as any).trackSelectedAt || (reg as any).track_locked_at || rawData.trackSelectedAt;
+
+        const subTotalAmount = perStudentAmount * teamMembers.length;
+
+        return {
+          id: teamId,
+          name: tName,
+          inviteCode: `${reg.registrationNumber}-${cleanName}`,
+          leaderId: leaderMember?.studentId || (participant ? 'participant_' + participant.email.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'leader_1'),
+          leaderName: leaderMember?.name || participant?.name || 'Team Leader',
+          instituteName: reg.organizationName || participant?.institute_name || '',
+          members: teamMembers,
+          isLocked: teamMembers.length >= 4 || Boolean(rawData.isLocked || (reg as any).isLocked),
+          createdAt: reg.createdAt || new Date().toISOString(),
+          assignedHub: 'north' as any,
+          paymentStatus: reg.paymentStatus,
+          invoiceNumber: reg.invoiceNumber,
+          registrationMode: 'team',
+          feeTier: reg.tierLabel || `Institutional Team (${teamMembers.length} participants)`,
+          totalAmount: subTotalAmount,
+          subtotalAmount: Math.round(subTotalAmount / 1.18),
+          gstAmount: Math.round(subTotalAmount - subTotalAmount / 1.18),
+          participantCount: teamMembers.length,
+          maxMembers: Math.max(teamMembers.length, 4),
+          selectedTrackId,
+          selectedTrackName,
+          trackSelectedAt,
+        };
+      });
+    }
+
+    // Default single-team behavior for 1 team or individual entries
+    const teamId = 'team_participant_' + reg.registrationNumber;
+    const teamMembers: TeamMember[] = (nominees && nominees.length > 0)
+      ? nominees.map((n) => {
         const paymentLabel = isPaid
           ? (isComplimentary ? 'Early Bird (₹0)' : isInst ? 'Institute Paid' : `Paid ₹${perStudentAmount.toLocaleString('en-IN')}`)
           : (isInst ? 'Invoice Pending' : `Pending ₹${perStudentAmount.toLocaleString('en-IN')}`);
@@ -603,8 +716,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     const leaderMember = teamMembers.find((m) => m.isLeader) || teamMembers[0];
 
-    const rawData = (reg as any).raw_data || {};
-    const participantNominee = (rawData.nominees || []).find(
+    const participantNominee = rawNominees.find(
       (n: any) => participant && n.email && n.email.toLowerCase().trim() === participant.email.toLowerCase().trim()
     );
     const selectedTrackId =
@@ -629,7 +741,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       rawData.trackSelectedAt ||
       participantNominee?.trackSelectedAt;
 
-    return {
+    return [{
       id: teamId,
       name: reg.teamName || (isInst ? `${reg.organizationName} Delegation` : (participantCount > 1 ? `${reg.organizationName} Team` : 'Individual Entry')),
       inviteCode: reg.registrationNumber,
@@ -652,7 +764,21 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       selectedTrackId,
       selectedTrackName,
       trackSelectedAt,
-    };
+    }];
+  }
+
+  function buildSyntheticTeamFromReg(
+    reg: CSRBootcampRegistration,
+    participant?: SupabaseParticipantRow | null
+  ): Team {
+    const synTeams = buildSyntheticTeamsFromReg(reg, participant);
+    if (participant) {
+      const found = synTeams.find(t =>
+        t.members.some(m => m.email.toLowerCase().trim() === participant.email.toLowerCase().trim())
+      );
+      if (found) return found;
+    }
+    return synTeams[0];
   }
 
   const initialParticipant = getSavedParticipantSession();
@@ -679,7 +805,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         (r) => r.registrationNumber === initialParticipant.registration_number
       );
       if (cached) {
-        return [buildSyntheticTeamFromReg(cached, initialParticipant), ...MOCK_TEAMS];
+        return [...buildSyntheticTeamsFromReg(cached, initialParticipant), ...MOCK_TEAMS];
       }
       const tempTeam: Team = {
         id: 'team_participant_' + initialParticipant.registration_number,
@@ -804,23 +930,25 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setCertificates((prev) => [cert, ...prev.filter((c) => c.id !== cert.id && c.certificateNumber !== cert.certificateNumber)]);
       }
       if (reg && reg.nominees && reg.nominees.length > 0) {
-        const synTeam = buildSyntheticTeamFromReg(reg, {
+        const synTeams = buildSyntheticTeamsFromReg(reg, {
           ...participant,
           ...(lockedTrackId ? { selected_track_id: lockedTrackId, selected_track_name: lockedTrackName, track_locked_at: lockedTrackAt } : {}),
         } as any);
-        if (lockedTrackId) {
-          synTeam.selectedTrackId = lockedTrackId;
-          synTeam.selectedTrackName = lockedTrackName;
-          synTeam.trackSelectedAt = lockedTrackAt;
+        const myTeam = synTeams.find(t => t.members.some(m => m.email.toLowerCase() === participant.email.toLowerCase())) || synTeams[0];
+        if (lockedTrackId && myTeam) {
+          myTeam.selectedTrackId = lockedTrackId;
+          myTeam.selectedTrackName = lockedTrackName;
+          myTeam.trackSelectedAt = lockedTrackAt;
         }
-        setTeams((prev) => [synTeam, ...prev.filter((t) => t.id !== teamId)]);
+        const synIds = new Set(synTeams.map(t => t.id));
+        setTeams((prev) => [...synTeams, ...prev.filter((t) => !synIds.has(t.id) && t.id !== teamId)]);
         setCurrentUser((prev) => ({
           ...prev,
-          teamId,
+          teamId: myTeam.id,
           hasPaidR1R2: reg.paymentStatus === 'PAID',
-          selectedTrackId: synTeam.selectedTrackId || lockedTrackId,
-          selectedTrackName: synTeam.selectedTrackName || lockedTrackName,
-          trackSelectedAt: synTeam.trackSelectedAt || lockedTrackAt,
+          selectedTrackId: myTeam.selectedTrackId || lockedTrackId,
+          selectedTrackName: myTeam.selectedTrackName || lockedTrackName,
+          trackSelectedAt: myTeam.trackSelectedAt || lockedTrackAt,
         }));
         return;
       }
@@ -1020,8 +1148,9 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       (r) => r.registrationNumber === participant.registration_number
     );
     if (cached) {
-      const synTeam = buildSyntheticTeamFromReg(cached, participant);
-      setTeams((prev) => [synTeam, ...prev.filter((t) => t.id !== synTeam.id)]);
+      const synTeams = buildSyntheticTeamsFromReg(cached, participant);
+      const synIds = new Set(synTeams.map(t => t.id));
+      setTeams((prev) => [...synTeams, ...prev.filter((t) => !synIds.has(t.id))]);
     }
 
     // 4. Async sync full Supabase registration and peers
@@ -1429,12 +1558,12 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
                 setOfflineRoundResults(prev => {
                   const incomingKeys = new Set(
-                    mappedJuryResults.map(m => m.registrationNumber || m.teamId || m.id)
+                    mappedJuryResults.map(m => m.teamId ? `${m.round}_${m.teamId}` : (m.registrationNumber ? `${m.round}_${m.registrationNumber}` : m.id))
                   );
                   return [
                     ...mappedJuryResults,
                     ...prev.filter(
-                      p => !incomingKeys.has((p as any).registrationNumber || p.teamId || p.id)
+                      p => !incomingKeys.has(p.teamId ? `${p.round}_${p.teamId}` : ((p as any).registrationNumber ? `${p.round}_${(p as any).registrationNumber}` : p.id))
                     ),
                   ];
                 });
@@ -1444,7 +1573,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
           // Build real teams from Supabase registrations
           if (res.registrations.length > 0) {
-            const realTeams = res.registrations.map(r => buildSyntheticTeamFromReg(r));
+            const realTeams = res.registrations.flatMap(r => buildSyntheticTeamsFromReg(r));
             setTeams(prev => {
               const realIds = new Set(realTeams.map(t => t.id));
               return [...realTeams, ...prev.filter(t => !realIds.has(t.id))];
@@ -2832,7 +2961,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   ): Promise<{ success: boolean; publishedCount: number; emailSentCount: number }> => {
     let combined: CertificateRecord[] = [];
     setCertificates(prev => {
-      const existingMap = new Map(prev.map(c => [c.id || c.certificateNumber, c]));
+      const existingMap = new Map<string, CertificateRecord>(prev.map(c => [c.id || c.certificateNumber, c]));
       certs.forEach(c => existingMap.set(c.id || c.certificateNumber, c));
       combined = Array.from(existingMap.values());
       try {

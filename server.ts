@@ -13,6 +13,7 @@ import {
   getFinalResultsEmail,
 } from "./server/mailer";
 
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 dotenv.config();
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://setjjgjhuslevgnqcnhj.supabase.co';
@@ -34,23 +35,33 @@ const schemaStorage = new AsyncLocalStorage<'public' | 'uat'>();
 export function resolveRequestSchema(req: Request | any): 'public' | 'uat' {
   const origin = ((req.headers?.origin || req.headers?.referer || '') as string).toLowerCase();
   const host = ((req.headers?.host || '') as string).toLowerCase();
-  const explicit = ((req.headers?.['x-app-schema'] || req.headers?.['x-db-schema'] || '') as string).toLowerCase();
+  const explicit = ((req.headers?.['x-app-schema'] || req.headers?.['x-db-schema'] || req.query?.schema || '') as string).toLowerCase();
 
-  // 1. Live production domain: strictly locked to public schema
+  // 1. Explicit header or query param check
+  if (explicit === 'public') return 'public';
+  if (explicit === 'uat') return 'uat';
+
+  // 2. Check if referer URL has ?schema=public
+  if (origin.includes('schema=public')) return 'public';
+  if (origin.includes('schema=uat')) return 'uat';
+
+  // 3. Live production domain: strictly locked to public schema
   if (origin.includes('research.aima.in') || host.includes('research.aima.in')) {
     return 'public';
   }
 
-  // 2. Explicit header check
-  if (explicit === 'public') return 'public';
-  if (explicit === 'uat') return 'uat';
+  // 4. Environment variable override from .env.local or .env
+  const envSchema = (process.env.VITE_DB_SCHEMA || process.env.DB_SCHEMA || '').toLowerCase();
+  if (envSchema === 'public' || envSchema === 'uat') {
+    return envSchema as 'public' | 'uat';
+  }
 
-  // 3. UAT vercel deployment or localhost: uat
+  // 5. UAT vercel deployment or localhost: uat default
   if (origin.includes('vercel.app') || host.includes('vercel.app') || origin.includes('localhost') || host.includes('localhost')) {
     return 'uat';
   }
 
-  return (process.env.VITE_DB_SCHEMA || process.env.DB_SCHEMA || 'uat') === 'public' ? 'public' : 'uat';
+  return 'uat';
 }
 
 const adminClients: Record<'public' | 'uat', any> = {

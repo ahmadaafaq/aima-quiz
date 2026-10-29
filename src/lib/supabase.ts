@@ -8,6 +8,30 @@ export const SUPABASE_ANON_KEY =
   'sb_publishable_RDIbw6a-RZItDzeY80ylwA_-7XGzb5V';
 export function resolveAppSchema(): 'public' | 'uat' {
   if (typeof window !== 'undefined') {
+    // 1. Explicit query parameter override (e.g. ?schema=public or ?schema=uat)
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const schemaParam = searchParams.get('schema')?.toLowerCase();
+      if (schemaParam === 'public' || schemaParam === 'uat') {
+        try { localStorage.setItem('aima_db_schema', schemaParam); } catch (_) {}
+        return schemaParam as 'public' | 'uat';
+      }
+    } catch (_) {}
+
+    // 2. Explicit localStorage override
+    try {
+      const stored = localStorage.getItem('aima_db_schema')?.toLowerCase();
+      if (stored === 'public' || stored === 'uat') {
+        return stored as 'public' | 'uat';
+      }
+    } catch (_) {}
+
+    // 3. Environment variable override from .env / .env.local
+    const envSchema = (import.meta as any).env?.VITE_DB_SCHEMA?.toLowerCase();
+    if (envSchema === 'public' || envSchema === 'uat') {
+      return envSchema as 'public' | 'uat';
+    }
+
     const host = window.location.hostname.toLowerCase();
     // Live production domain: strictly locked to public schema
     if (host === 'research.aima.in' || host.endsWith('.aima.in')) {
@@ -1260,12 +1284,60 @@ export async function saveJuryScorecardToDb(scorecard: {
         juryEvaluationPayload.case_data_evidence = Number(kpis.caseDataEvidence ?? kpis.case_data_evidence ?? 0);
       }
 
-      const { error: juryErr } = await supabase
-        .from('jury_evaluations')
-        .upsert(juryEvaluationPayload, { onConflict: 'registration_number,round' });
+      // Check if an existing evaluation matches by team_id, candidate_email, or registration_number
+      let existingEvalId: string | null = null;
+      if (scorecard.teamId) {
+        const { data: byTeam } = await supabase
+          .from('jury_evaluations')
+          .select('id, registration_number')
+          .eq('round', scorecard.round)
+          .eq('team_id', scorecard.teamId)
+          .limit(1);
+        if (byTeam && byTeam.length > 0) {
+          existingEvalId = byTeam[0].id;
+          juryEvaluationPayload.registration_number = byTeam[0].registration_number || juryEvaluationPayload.registration_number;
+        }
+      }
+      if (!existingEvalId && scorecard.candidateEmail) {
+        const { data: byEmail } = await supabase
+          .from('jury_evaluations')
+          .select('id, registration_number')
+          .eq('round', scorecard.round)
+          .eq('candidate_email', scorecard.candidateEmail.toLowerCase().trim())
+          .limit(1);
+        if (byEmail && byEmail.length > 0) {
+          existingEvalId = byEmail[0].id;
+          juryEvaluationPayload.registration_number = byEmail[0].registration_number || juryEvaluationPayload.registration_number;
+        }
+      }
+      if (!existingEvalId && regNum && regNum !== 'AIMA-CL26-00000') {
+        const { data: byReg } = await supabase
+          .from('jury_evaluations')
+          .select('id')
+          .eq('round', scorecard.round)
+          .eq('registration_number', regNum)
+          .limit(1);
+        if (byReg && byReg.length > 0) {
+          existingEvalId = byReg[0].id;
+        }
+      }
+
+      let juryErr: any = null;
+      if (existingEvalId) {
+        const res = await supabase
+          .from('jury_evaluations')
+          .update(juryEvaluationPayload)
+          .eq('id', existingEvalId);
+        juryErr = res.error;
+      } else {
+        const res = await supabase
+          .from('jury_evaluations')
+          .insert(juryEvaluationPayload);
+        juryErr = res.error;
+      }
 
       if (juryErr && juryErr.code !== 'PGRST205') {
-        console.warn('jury_evaluations scorecard upsert notice:', juryErr.message);
+        console.warn('jury_evaluations scorecard save notice:', juryErr.message);
       }
     } catch (e: any) {
       console.warn('jury_evaluations save error:', e?.message);
@@ -1318,8 +1390,9 @@ export async function saveJuryScorecardToDb(scorecard: {
       (r: any) =>
         r.round === scorecard.round &&
         ((scorecard.teamId && r.teamId === scorecard.teamId) ||
-          (regNum && r.registrationNumber === regNum) ||
-          (scorecard.candidateEmail && r.candidateEmail === scorecard.candidateEmail))
+          (scorecard.candidateEmail && r.candidateEmail && r.candidateEmail.toLowerCase() === scorecard.candidateEmail.toLowerCase()) ||
+          (scorecard.teamName && r.teamName && r.teamName === scorecard.teamName) ||
+          (regNum && r.registrationNumber === regNum && !scorecard.teamId))
     );
 
     let newOfflineResults;

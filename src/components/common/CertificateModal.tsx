@@ -114,7 +114,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate,
 
       ctx.drawImage(baseImg, 0, 0, 1754, 1241);
 
-      // Helper to fit and draw dynamic text cleanly over the underline
+      // Helper to fit and draw dynamic text cleanly over the underline without truncation
       const drawField = (
         text: string,
         centerX: number,
@@ -126,7 +126,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate,
       ) => {
         let size = initialSize;
         ctx.font = `${weight} ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Montserrat, sans-serif`;
-        while (ctx.measureText(text).width > maxW && size > 13) {
+        while (ctx.measureText(text).width > maxW && size > 10) {
           size -= 1;
           ctx.font = `${weight} ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Montserrat, sans-serif`;
         }
@@ -138,16 +138,16 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate,
       // 2. Render exact dynamic participant / team / institute details
       if (isAchievementTop1) {
         // Page 2: Achievement Top 1 Position
-        drawField(teamDisplay, 1092, 540, 540, 28, '#0B4E94', 'bold');
-        drawField(instituteDisplay, 671, 590, 660, 24, '#1E293B', 'bold');
+        drawField(teamDisplay, 1092, 540, 560, 28, '#0B4E94', 'bold');
+        drawField(instituteDisplay, 671, 592, 680, 24, '#1E293B', 'bold');
       } else if (isSelectionFinale) {
         // Page 3: Selection Grand Finale
-        drawField(teamDisplay, 1025, 540, 580, 28, '#0B4E94', 'bold');
-        drawField(instituteDisplay, 727, 590, 660, 24, '#1E293B', 'bold');
+        drawField(teamDisplay, 1025, 540, 600, 28, '#0B4E94', 'bold');
+        drawField(instituteDisplay, 727, 592, 680, 24, '#1E293B', 'bold');
       } else {
         // Page 1: Participation
-        drawField(recipientDisplay, 877, 620, 750, 32, '#0B4E94', 'bold');
-        drawField(instituteDisplay, 877, 672, 750, 26, '#1E293B', 'bold');
+        drawField(recipientDisplay, 877, 620, 770, 32, '#0B4E94', 'bold');
+        drawField(instituteDisplay, 877, 674, 770, 26, '#1E293B', 'bold');
       }
 
       // 3. Discreet Digital Credential ID at bottom corner
@@ -175,6 +175,28 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate,
     } finally {
       setIsDownloading(false);
     }
+  };
+
+  // Helper to compute proportional font size and avoid clipping inside SVG
+  const getAdaptiveSvgFontSize = (
+    text: string,
+    maxPixelWidth: number,
+    baseSize: number,
+    minSize: number = 10
+  ): { fontSize: number; textLength?: number } => {
+    if (!text) return { fontSize: baseSize };
+    const charRatio = 0.56;
+    const naturalWidth = text.length * baseSize * charRatio;
+    if (naturalWidth <= maxPixelWidth) {
+      return { fontSize: baseSize };
+    }
+    const fitted = Math.floor(maxPixelWidth / (text.length * charRatio));
+    const finalSize = Math.max(minSize, fitted);
+    const finalWidth = text.length * finalSize * charRatio;
+    return {
+      fontSize: finalSize,
+      textLength: finalWidth > maxPixelWidth ? maxPixelWidth : undefined,
+    };
   };
 
   return (
@@ -276,122 +298,153 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate,
               backgroundRepeat: 'no-repeat',
             }}
           >
-            {/* Dynamic Overlays depending on certificate category */}
-            {isAchievementTop1 ? (
-              <>
-                {/* Team Name on Line 1 */}
-                <div
-                  className="absolute font-bold text-[#0B4E94] truncate"
-                  style={{
-                    left: '62.26%',
-                    top: '43.6%',
-                    transform: 'translate(-50%, -100%)',
-                    maxWidth: '31%',
-                    fontSize: 'clamp(11px, 1.6vw, 22px)',
-                    lineHeight: 1,
-                  }}
-                  title={teamDisplay}
-                >
-                  {teamDisplay}
-                </div>
-
-                {/* Institute Name on Line 2 */}
-                <div
-                  className="absolute font-bold text-slate-800 truncate"
-                  style={{
-                    left: '38.26%',
-                    top: '47.6%',
-                    transform: 'translate(-50%, -100%)',
-                    maxWidth: '38%',
-                    fontSize: 'clamp(9px, 1.35vw, 19px)',
-                    lineHeight: 1,
-                  }}
-                  title={instituteDisplay}
-                >
-                  {instituteDisplay}
-                </div>
-              </>
-            ) : isSelectionFinale ? (
-              <>
-                {/* Team / Recipient Name on Line 1 */}
-                <div
-                  className="absolute font-bold text-[#0B4E94] truncate"
-                  style={{
-                    left: '58.44%',
-                    top: '43.6%',
-                    transform: 'translate(-50%, -100%)',
-                    maxWidth: '33%',
-                    fontSize: 'clamp(11px, 1.6vw, 22px)',
-                    lineHeight: 1,
-                  }}
-                  title={teamDisplay}
-                >
-                  {teamDisplay}
-                </div>
-
-                {/* Institute Name on Line 2 */}
-                <div
-                  className="absolute font-bold text-slate-800 truncate"
-                  style={{
-                    left: '41.45%',
-                    top: '47.6%',
-                    transform: 'translate(-50%, -100%)',
-                    maxWidth: '38%',
-                    fontSize: 'clamp(9px, 1.35vw, 19px)',
-                    lineHeight: 1,
-                  }}
-                  title={instituteDisplay}
-                >
-                  {instituteDisplay}
-                </div>
-              </>
-            ) : (
-              <>
-                {/* Recipient Name on Line 1 */}
-                <div
-                  className="absolute font-bold text-[#0B4E94] truncate"
-                  style={{
-                    left: '50%',
-                    top: '50.1%',
-                    transform: 'translate(-50%, -100%)',
-                    maxWidth: '43%',
-                    fontSize: 'clamp(12px, 1.8vw, 25px)',
-                    lineHeight: 1,
-                  }}
-                  title={recipientDisplay}
-                >
-                  {recipientDisplay}
-                </div>
-
-                {/* Institute Name on Line 2 */}
-                <div
-                  className="absolute font-bold text-slate-800 truncate"
-                  style={{
-                    left: '50%',
-                    top: '54.4%',
-                    transform: 'translate(-50%, -100%)',
-                    maxWidth: '43%',
-                    fontSize: 'clamp(10px, 1.45vw, 20px)',
-                    lineHeight: 1,
-                  }}
-                  title={instituteDisplay}
-                >
-                  {instituteDisplay}
-                </div>
-              </>
-            )}
-
-            {/* Discreet Digital Credential ID */}
-            <div
-              className="absolute font-mono text-slate-500 font-semibold select-all"
-              style={{
-                right: '4.2%',
-                bottom: '4.2%',
-                fontSize: 'clamp(7px, 0.75vw, 11px)',
-              }}
+            {/* High-Precision SVG Dynamic Overlay with Zero-Clip Adaptive Text */}
+            <svg
+              viewBox="0 0 1754 1241"
+              className="absolute inset-0 w-full h-full select-text"
+              style={{ width: '100%', height: '100%' }}
             >
-              Official Credential ID: {certificate.certificateNumber}
-            </div>
+              {isAchievementTop1 ? (
+                <>
+                  {/* Top 1 Position: Team Name (Line 1) */}
+                  {(() => {
+                    const metrics = getAdaptiveSvgFontSize(teamDisplay, 560, 28, 13);
+                    return (
+                      <text
+                        x="1092"
+                        y="540"
+                        textAnchor="middle"
+                        fill="#0B4E94"
+                        fontWeight="bold"
+                        fontFamily='-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Montserrat, sans-serif'
+                        fontSize={metrics.fontSize}
+                        textLength={metrics.textLength}
+                        lengthAdjust={metrics.textLength ? 'spacingAndGlyphs' : undefined}
+                      >
+                        {teamDisplay}
+                      </text>
+                    );
+                  })()}
+
+                  {/* Top 1 Position: Institute Name (Line 2) */}
+                  {(() => {
+                    const metrics = getAdaptiveSvgFontSize(instituteDisplay, 680, 24, 10);
+                    return (
+                      <text
+                        x="671"
+                        y="592"
+                        textAnchor="middle"
+                        fill="#1E293B"
+                        fontWeight="bold"
+                        fontFamily='-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Montserrat, sans-serif'
+                        fontSize={metrics.fontSize}
+                        textLength={metrics.textLength}
+                        lengthAdjust={metrics.textLength ? 'spacingAndGlyphs' : undefined}
+                      >
+                        {instituteDisplay}
+                      </text>
+                    );
+                  })()}
+                </>
+              ) : isSelectionFinale ? (
+                <>
+                  {/* Selection Grand Finale: Team Name (Line 1) */}
+                  {(() => {
+                    const metrics = getAdaptiveSvgFontSize(teamDisplay, 600, 28, 13);
+                    return (
+                      <text
+                        x="1025"
+                        y="540"
+                        textAnchor="middle"
+                        fill="#0B4E94"
+                        fontWeight="bold"
+                        fontFamily='-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Montserrat, sans-serif'
+                        fontSize={metrics.fontSize}
+                        textLength={metrics.textLength}
+                        lengthAdjust={metrics.textLength ? 'spacingAndGlyphs' : undefined}
+                      >
+                        {teamDisplay}
+                      </text>
+                    );
+                  })()}
+
+                  {/* Selection Grand Finale: Institute Name (Line 2) */}
+                  {(() => {
+                    const metrics = getAdaptiveSvgFontSize(instituteDisplay, 680, 24, 10);
+                    return (
+                      <text
+                        x="727"
+                        y="592"
+                        textAnchor="middle"
+                        fill="#1E293B"
+                        fontWeight="bold"
+                        fontFamily='-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Montserrat, sans-serif'
+                        fontSize={metrics.fontSize}
+                        textLength={metrics.textLength}
+                        lengthAdjust={metrics.textLength ? 'spacingAndGlyphs' : undefined}
+                      >
+                        {instituteDisplay}
+                      </text>
+                    );
+                  })()}
+                </>
+              ) : (
+                <>
+                  {/* Participation: Recipient Name (Line 1) */}
+                  {(() => {
+                    const metrics = getAdaptiveSvgFontSize(recipientDisplay, 770, 32, 14);
+                    return (
+                      <text
+                        x="877"
+                        y="620"
+                        textAnchor="middle"
+                        fill="#0B4E94"
+                        fontWeight="bold"
+                        fontFamily='-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Montserrat, sans-serif'
+                        fontSize={metrics.fontSize}
+                        textLength={metrics.textLength}
+                        lengthAdjust={metrics.textLength ? 'spacingAndGlyphs' : undefined}
+                      >
+                        {recipientDisplay}
+                      </text>
+                    );
+                  })()}
+
+                  {/* Participation: Institute Name (Line 2) */}
+                  {(() => {
+                    const metrics = getAdaptiveSvgFontSize(instituteDisplay, 770, 26, 11);
+                    return (
+                      <text
+                        x="877"
+                        y="674"
+                        textAnchor="middle"
+                        fill="#1E293B"
+                        fontWeight="bold"
+                        fontFamily='-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Montserrat, sans-serif'
+                        fontSize={metrics.fontSize}
+                        textLength={metrics.textLength}
+                        lengthAdjust={metrics.textLength ? 'spacingAndGlyphs' : undefined}
+                      >
+                        {instituteDisplay}
+                      </text>
+                    );
+                  })()}
+                </>
+              )}
+
+              {/* Discreet Digital Credential ID at bottom corner */}
+              <text
+                x="1670"
+                y="1182"
+                textAnchor="end"
+                fill="#64748B"
+                fontWeight="600"
+                fontFamily="monospace"
+                fontSize="13"
+              >
+                Official Credential ID: {certificate.certificateNumber}
+              </text>
+            </svg>
           </div>
         </div>
 

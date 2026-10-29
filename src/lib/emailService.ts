@@ -55,7 +55,7 @@ export interface RegistrationEmailPayload {
   roleInTeam?: string;
 }
 
-export async function sendRegistrationConfirmation(p: RegistrationEmailPayload): Promise<void> {
+export async function sendRegistrationConfirmation(p: RegistrationEmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const loginUrl = p.loginUrl || `${LOGIN_URL}/login`;
   return sendViaBackend('registration', {
     toName:             p.toName,
@@ -82,7 +82,7 @@ export interface TeamMemberEmailPayload {
   tempPassword: string;
 }
 
-export async function sendTeamMemberAddedEmail(p: TeamMemberEmailPayload): Promise<void> {
+export async function sendTeamMemberAddedEmail(p: TeamMemberEmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
   return sendViaBackend('team_member', {
     toName:       p.toName,
     toEmail:      p.toEmail,
@@ -105,7 +105,7 @@ export interface R1ResultsEmailPayload {
   qualified: boolean;
 }
 
-export async function sendR1ResultsEmail(p: R1ResultsEmailPayload): Promise<void> {
+export async function sendR1ResultsEmail(p: R1ResultsEmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
   return sendViaBackend('r1_results', {
     toName:    p.toName,
     toEmail:   p.toEmail,

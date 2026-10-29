@@ -200,7 +200,7 @@ async function main() {
       password: rec.password,
       loginUrl: LOGIN_URL,
       roleInTeam: rec.role,
-      isSolo: false,
+      isIndividual: false,
     });
 
     console.log(`      Sending to ${rec.toEmail} ...`);

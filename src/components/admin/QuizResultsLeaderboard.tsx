@@ -251,21 +251,25 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     // 1. Direct check against live Supabase DB evaluations
     const dbEval = dbJuryEvaluations.find(
       d =>
-        (row.registrationNumber && d.registration_number === row.registrationNumber) ||
         (row.teamId && d.team_id === row.teamId) ||
+        (row.teamName && row.teamName !== 'Individual Entry' && row.teamName !== 'Team Entry' && d.team_name && d.team_name.toLowerCase() === row.teamName.toLowerCase()) ||
         (row.email && d.candidate_email && d.candidate_email.toLowerCase() === row.email.toLowerCase().trim()) ||
         (row.members && row.members.some((m: any) =>
-          (m.registrationNumber && d.registration_number === m.registrationNumber) ||
           (m.email && d.candidate_email && d.candidate_email.toLowerCase() === m.email.toLowerCase().trim())
+        )) ||
+        (row.registrationNumber && d.registration_number === row.registrationNumber) ||
+        (row.members && row.members.some((m: any) =>
+          m.registrationNumber && d.registration_number === m.registrationNumber
         ))
     );
 
     const contextScorecard = offlineRoundResults.find(
       r =>
         (row.teamId && r.teamId === row.teamId) ||
-        (row.registrationNumber && (r as any).registrationNumber === row.registrationNumber) ||
-        (row.teamName && row.teamName !== 'Individual Entry' && r.teamName === row.teamName) ||
-        r.teamId === row.userId
+        (row.teamName && row.teamName !== 'Individual Entry' && row.teamName !== 'Team Entry' && r.teamName === row.teamName) ||
+        (row.email && (r as any).candidateEmail && (r as any).candidateEmail.toLowerCase() === row.email.toLowerCase().trim()) ||
+        r.teamId === row.userId ||
+        (row.registrationNumber && (r as any).registrationNumber === row.registrationNumber)
     );
 
     if (dbEval) {
@@ -313,6 +317,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     instituteName?: string;
     userProfile?: UserProfile;
     score: number;
+    members?: any[];
   }) => {
     if (!isResultsPublished) {
       return;
@@ -328,9 +333,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     // 1. Check live jury_evaluations table record from DB
     const dbEval = dbJuryEvaluations.find(
       d =>
-        (row.registrationNumber && d.registration_number === row.registrationNumber) ||
         (row.teamId && d.team_id === row.teamId) ||
-        (row.email && d.candidate_email && d.candidate_email.toLowerCase() === row.email.toLowerCase().trim())
+        (row.teamName && row.teamName !== 'Individual Entry' && row.teamName !== 'Team Entry' && d.team_name && d.team_name.toLowerCase() === row.teamName.toLowerCase()) ||
+        (row.email && d.candidate_email && d.candidate_email.toLowerCase() === row.email.toLowerCase().trim()) ||
+        (row.members && row.members.some((m: any) =>
+          (m.email && d.candidate_email && d.candidate_email.toLowerCase() === m.email.toLowerCase().trim())
+        )) ||
+        (row.registrationNumber && d.registration_number === row.registrationNumber)
     );
 
     const existing = getRowJuryScorecard(row);
@@ -460,6 +469,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     instituteName?: string;
     userProfile?: UserProfile;
     score: number;
+    members?: any[];
   }) => {
     setIsSavingJury(true);
     try {
@@ -486,9 +496,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
       const dbEval = dbJuryEvaluations.find(
         d =>
-          (row.registrationNumber && d.registration_number === row.registrationNumber) ||
           (row.teamId && d.team_id === row.teamId) ||
-          (row.email && d.candidate_email && d.candidate_email.toLowerCase() === row.email.toLowerCase().trim())
+          (row.teamName && row.teamName !== 'Individual Entry' && row.teamName !== 'Team Entry' && d.team_name && d.team_name.toLowerCase() === row.teamName.toLowerCase()) ||
+          (row.email && d.candidate_email && d.candidate_email.toLowerCase() === row.email.toLowerCase().trim()) ||
+          (row.members && row.members.some((m: any) =>
+            (m.email && d.candidate_email && d.candidate_email.toLowerCase() === m.email.toLowerCase().trim())
+          )) ||
+          (row.registrationNumber && d.registration_number === row.registrationNumber)
       );
 
       const rawTrackId =
@@ -506,7 +520,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         : (juryFormData.track || 'General Management & Corporate Strategy');
 
       const scorecardPayload = {
-        registrationNumber: row.registrationNumber || '',
+        registrationNumber: dbEval?.registration_number || row.registrationNumber || '',
         candidateEmail: row.email,
         userId: row.userId,
         teamId: row.teamId || row.userId,
@@ -539,9 +553,11 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       // Update local dbJuryEvaluations state
       setDbJuryEvaluations(prev => {
         const item = {
+          id: dbEval?.id,
           registration_number: scorecardPayload.registrationNumber,
           team_id: scorecardPayload.teamId,
           candidate_email: scorecardPayload.candidateEmail,
+          team_name: scorecardPayload.teamName,
           track_id: scorecardPayload.trackId,
           track_name: scorecardPayload.trackName,
           track_badge: scorecardPayload.trackBadge,
@@ -562,9 +578,11 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         };
         const idx = prev.findIndex(
           p =>
-            (item.registration_number && p.registration_number === item.registration_number) ||
+            (item.id && p.id === item.id) ||
+            (item.team_id && p.team_id === item.team_id) ||
+            (item.team_name && p.team_name && p.team_name.toLowerCase() === item.team_name.toLowerCase()) ||
             (item.candidate_email && p.candidate_email && p.candidate_email.toLowerCase() === item.candidate_email.toLowerCase()) ||
-            (item.team_id && p.team_id === item.team_id)
+            (item.registration_number && p.registration_number === item.registration_number)
         );
         if (idx >= 0) {
           const next = [...prev];
@@ -904,7 +922,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         u => u.id === attempt.studentId || u.id === attempt.userId ||
           (attempt.participantEmail && u.email.toLowerCase() === attempt.participantEmail.toLowerCase())
       );
-      const userTeam = teams.find(t => t.id === attempt.teamId || (user && t.members.some(m => m.studentId === user.id)));
+      const candidateEmail = (user?.email || attempt.participantEmail || '').toLowerCase().trim();
+      const userTeam = teams.find(
+        t =>
+          (candidateEmail && t.members.some(m => m.email.toLowerCase().trim() === candidateEmail)) ||
+          (attempt.teamId && t.id === attempt.teamId) ||
+          (user && t.members.some(m => m.studentId === user.id))
+      );
       const institute = institutions.find(i => i.id === user?.instituteId);
 
       const score = attempt.score ?? 0;
@@ -923,7 +947,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         registrationNumber: attempt.registrationNumber || user?.studentIdCardNumber || 'AIMA-CL26-00000',
         instituteName: user?.instituteName || institute?.name || attempt.instituteName || 'Independent B-School',
         instituteCity: institute?.city || 'India',
-        teamName: userTeam?.name || 'Individual Entry',
+        teamName: userTeam?.name || (isTeam ? 'Team Entry' : 'Individual Entry'),
         teamId,
         isTeam,
         isTeamLeader: Boolean(user?.isTeamLeader || (userTeam && userTeam.leaderId === user?.id)),
@@ -1084,13 +1108,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       const jury = getRowJuryScorecard(row);
       const dbEval = dbJuryEvaluations.find(
         d =>
-          (row.registrationNumber && d.registration_number === row.registrationNumber) ||
           (row.teamId && d.team_id === row.teamId) ||
+          (row.teamName && row.teamName !== 'Individual Entry' && row.teamName !== 'Team Entry' && d.team_name && d.team_name.toLowerCase() === row.teamName.toLowerCase()) ||
           (row.email && d.candidate_email && d.candidate_email.toLowerCase() === row.email.toLowerCase().trim()) ||
           (row.members && row.members.some((m: any) =>
-            (m.registrationNumber && d.registration_number === m.registrationNumber) ||
             (m.email && d.candidate_email && d.candidate_email.toLowerCase() === m.email.toLowerCase().trim())
-          ))
+          )) ||
+          (row.registrationNumber && d.registration_number === row.registrationNumber)
       );
       const dbScore =
         dbEval?.total_score !== undefined && dbEval?.total_score !== null && Number(dbEval.total_score) > 0
@@ -1688,13 +1712,13 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       const jury = getRowJuryScorecard(r);
       const dbEval = dbJuryEvaluations.find(
         d =>
-          (r.registrationNumber && d.registration_number === r.registrationNumber) ||
           (r.teamId && d.team_id === r.teamId) ||
+          (r.teamName && r.teamName !== 'Individual Entry' && r.teamName !== 'Team Entry' && d.team_name && d.team_name.toLowerCase() === r.teamName.toLowerCase()) ||
           (r.email && d.candidate_email && d.candidate_email.toLowerCase() === r.email.toLowerCase().trim()) ||
           (r.members && r.members.some((m: any) =>
-            (m.registrationNumber && d.registration_number === m.registrationNumber) ||
             (m.email && d.candidate_email && d.candidate_email.toLowerCase() === m.email.toLowerCase().trim())
-          ))
+          )) ||
+          (r.registrationNumber && d.registration_number === r.registrationNumber)
       );
 
       const matchedTrack = OFFICIAL_CASE_TRACKS.find(
@@ -2448,16 +2472,15 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                   const isExpanded = expandedJuryUserId === row.id || expandedJuryUserId === row.userId;
                   const isTeamExpanded = expandedTeamIds.has(row.id);
 
-                  // Resolve Chosen / Selected Case for this candidate or team
                   const rowDbEval = dbJuryEvaluations.find(
                     d =>
-                      (row.registrationNumber && d.registration_number === row.registrationNumber) ||
                       (row.teamId && d.team_id === row.teamId) ||
+                      (row.teamName && row.teamName !== 'Individual Entry' && row.teamName !== 'Team Entry' && d.team_name && d.team_name.toLowerCase() === row.teamName.toLowerCase()) ||
                       (row.email && d.candidate_email && d.candidate_email.toLowerCase() === row.email.toLowerCase().trim()) ||
                       (row.members && row.members.some((m: any) =>
-                        (m.registrationNumber && d.registration_number === m.registrationNumber) ||
                         (m.email && d.candidate_email && d.candidate_email.toLowerCase() === m.email.toLowerCase().trim())
-                      ))
+                      )) ||
+                      (row.registrationNumber && d.registration_number === row.registrationNumber)
                   );
 
                   const rowContextTeam = teams.find(
