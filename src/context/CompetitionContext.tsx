@@ -1280,6 +1280,7 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       try {
         const live = await fetchCompetitionConfigFromSupabase();
         let isFinalPub = typeof localStorage !== 'undefined' && localStorage.getItem('AIMA_FINAL_RESULTS_PUBLISHED') === 'true';
+        let isCertPub = typeof localStorage !== 'undefined' && localStorage.getItem('AIMA_CERTIFICATES_PUBLISHED') === 'true';
         try {
           const { data: sysRow } = await supabase
             .from('registrations')
@@ -1292,6 +1293,12 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
               localStorage.setItem('AIMA_FINAL_RESULTS_PUBLISHED', String(isFinalPub));
             }
           }
+          if (sysRow?.raw_data?.isCertificatesPublished !== undefined || sysRow?.raw_data?.isCertificatePublished !== undefined) {
+            isCertPub = Boolean(sysRow.raw_data.isCertificatesPublished ?? sysRow.raw_data.isCertificatePublished);
+            if (typeof localStorage !== 'undefined') {
+              localStorage.setItem('AIMA_CERTIFICATES_PUBLISHED', String(isCertPub));
+            }
+          }
         } catch {}
 
         if (live && isMounted) {
@@ -1299,11 +1306,15 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
             ...prev,
             ...live,
             isFinalResultsPublished: live.isFinalResultsPublished ?? isFinalPub,
+            isCertificatesPublished: (live as any).isCertificatesPublished ?? isCertPub,
+            isCertificatePublished: (live as any).isCertificatePublished ?? isCertPub,
           }));
         } else if (isMounted) {
           setConfig(prev => ({
             ...prev,
             isFinalResultsPublished: isFinalPub,
+            isCertificatesPublished: isCertPub,
+            isCertificatePublished: isCertPub,
           }));
         }
       } catch (err) {
@@ -2977,6 +2988,42 @@ export const CompetitionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       await savePublishedCertificatesToSupabase(combined.length > 0 ? combined : certs);
     } catch (err) {
       console.warn('Error saving published certificates to Supabase:', err);
+    }
+
+    // Mark certificates officially published in config, localStorage & system settings
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('AIMA_CERTIFICATES_PUBLISHED', 'true');
+      }
+      await updateConfig({
+        isCertificatesPublished: true,
+        isCertificatePublished: true,
+      });
+
+      const { data: existingSys } = await supabase
+        .from('registrations')
+        .select('*')
+        .eq('registration_number', 'AIMA_SYSTEM_QUIZ_CONFIG')
+        .maybeSingle();
+
+      const raw = existingSys?.raw_data || {};
+      const now = new Date().toISOString();
+      if (existingSys) {
+        await supabase
+          .from('registrations')
+          .update({
+            raw_data: {
+              ...raw,
+              isCertificatesPublished: true,
+              isCertificatePublished: true,
+              certificatePublishedAt: now,
+              updatedAt: now,
+            },
+          })
+          .eq('id', existingSys.id);
+      }
+    } catch (certPubErr) {
+      console.warn('Could not persist certificate publication flag in system config:', certPubErr);
     }
 
     addAuditLog(

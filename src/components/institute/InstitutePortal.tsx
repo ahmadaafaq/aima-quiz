@@ -126,12 +126,9 @@ export const InstitutePortal: React.FC = () => {
   const regNominees = Array.isArray(matchedReg?.nominees) ? matchedReg.nominees : [];
 
   const isCertificatePublished = Boolean(
-    stage1Program?.isCertificatePublished === true ||
-    (stage1Program as any)?.is_certificate_published === true ||
-    config?.isCertificatePublishedR1 === true ||
+    config?.isCertificatesPublished === true ||
     config?.isCertificatePublished === true ||
-    (matchedReg as any)?.isCertificatePublished === true ||
-    (matchedReg as any)?.raw_data?.isCertificatePublished === true
+    (typeof localStorage !== 'undefined' && localStorage.getItem('AIMA_CERTIFICATES_PUBLISHED') === 'true')
   );
 
   const canViewCertificates = Boolean(isCertificatePublished && isFinalResultsPublished);
