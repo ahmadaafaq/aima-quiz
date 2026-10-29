@@ -83,11 +83,17 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate,
   const instituteDisplay = certificate.institute || 'All India Management Association Partner Institution';
   const topPercent = certificate.selectionTopPercentage || 25;
 
+  const templatePath = isAchievementTop1
+    ? '/certificates/cert_top1_signed.png'
+    : isSelectionFinale
+      ? '/certificates/cert_selection_signed.png'
+      : '/certificates/cert_participation_signed.png';
+
   const handlePrint = () => {
     window.print();
   };
 
-  // High-Resolution 1754x1241 Canvas PNG Generator matching the exact PDF template
+  // High-Resolution 1754x1241 Canvas PNG Generator using official signed certificate templates
   const handleDownloadPng = async () => {
     try {
       setIsDownloading(true);
@@ -97,146 +103,58 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate,
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      // 1. Draw base blank template containing authentic border, logos, and 5 signatories
+      // 1. Draw authentic signed template (contains border, logos, gold titles, text, and 5 signatories)
       const baseImg = new Image();
       baseImg.crossOrigin = 'anonymous';
       await new Promise<void>((resolve, reject) => {
         baseImg.onload = () => resolve();
         baseImg.onerror = () => reject(new Error('Failed to load certificate template asset'));
-        baseImg.src = '/certificates/cert_blank_template.png';
+        baseImg.src = templatePath;
       });
 
       ctx.drawImage(baseImg, 0, 0, 1754, 1241);
 
-      // 2. Main Title: INDIA CASE LEAGUE 2026 (y ≈ 325)
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#0B4E94';
-      ctx.font = '900 48px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Montserrat, sans-serif';
-      ctx.fillText('INDIA CASE LEAGUE 2026', 1754 / 2, 325);
-
-      // 3. Subtitle (y ≈ 435)
-      ctx.fillStyle = '#C59B27';
-      ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Montserrat, sans-serif';
-      ctx.fillText(certificateTypeTitle, 1754 / 2, 435);
-
-      // Helper function to wrap text with bolding support
-      const drawWrappedText = (
-        textSegments: { text: string; bold: boolean }[],
-        startX: number,
-        startY: number,
-        maxWidth: number,
-        lineHeight: number
+      // Helper to fit and draw dynamic text cleanly over the underline
+      const drawField = (
+        text: string,
+        centerX: number,
+        yBase: number,
+        maxW: number,
+        initialSize: number,
+        color: string = '#0B4E94',
+        weight: string = 'bold'
       ) => {
-        // Flatten into words
-        const words: { word: string; bold: boolean }[] = [];
-        textSegments.forEach(seg => {
-          const splitWords = seg.text.split(' ');
-          splitWords.forEach((w, idx) => {
-            if (w.length > 0 || idx < splitWords.length - 1) {
-              words.push({ word: w, bold: seg.bold });
-            }
-          });
-        });
-
-        const lines: { word: string; bold: boolean }[][] = [];
-        let currentLine: { word: string; bold: boolean }[] = [];
-        let currentLineWidth = 0;
-
-        for (const item of words) {
-          ctx.font = item.bold
-            ? 'bold 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            : 'normal 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-          const wordWidth = ctx.measureText(item.word + ' ').width;
-
-          if (currentLineWidth + wordWidth > maxWidth && currentLine.length > 0) {
-            lines.push(currentLine);
-            currentLine = [item];
-            currentLineWidth = wordWidth;
-          } else {
-            currentLine.push(item);
-            currentLineWidth += wordWidth;
-          }
+        let size = initialSize;
+        ctx.font = `${weight} ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Montserrat, sans-serif`;
+        while (ctx.measureText(text).width > maxW && size > 13) {
+          size -= 1;
+          ctx.font = `${weight} ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Montserrat, sans-serif`;
         }
-        if (currentLine.length > 0) lines.push(currentLine);
-
-        let curY = startY;
-        for (const line of lines) {
-          // Calculate total line width for center alignment
-          let totalLineWidth = 0;
-          for (const item of line) {
-            ctx.font = item.bold
-              ? 'bold 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-              : 'normal 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-            totalLineWidth += ctx.measureText(item.word + ' ').width;
-          }
-
-          let curX = startX - totalLineWidth / 2;
-          for (const item of line) {
-            ctx.font = item.bold
-              ? 'bold 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-              : 'normal 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-            ctx.fillStyle = '#1E293B';
-            ctx.textAlign = 'left';
-            ctx.fillText(item.word + ' ', curX, curY);
-            curX += ctx.measureText(item.word + ' ').width;
-          }
-          curY += lineHeight;
-        }
-        return curY;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = color;
+        ctx.fillText(text, centerX, yBase);
       };
 
-      // 4. Render exact dynamic body paragraphs
+      // 2. Render exact dynamic participant / team / institute details
       if (isAchievementTop1) {
-        // Achievement Top 1
-        const segments = [
-          { text: 'This is to certify that the team ', bold: false },
-          { text: teamDisplay, bold: true },
-          { text: ' from ', bold: false },
-          { text: instituteDisplay, bold: true },
-          {
-            text: ' has secured Top 1 position in the India Case League 2026, organised by the All India Management Association (AIMA)- India Case Research Centre, held on 29 October 2026 at ICFAI Foundation for Higher Education (IFHE), Karnataka.',
-            bold: false,
-          },
-        ];
-        drawWrappedText(segments, 1754 / 2, 570, 1340, 48);
+        // Page 2: Achievement Top 1 Position
+        drawField(teamDisplay, 1092, 540, 540, 28, '#0B4E94', 'bold');
+        drawField(instituteDisplay, 671, 590, 660, 24, '#1E293B', 'bold');
       } else if (isSelectionFinale) {
-        // Selection Grand Finale
-        const para1 = [
-          { text: 'This is to certify that ', bold: false },
-          { text: teamDisplay, bold: true },
-          { text: ' from ', bold: false },
-          { text: instituteDisplay, bold: true },
-          {
-            text: ' has been selected for the Grand Finale of India Case League 2026, organised by the All India Management Association (AIMA), following their successful performance in the Regional Round.',
-            bold: false,
-          },
-        ];
-        const nextY = drawWrappedText(para1, 1754 / 2, 545, 1340, 44);
-
-        const para2 = [
-          { text: `The team is among the top ${topPercent}% of participating teams selected to advance to the Grand Finale, in recognition of their analytical skills, problem-solving abilities, and application of management concepts to real-world business challenges.`, bold: false },
-        ];
-        drawWrappedText(para2, 1754 / 2, nextY + 36, 1340, 44);
+        // Page 3: Selection Grand Finale
+        drawField(teamDisplay, 1025, 540, 580, 28, '#0B4E94', 'bold');
+        drawField(instituteDisplay, 727, 590, 660, 24, '#1E293B', 'bold');
       } else {
-        // Participation
-        const segments = [
-          { text: 'This is to certify that ', bold: false },
-          { text: recipientDisplay, bold: true },
-          { text: ' of ', bold: false },
-          { text: instituteDisplay, bold: true },
-          {
-            text: ' has participated in the India Case League 2026, organised by the All India Management Association (AIMA) - India Case Research Centre, held on 29 October 2026 in ICFAI Foundation for Higher Education (IFHE), Karnataka.',
-            bold: false,
-          },
-        ];
-        drawWrappedText(segments, 1754 / 2, 570, 1340, 48);
+        // Page 1: Participation
+        drawField(recipientDisplay, 877, 620, 750, 32, '#0B4E94', 'bold');
+        drawField(instituteDisplay, 877, 672, 750, 26, '#1E293B', 'bold');
       }
 
-      // 5. Discreet Digital Credential ID at bottom corner
+      // 3. Discreet Digital Credential ID at bottom corner
       ctx.textAlign = 'right';
       ctx.font = '600 13px monospace';
       ctx.fillStyle = '#64748B';
-      ctx.fillText(`Official Credential ID: ${certificate.certificateNumber}`, 1680, 1195);
+      ctx.fillText(`Official Credential ID: ${certificate.certificateNumber}`, 1670, 1180);
 
       // Trigger download
       const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/png', 1.0));
@@ -350,97 +268,130 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate,
           <div
             id="printable-certificate-wrapper"
             ref={certContainerRef}
-            className="relative w-full max-w-4xl aspect-[1754/1241] bg-white rounded-lg shadow-2xl overflow-hidden select-text text-center flex flex-col justify-between"
+            className="relative w-full max-w-4xl aspect-[1754/1241] bg-white rounded-lg shadow-2xl overflow-hidden select-text text-center"
             style={{
-              backgroundImage: 'url(/certificates/cert_blank_template.png)',
+              backgroundImage: `url(${templatePath})`,
               backgroundSize: '100% 100%',
               backgroundPosition: 'center',
               backgroundRepeat: 'no-repeat',
             }}
           >
-            {/* Top Spacing to preserve authentic header logos (AIMA, ICRC, ICFAI IFHE, IBS Bangalore) */}
-            <div className="w-full" style={{ height: '22%' }} />
+            {/* Dynamic Overlays depending on certificate category */}
+            {isAchievementTop1 ? (
+              <>
+                {/* Team Name on Line 1 */}
+                <div
+                  className="absolute font-bold text-[#0B4E94] truncate"
+                  style={{
+                    left: '62.26%',
+                    top: '43.6%',
+                    transform: 'translate(-50%, -100%)',
+                    maxWidth: '31%',
+                    fontSize: 'clamp(11px, 1.6vw, 22px)',
+                    lineHeight: 1,
+                  }}
+                  title={teamDisplay}
+                >
+                  {teamDisplay}
+                </div>
 
-            {/* Central Dynamic Content Area */}
-            <div className="w-full px-6 sm:px-12 md:px-16 flex flex-col items-center justify-center flex-1 my-auto">
-              {/* Main Heading */}
-              <h1
-                className="text-lg sm:text-2xl md:text-3xl lg:text-[34px] font-black uppercase tracking-wider text-[#0B4E94] leading-tight"
-                style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Montserrat, sans-serif' }}
-              >
-                INDIA CASE LEAGUE 2026
-              </h1>
+                {/* Institute Name on Line 2 */}
+                <div
+                  className="absolute font-bold text-slate-800 truncate"
+                  style={{
+                    left: '38.26%',
+                    top: '47.6%',
+                    transform: 'translate(-50%, -100%)',
+                    maxWidth: '38%',
+                    fontSize: 'clamp(9px, 1.35vw, 19px)',
+                    lineHeight: 1,
+                  }}
+                  title={instituteDisplay}
+                >
+                  {instituteDisplay}
+                </div>
+              </>
+            ) : isSelectionFinale ? (
+              <>
+                {/* Team / Recipient Name on Line 1 */}
+                <div
+                  className="absolute font-bold text-[#0B4E94] truncate"
+                  style={{
+                    left: '58.44%',
+                    top: '43.6%',
+                    transform: 'translate(-50%, -100%)',
+                    maxWidth: '33%',
+                    fontSize: 'clamp(11px, 1.6vw, 22px)',
+                    lineHeight: 1,
+                  }}
+                  title={teamDisplay}
+                >
+                  {teamDisplay}
+                </div>
 
-              {/* Subtitle */}
-              <h2
-                className="text-xs sm:text-base md:text-xl lg:text-[23px] font-bold uppercase tracking-wide text-[#C59B27] mt-2 sm:mt-3 mb-3 sm:mb-5"
-                style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Montserrat, sans-serif' }}
-              >
-                {certificateTypeTitle}
-              </h2>
+                {/* Institute Name on Line 2 */}
+                <div
+                  className="absolute font-bold text-slate-800 truncate"
+                  style={{
+                    left: '41.45%',
+                    top: '47.6%',
+                    transform: 'translate(-50%, -100%)',
+                    maxWidth: '38%',
+                    fontSize: 'clamp(9px, 1.35vw, 19px)',
+                    lineHeight: 1,
+                  }}
+                  title={instituteDisplay}
+                >
+                  {instituteDisplay}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Recipient Name on Line 1 */}
+                <div
+                  className="absolute font-bold text-[#0B4E94] truncate"
+                  style={{
+                    left: '50%',
+                    top: '50.1%',
+                    transform: 'translate(-50%, -100%)',
+                    maxWidth: '43%',
+                    fontSize: 'clamp(12px, 1.8vw, 25px)',
+                    lineHeight: 1,
+                  }}
+                  title={recipientDisplay}
+                >
+                  {recipientDisplay}
+                </div>
 
-              {/* Exact Dynamic Body Copy */}
-              <div className="text-[10px] sm:text-xs md:text-sm lg:text-[15.5px] leading-relaxed text-slate-800 max-w-3xl font-normal mx-auto">
-                {isAchievementTop1 ? (
-                  <p>
-                    This is to certify that the team{' '}
-                    <strong className="font-bold text-slate-950 underline decoration-[#C59B27]/40 decoration-2 underline-offset-4">
-                      {teamDisplay}
-                    </strong>{' '}
-                    from{' '}
-                    <strong className="font-bold text-slate-950">
-                      {instituteDisplay}
-                    </strong>{' '}
-                    has secured Top 1 position in the India Case League 2026, organised by the All India Management
-                    Association (AIMA)- India Case Research Centre, held on 29 October 2026 at ICFAI Foundation for
-                    Higher Education (IFHE), Karnataka.
-                  </p>
-                ) : isSelectionFinale ? (
-                  <div className="space-y-2 sm:space-y-3">
-                    <p>
-                      This is to certify that{' '}
-                      <strong className="font-bold text-slate-950 underline decoration-[#C59B27]/40 decoration-2 underline-offset-4">
-                        {teamDisplay}
-                      </strong>{' '}
-                      from{' '}
-                      <strong className="font-bold text-slate-950">
-                        {instituteDisplay}
-                      </strong>{' '}
-                      has been selected for the Grand Finale of India Case League 2026, organised by the All India
-                      Management Association (AIMA), following their successful performance in the Regional Round.
-                    </p>
-                    <p className="text-[9.5px] sm:text-[11.5px] md:text-[13px] lg:text-[14.5px] text-slate-700">
-                      The team is among the top <strong className="font-bold text-[#0B4E94]">{topPercent}%</strong> of participating
-                      teams selected to advance to the Grand Finale, in recognition of their analytical skills, problem-solving
-                      abilities, and application of management concepts to real-world business challenges.
-                    </p>
-                  </div>
-                ) : (
-                  <p>
-                    This is to certify that{' '}
-                    <strong className="font-bold text-slate-950 underline decoration-[#C59B27]/40 decoration-2 underline-offset-4">
-                      {recipientDisplay}
-                    </strong>{' '}
-                    of{' '}
-                    <strong className="font-bold text-slate-950">
-                      {instituteDisplay}
-                    </strong>{' '}
-                    has participated in the India Case League 2026, organised by the All India Management
-                    Association (AIMA) - India Case Research Centre, held on 29 October 2026 in ICFAI Foundation for
-                    Higher Education (IFHE), Karnataka.
-                  </p>
-                )}
-              </div>
+                {/* Institute Name on Line 2 */}
+                <div
+                  className="absolute font-bold text-slate-800 truncate"
+                  style={{
+                    left: '50%',
+                    top: '54.4%',
+                    transform: 'translate(-50%, -100%)',
+                    maxWidth: '43%',
+                    fontSize: 'clamp(10px, 1.45vw, 20px)',
+                    lineHeight: 1,
+                  }}
+                  title={instituteDisplay}
+                >
+                  {instituteDisplay}
+                </div>
+              </>
+            )}
+
+            {/* Discreet Digital Credential ID */}
+            <div
+              className="absolute font-mono text-slate-500 font-semibold select-all"
+              style={{
+                right: '4.2%',
+                bottom: '4.2%',
+                fontSize: 'clamp(7px, 0.75vw, 11px)',
+              }}
+            >
+              Official Credential ID: {certificate.certificateNumber}
             </div>
-
-            {/* Bottom Spacing to preserve authentic 5 Signatories in footer template */}
-            <div className="w-full relative" style={{ height: '22%' }}>
-              {/* Discreet Credential ID */}
-              <div className="absolute bottom-2 right-4 text-[7px] sm:text-[9px] md:text-[10px] font-mono text-slate-400 select-all">
-                ID: {certificate.certificateNumber}
-              </div>
-            </div>
-
           </div>
         </div>
 
