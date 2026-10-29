@@ -59,7 +59,18 @@ export function hashPassword(plain: string): string {
 }
 
 export function verifyPassword(plain: string, stored: string): boolean {
-  return hashPassword(plain) === stored;
+  if (!stored) return false;
+  if (hashPassword(plain) === stored) return true;
+  if (hashPassword(plain.trim()) === stored) return true;
+  if (stored.startsWith('aima_')) {
+    try {
+      const decodedStored = decodeURIComponent(escape(atob(stored.slice(5))));
+      if (plain.trim() === decodedStored.trim()) return true;
+    } catch {
+      // ignore
+    }
+  }
+  return false;
 }
 
 // Auto-generate a strong default password from the nominee's name + mobile
