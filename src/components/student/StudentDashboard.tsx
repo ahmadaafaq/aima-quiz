@@ -2816,20 +2816,23 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
               </div>
             ) : (
               /* State B: Track Confirmed - Display Confirmed State, Venue Details, Scorecard Workflow */
-              <div className="p-6 sm:p-7 rounded-3xl bg-white dark:bg-slate-900 border border-emerald-500/30 shadow-sm space-y-6 animate-in fade-in">
+              <div className="p-6 sm:p-7 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-6 animate-in fade-in">
                 {/* Header with Confirmed Track */}
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                        ROUND 2 TRACK CONFIRMED
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                        ROUND 2
+                      </span>
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        Track Confirmed
                       </span>
                       <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-blue-600 text-white">
                         {activeConfirmedTrack?.badge || 'TRACK CONFIRMED'}
                       </span>
-                      <span className="text-xs font-semibold text-slate-500">
-                        Offline Case Presentation at AIMA Venue
+                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                        • Offline Case Presentation at AIMA Venue
                       </span>
                     </div>
 
@@ -2850,7 +2853,7 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
                     <button
                       onClick={() => setIsChangingTrack(true)}
-                      className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs transition-colors cursor-pointer"
+                      className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs transition-colors cursor-pointer"
                     >
                       Change Track
                     </button>
@@ -2858,87 +2861,115 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
                     {activeConfirmedTrack?.caseDocFileName && (
                       <button
                         onClick={(e) => handleDownloadDirectCaseStudy(activeConfirmedTrack, e)}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-emerald-600/25 transition-all flex items-center gap-1.5 cursor-pointer ring-2 ring-emerald-500/20"
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs shadow-sm hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
                         title={`Download Case Study (PDF): ${activeConfirmedTrack.masterCaseTitle || activeConfirmedTrack.name}`}
                       >
                         <Download className="w-3.5 h-3.5" />
-                        <span>Download Case Study (PDF)</span>
+                        <span>Download Case Study</span>
                       </button>
                     )}
 
                     <button
                       onClick={handleDownloadInstructions}
-                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                      className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs shadow-sm hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
                       title="Download AIMA ICRC South Zone Student Instructions (PDF)"
                     >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Download Instructions</span>
+                      <Download className="w-3.5 h-3.5 text-slate-300" />
+                      <span>Guidelines (PDF)</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Bottom Guidelines Reference */}
-                <div className="pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-500">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-blue-600 shrink-0" />
-                    <span>Official League Guidelines: <code className="font-mono text-slate-700 dark:text-slate-300">AIMA_ICRC_South_Zone_Student_Instructions.pdf</code></span>
+                {/* Official Documents Bar with Clean Action Pills */}
+                <div className="p-3.5 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                  <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 font-medium">
+                    <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="text-[11px] uppercase tracking-wider font-bold text-slate-400">Attached Documents</span>
                   </div>
-                  {activeConfirmedTrack?.caseDocFileName && (
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>Case Document: <code className="font-mono text-slate-700 dark:text-slate-300">{activeConfirmedTrack.caseDocFileName}</code></span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleDownloadInstructions}
+                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      title="Official League Guidelines: AIMA_ICRC_South_Zone_Student_Instructions.pdf"
+                    >
+                      <Download className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span>Official Guidelines (PDF)</span>
+                    </button>
+
+                    {activeConfirmedTrack?.caseDocFileName && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleDownloadDirectCaseStudy(activeConfirmedTrack, e)}
+                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-300 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        title={`Case Document: ${activeConfirmedTrack.caseDocFileName}`}
+                      >
+                        <Download className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Case Brief Study (PDF)</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Round 2 Jury Scorecard & Final Results Card (Displayed when jury has evaluated) */}
                 {studentJuryEval && (
-                  <div className={`p-5 rounded-2xl border transition-all ${isFinalResultsPublished
-                      ? 'bg-gradient-to-r from-purple-500/10 via-emerald-500/10 to-blue-500/10 border-purple-500/30 dark:border-purple-500/40'
-                      : 'bg-amber-500/10 border-amber-500/30'
-                    }`}>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
-                      <div className="flex items-center gap-2">
-                        <Award className={`w-5 h-5 ${isFinalResultsPublished ? 'text-purple-600 dark:text-purple-400' : 'text-amber-600'}`} />
-                        <div>
+                  <div className="p-5 sm:p-6 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 transition-all space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-700/60">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0 mt-0.5">
+                          <Award className="w-5 h-5" />
+                        </div>
+                        <div className="space-y-0.5">
                           <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                             <span>Round 2 Case Defense Scorecard</span>
                             {isFinalResultsPublished ? (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold border border-emerald-300">
-                                Official Final Results Published ✓
+                              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                Official Final Results Published
                               </span>
                             ) : (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 font-bold border border-amber-300">
+                              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 font-bold border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-amber-600" />
                                 Evaluated • Publication Pending
                               </span>
                             )}
                           </h4>
-                          <p className="text-[11px] text-slate-500">
-                            Evaluated by: <span className="font-semibold text-slate-700 dark:text-slate-300">{studentJuryEval.evaluated_by || studentJuryEval.evaluatedBy || 'AIMA National Jury Panel'}</span>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Evaluated by <span className="font-semibold text-slate-700 dark:text-slate-300">{studentJuryEval.evaluated_by || studentJuryEval.evaluatedBy || 'AIMA National Jury Panel'}</span>
                           </p>
                         </div>
                       </div>
 
-                      {/* Marks Pill */}
+                      {/* Marks Tiles */}
                       {isFinalResultsPublished ? (
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Round 2 Jury Score</span>
-                            <span className="text-base font-black text-purple-600 dark:text-purple-400 font-mono">
-                              {studentJuryEval.total_score ?? studentJuryEval.livePresentationScore ?? studentJuryEval.aggregateScore}/100
-                            </span>
+                        <div className="flex items-center gap-2.5 sm:self-center">
+                          {/* Round 2 Jury Score */}
+                          <div className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xs text-right min-w-[110px]">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Round 2 Score</span>
+                            <div className="flex items-baseline justify-end gap-0.5">
+                              <span className="text-lg font-black text-slate-900 dark:text-white font-mono">
+                                {studentJuryEval.total_score ?? studentJuryEval.livePresentationScore ?? studentJuryEval.aggregateScore}
+                              </span>
+                              <span className="text-xs font-semibold text-slate-400">/100</span>
+                            </div>
                           </div>
-                          <div className="text-right pl-3 border-l border-slate-200 dark:border-slate-700">
-                            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Combined Merit</span>
-                            <span className="text-base font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                              {((myAttempt?.score ?? 0) + Number(studentJuryEval.total_score ?? studentJuryEval.livePresentationScore ?? studentJuryEval.aggregateScore ?? 0))}/200
-                            </span>
+
+                          {/* Combined Merit */}
+                          <div className="px-3.5 py-2 rounded-xl bg-emerald-500/10 dark:bg-emerald-950/30 border border-emerald-500/20 shadow-2xs text-right min-w-[120px]">
+                            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">Combined Merit</span>
+                            <div className="flex items-baseline justify-end gap-0.5">
+                              <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                                {((myAttempt?.score ?? 0) + Number(studentJuryEval.total_score ?? studentJuryEval.livePresentationScore ?? studentJuryEval.aggregateScore ?? 0))}
+                              </span>
+                              <span className="text-xs font-semibold text-emerald-600/70 dark:text-emerald-400/70">/200</span>
+                            </div>
                           </div>
                         </div>
                       ) : (
-                        <div className="text-right">
-                          <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" /> Final Results Awaited
+                        <div className="px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-right">
+                          <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>Final Results Awaited</span>
                           </span>
                         </div>
                       )}
@@ -2946,11 +2977,13 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
 
                     {/* Jury Feedback */}
                     {(studentJuryEval.jury_feedback || studentJuryEval.notes) && (
-                      <div className="pt-3">
-                        <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Jury Panel Feedback</span>
-                        <p className="text-xs italic text-slate-700 dark:text-slate-300 bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                          Jury Panel Feedback
+                        </span>
+                        <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 italic shadow-2xs">
                           "{studentJuryEval.jury_feedback || studentJuryEval.notes}"
-                        </p>
+                        </div>
                       </div>
                     )}
                   </div>
