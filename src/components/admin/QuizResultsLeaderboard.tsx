@@ -1717,9 +1717,167 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     });
 
     // ─────────────────────────────────────────────────────────────────────────
+    // SHEET 0: All Participants Results (Individual Participant Breakdown)
+    // S.No, Participant Name, Email, Team, Institute, R1 Result, R2 Result, Combined Result, Rank
+    // ─────────────────────────────────────────────────────────────────────────
+    const participantMap = new Map<string, any>();
+
+    leaderboardWithCombinedScores.forEach((r: any) => {
+      const r2ScoreVal = r.hasPresentation ? Number(r.presentationScore) : 0;
+      const r2Display = r.hasPresentation ? Number(r.presentationScore) : 'Pending Jury Score';
+
+      if (r.isTeam && r.members && r.members.length > 0) {
+        r.members.forEach((m: any) => {
+          const emailKey = (m.email || `${m.name}_${r.id}`).toLowerCase().trim();
+          const r1Score = Number(m.score) || 0;
+          const combinedScore = r1Score + r2ScoreVal;
+          participantMap.set(emailKey, {
+            name: m.name,
+            email: m.email || 'N/A',
+            teamName: r.teamName,
+            instituteName: r.instituteName || m.userProfile?.instituteName || 'Independent B-School',
+            r1Result: r1Score,
+            numericR1Score: r1Score,
+            r2Result: r2Display,
+            validPresentationScore: r2ScoreVal,
+            combinedResult: r.hasPresentation ? combinedScore : r1Score,
+            numericCombinedScore: combinedScore,
+            tieBreakerScore: Number(m.analyticalScore) || 0,
+            timeTaken: Number(m.timeTaken) || 1800,
+            tabSwitches: Number(m.tabSwitches) || 0,
+          });
+        });
+
+        // Include any registered team members who haven't attempted Round 1 yet
+        const matchingTeam = teams.find(
+          t => (r.teamId && t.id === r.teamId) || (r.teamName && t.name === r.teamName)
+        );
+        if (matchingTeam?.members) {
+          matchingTeam.members.forEach((tm: any) => {
+            const emailKey = (tm.email || `${tm.name}_${matchingTeam.id}`).toLowerCase().trim();
+            if (!participantMap.has(emailKey)) {
+              participantMap.set(emailKey, {
+                name: tm.name,
+                email: tm.email || 'N/A',
+                teamName: r.teamName,
+                instituteName: tm.institute || r.instituteName || 'Independent B-School',
+                r1Result: 'Not Attempted',
+                numericR1Score: -1,
+                r2Result: r2Display,
+                validPresentationScore: r2ScoreVal,
+                combinedResult: r.hasPresentation ? r2ScoreVal : 0,
+                numericCombinedScore: r2ScoreVal,
+                tieBreakerScore: 0,
+                timeTaken: 999999,
+                tabSwitches: 0,
+              });
+            }
+          });
+        }
+      } else {
+        // Solo entry
+        const emailKey = (r.email || `${r.name}_${r.id}`).toLowerCase().trim();
+        const r1Score = Number(r.quizScore) || 0;
+        const combinedScore = r1Score + r2ScoreVal;
+        participantMap.set(emailKey, {
+          name: r.name,
+          email: r.email || 'N/A',
+          teamName: r.teamName && r.teamName !== 'Individual Entry' ? r.teamName : 'Individual Entry',
+          instituteName: r.instituteName || 'Independent B-School',
+          r1Result: r1Score,
+          numericR1Score: r1Score,
+          r2Result: r2Display,
+          validPresentationScore: r2ScoreVal,
+          combinedResult: r.hasPresentation ? combinedScore : r1Score,
+          numericCombinedScore: combinedScore,
+          tieBreakerScore: Number(r.tieBreakerScore) || 0,
+          timeTaken: Number(r.timeTaken) || 1800,
+          tabSwitches: Number(r.tabSwitches) || 0,
+        });
+      }
+    });
+
+    // Also include any registered students/candidates who have not appeared in quiz attempts
+    users.forEach(u => {
+      if (u.role === 'student' || u.role === 'team_leader' || u.role === 'team_member') {
+        const emailKey = (u.email || '').toLowerCase().trim();
+        if (emailKey && !participantMap.has(emailKey)) {
+          const uTeam = teams.find(t => t.members.some(m => m.email?.toLowerCase().trim() === emailKey));
+          participantMap.set(emailKey, {
+            name: u.name,
+            email: u.email,
+            teamName: uTeam?.name || 'Individual Entry',
+            instituteName: u.instituteName || 'Independent B-School',
+            r1Result: 'Not Attempted',
+            numericR1Score: -1,
+            r2Result: 'Pending Jury Score',
+            validPresentationScore: 0,
+            combinedResult: 0,
+            numericCombinedScore: 0,
+            tieBreakerScore: 0,
+            timeTaken: 999999,
+            tabSwitches: 0,
+          });
+        }
+      }
+    });
+
+    const allParticipantsSorted = Array.from(participantMap.values()).sort((a, b) => {
+      if (b.numericCombinedScore !== a.numericCombinedScore) {
+        return b.numericCombinedScore - a.numericCombinedScore;
+      }
+      if (b.validPresentationScore !== a.validPresentationScore) {
+        return b.validPresentationScore - a.validPresentationScore;
+      }
+      if (b.tieBreakerScore !== a.tieBreakerScore) {
+        return b.tieBreakerScore - a.tieBreakerScore;
+      }
+      if (b.numericR1Score !== a.numericR1Score) {
+        return b.numericR1Score - a.numericR1Score;
+      }
+      if (a.timeTaken !== b.timeTaken) {
+        return a.timeTaken - b.timeTaken;
+      }
+      return a.tabSwitches - b.tabSwitches;
+    });
+
+    let currentParticipantRank = 1;
+    allParticipantsSorted.forEach((p, idx) => {
+      if (idx > 0) {
+        const prev = allParticipantsSorted[idx - 1];
+        const isTie =
+          prev.numericCombinedScore === p.numericCombinedScore &&
+          prev.validPresentationScore === p.validPresentationScore &&
+          prev.tieBreakerScore === p.tieBreakerScore &&
+          prev.numericR1Score === p.numericR1Score &&
+          prev.timeTaken === p.timeTaken;
+        if (!isTie) {
+          currentParticipantRank = idx + 1;
+        }
+      }
+      p.rank = currentParticipantRank;
+    });
+
+    const sheet0Rows = allParticipantsSorted.map((p, idx) => ({
+      'S.No': idx + 1,
+      'Participant Name': p.name,
+      'Email': p.email,
+      'Team': p.teamName,
+      'Institute': p.instituteName,
+      'R1 Result': p.r1Result,
+      'R2 Result': p.r2Result,
+      'Combined Result': p.combinedResult,
+      'Rank': p.rank,
+    }));
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Assemble Multi-Sheet Excel Workbook
     // ─────────────────────────────────────────────────────────────────────────
     const wb = XLSX.utils.book_new();
+
+    const ws0 = XLSX.utils.json_to_sheet(sheet0Rows);
+    ws0['!cols'] = fitColWidths(sheet0Rows);
+    XLSX.utils.book_append_sheet(wb, ws0, 'All Participants Results');
 
     const ws1 = XLSX.utils.json_to_sheet(sheet1Rows);
     ws1['!cols'] = fitColWidths(sheet1Rows);
@@ -1734,12 +1892,12 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
     XLSX.utils.book_append_sheet(wb, ws3, 'Round 2 Results');
 
     const timestamp = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(wb, `AIMA_ICL_2026_Official_Merit_List_3_Sheets_${timestamp}.xlsx`);
+    XLSX.writeFile(wb, `AIMA_ICL_2026_Official_Merit_List_4_Sheets_${timestamp}.xlsx`);
 
     addAuditLog(
       'Merit List Exported',
       'Quiz',
-      `Super Admin exported official 3-sheet Excel spreadsheet (Combined Final Results, Round 1 Results, Round 2 Results) with ${combinedSorted.length} entries.`
+      `Super Admin exported official 4-sheet Excel spreadsheet (All Participants Results, Combined Final Results, Round 1 Results, Round 2 Results) with ${allParticipantsSorted.length} individual participants and ${combinedSorted.length} team/solo entries.`
     );
   };
 
@@ -1776,10 +1934,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
           <button
             onClick={handleExportMeritList}
             className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition flex items-center gap-2 cursor-pointer border border-slate-700"
-            title="Download multi-sheet Excel spreadsheet containing: 1. Combined Final Results (sorted by rank), 2. Round 1 Results (sorted by rank), 3. Round 2 Results (sorted by rank)"
+            title="Download multi-sheet Excel spreadsheet containing: 1. All Participants Results (individual candidate breakdown), 2. Combined Final Results (sorted by rank), 3. Round 1 Results (sorted by rank), 4. Round 2 Results (sorted by rank)"
           >
             <Download className="w-4 h-4 text-emerald-400" />
-            <span>Export Official Merit List (Excel - 3 Sheets)</span>
+            <span>Export Official Merit List (Excel - 4 Sheets)</span>
           </button>
           <button
             onClick={() => setShowCertificateCockpit(true)}
