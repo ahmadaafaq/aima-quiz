@@ -465,16 +465,17 @@ export const StudentDashboard: React.FC = () => {
   }, []);
 
   // Dynamic Certificate Published determination:
-  // Must be marked published in registration raw_data OR in certificates catalog
+  // Must be officially published via "Publish and Dispatch Certificates" action by Secretariat Admin
   const isCertificatePublished = Boolean(
-    (liveRegistration as any)?.raw_data?.isCertificatePublished === true ||
-    (liveRegistration as any)?.isCertificatePublished === true ||
-    (myCert as any)?.isCertificatePublished === true ||
-    (myCert as any)?.isPublished === true ||
-    (myCert && Array.isArray(certificates) && certificates.some(c => c && (c.certificateNumber === myCert.certificateNumber || c.id === myCert.id)))
+    config?.isCertificatesPublished === true ||
+    config?.isCertificatePublished === true ||
+    (typeof localStorage !== 'undefined' && localStorage.getItem('AIMA_CERTIFICATES_PUBLISHED') === 'true')
   );
 
-  // Participant can view certificate ONLY IF final results are published AND certificate is published:
+  // Participant can view certificate ONLY IF:
+  // 1. Candidate certificate record exists
+  // 2. Official final results (R1 + R2) are published (showing marks)
+  // 3. Secretariat has explicitly published and dispatched certificates
   const canViewCertificate = Boolean(
     myCert &&
     isFinalResultsPublished &&
