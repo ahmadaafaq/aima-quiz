@@ -218,6 +218,11 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
     }
 
     // 5. Credentials Verification with Supabase
+    if (email.trim().toLowerCase() === 'co@aima.in') {
+      setError('Access Denied: The Jury Coordinator login session has concluded.');
+      return;
+    }
+
     setIsLoading(true);
     const result = await signInWithEmailPassword(email.trim(), password);
     setIsLoading(false);

@@ -27,7 +27,8 @@ export function getAdminAuthData(): { user: string; role: 'super_admin' | 'jury_
     const data = JSON.parse(raw);
     if (
       data &&
-      (data.user === 'admin@aima.in' || data.user === 'co@aima.in' || data.role === 'super_admin' || data.role === 'jury_coordinator') &&
+      (data.user === 'admin@aima.in' || data.role === 'super_admin') &&
+      data.user !== 'co@aima.in' &&
       !!data.token
     ) {
       return data;
@@ -67,18 +68,10 @@ export const AdminLoginGate: React.FC<AdminLoginGateProps> = ({ onAuthenticated 
     const cleanPass = password.trim();
 
     try {
-      // Special direct credentials for Jury Coordinator
-      if (cleanUser === 'co@aima.in' && cleanPass === 'co@case#') {
-        const authData = {
-          user: 'co@aima.in',
-          role: 'jury_coordinator' as const,
-          token: 'aima_jury_sec_' + Date.now().toString(36),
-          loginTime: new Date().toISOString(),
-        };
-        sessionStorage.setItem(ADMIN_AUTH_KEY, JSON.stringify(authData));
-        localStorage.setItem(ADMIN_AUTH_KEY, JSON.stringify(authData));
+      // Explicitly block Jury Coordinator access as the evaluation/quiz session has concluded
+      if (cleanUser === 'co@aima.in') {
         setIsLoading(false);
-        onAuthenticated();
+        setError('Access Denied: The Jury Coordinator login session has concluded.');
         return;
       }
 
@@ -98,11 +91,10 @@ export const AdminLoginGate: React.FC<AdminLoginGateProps> = ({ onAuthenticated 
       }
 
       const result = await signInWithEmailPassword(cleanUser, cleanPass);
-      if (result.success && (result.profile?.role === 'admin' || cleanUser === 'co@aima.in' || cleanUser === 'admin@aima.in')) {
-        const isJuryCoord = cleanUser === 'co@aima.in';
+      if (result.success && (result.profile?.role === 'admin' || cleanUser === 'admin@aima.in')) {
         const authData = {
           user: cleanUser,
-          role: isJuryCoord ? ('jury_coordinator' as const) : ('super_admin' as const),
+          role: 'super_admin' as const,
           token: (result as any).session?.access_token || 'aima_sec_' + Date.now().toString(36),
           loginTime: new Date().toISOString(),
         };
@@ -146,7 +138,7 @@ export const AdminLoginGate: React.FC<AdminLoginGateProps> = ({ onAuthenticated 
               Executive Admin &amp; Jury Station
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Please authenticate as Super Administrator or Jury Coordinator (<span className="font-mono font-bold text-amber-600 dark:text-amber-400">co@aima.in</span>).
+              Please authenticate as Super Administrator (<span className="font-mono font-bold text-blue-600 dark:text-blue-400">admin@aima.in</span>).
             </p>
           </div>
         </div>
@@ -171,7 +163,7 @@ export const AdminLoginGate: React.FC<AdminLoginGateProps> = ({ onAuthenticated 
                   type="email"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="admin@aima.in or co@aima.in"
+                  placeholder="admin@aima.in"
                   required
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                 />
