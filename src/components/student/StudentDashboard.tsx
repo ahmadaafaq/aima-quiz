@@ -284,6 +284,15 @@ export const StudentDashboard: React.FC = () => {
     || (quizPrograms || []).find(p => p.stage === 'round_1' || p.round === 1)
     || (quizPrograms || [])[0];
 
+  // Dynamic Results Published determination strictly from quiz_programs table & competition config
+  const isResultsPublished = Boolean(
+    stage1Program?.isResultsPublished ??
+    (stage1Program as any)?.is_results_published ??
+    config?.isResultsPublishedR1 ??
+    config?.isPublicResultsPublished ??
+    false
+  );
+
   const getQuizAvailability = () => {
     if (!stage1Program) {
       return { isOpen: true, label: 'Start Round 1 Quiz', reason: null };
@@ -410,15 +419,6 @@ export const StudentDashboard: React.FC = () => {
   useEffect(() => {
     refreshQuizPrograms();
   }, []);
-
-  // Dynamic Results Published determination strictly from quiz_programs table & competition config
-  const isResultsPublished = Boolean(
-    stage1Program?.isResultsPublished ??
-    (stage1Program as any)?.is_results_published ??
-    config?.isResultsPublishedR1 ??
-    config?.isPublicResultsPublished ??
-    false
-  );
 
   // Dynamic Certificate Published determination:
   // Must be marked published in registration raw_data OR in certificates catalog
