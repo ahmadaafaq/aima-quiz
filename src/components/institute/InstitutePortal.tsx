@@ -35,13 +35,38 @@ import {
 } from 'lucide-react';
 
 export const InstitutePortal: React.FC = () => {
-  const { institutions, currentUser, teams, createInstitutionalTeam, participantUser, csrRegistrations } = useCompetition();
+  const {
+    institutions,
+    currentUser,
+    teams,
+    createInstitutionalTeam,
+    participantUser,
+    csrRegistrations,
+    quizPrograms,
+    quizAttempts,
+    caseSubmissions,
+    evaluations,
+    offlineRoundResults,
+    config,
+  } = useCompetition();
 
   const userEmail = (participantUser?.email || participantUser?.coordinator_email || currentUser.email || '').toLowerCase().trim();
   const userInstName = participantUser?.institute_name || currentUser.instituteName || (currentUser as any).organization_name || '';
   const userRegNum = participantUser?.registration_number || currentUser.registrationNumber || '';
 
-  // 1. Locate dynamic live registration for this coordinator or institute
+  // 1. Authoritative Stage 1 Quiz Program from DB to determine if R1 results are published
+  const stage1Program = (quizPrograms || []).find(p => p.id === 'qp_case_comp_stage1_2026')
+    || (quizPrograms || []).find(p => p.stage === 'round_1' || p.round === 1)
+    || (quizPrograms || [])[0];
+
+  const isResultsPublished = Boolean(
+    stage1Program?.isResultsPublished ??
+    (stage1Program as any)?.is_results_published ??
+    config?.isResultsPublishedR1 ??
+    false
+  );
+
+  // 2. Locate dynamic live registration for this coordinator or institute
   const matchedReg = csrRegistrations.find(r =>
     (userRegNum && r.registrationNumber === userRegNum) ||
     (userEmail && (
@@ -131,39 +156,117 @@ export const InstitutePortal: React.FC = () => {
     return Array.from(teamMap.values());
   }, [regNominees, matchedReg?.registrationNumber, instName]);
 
-  // Combined teams representing this institution
+  // Combined teams representing this institution with fully dynamic R1, R2, and combined metrics
   const instituteTeams = useMemo(() => {
-    if (dynamicTeamsFromReg.length > 0) return dynamicTeamsFromReg;
-    return teams.filter(
-      t =>
-        (instName && t.instituteName?.toLowerCase().includes(instName.toLowerCase())) ||
-        (instName && instName.toLowerCase().includes(t.instituteName?.toLowerCase() || '___')) ||
-        (coordinatorEmail && (t as any).coordinatorEmail?.toLowerCase() === coordinatorEmail.toLowerCase())
-    );
-  }, [dynamicTeamsFromReg, teams, instName, coordinatorEmail]);
+    const baseTeams = dynamicTeamsFromReg.length > 0
+      ? dynamicTeamsFromReg
+      : teams.filter(
+          t =>
+            (instName && t.instituteName?.toLowerCase().includes(instName.toLowerCase())) ||
+            (instName && instName.toLowerCase().includes(t.instituteName?.toLowerCase() || '___')) ||
+            (coordinatorEmail && (t as any).coordinatorEmail?.toLowerCase() === coordinatorEmail.toLowerCase())
+        );
 
-  // Real dynamic roster from registration nominees or db
-  const rosterFromReg = regNominees.map((n, idx) => ({
-    id: n.id || n.email || `nom_${idx}`,
-    name: n.name,
-    studentId: n.enrolmentNumber || ('ENR-' + (n.mobile ? n.mobile.slice(-4) : ('00' + (idx + 1)))),
-    email: n.email,
-    teamName: n.teamName || 'Institute Nominee',
-    feePaid: true,
-    r1Score: (n as any).r1Score || (n as any).score || (n.isTeamLeader ? 88 : 84),
-  }));
+    return baseTeams.map(t => {
+      const memberEmails = (t.members || []).map((m: any) => m.email?.toLowerCase().trim()).filter(Boolean);
+      const teamAttempts = (quizAttempts || []).filter(a =>
+        a.isCompleted &&
+        (a.teamId === t.id || (a.participantEmail && memberEmails.includes(a.participantEmail.toLowerCase().trim())))
+      );
 
-  const rosterFromDb = dbParticipants
-    .filter(p => !p.program?.toLowerCase().includes('coordinator') && p.email?.toLowerCase() !== coordinatorEmail.toLowerCase())
-    .map((p, idx) => ({
-      id: p.id || p.email,
-      name: p.name,
-      studentId: p.enrolment_number || ('ENR-' + (p.mobile ? p.mobile.slice(-4) : ('00' + (idx + 1)))),
-      email: p.email,
-      teamName: p.is_team_leader ? `${instName} Team Leader` : `${instName} Student Nominee`,
-      feePaid: true,
-      r1Score: p.quiz_score || 85,
-    }));
+      const r1AvgScore = teamAttempts.length > 0
+        ? Math.round(teamAttempts.reduce((acc, a) => acc + (Number(a.score) || 0), 0) / teamAttempts.length)
+        : undefined;
+
+      const sub = (caseSubmissions || []).find(s => s.teamId === t.id || s.teamId === t.name) || t.r2Submission;
+      
+      const teamEval = (evaluations || []).find(e => e.teamId === t.id || e.submissionId === sub?.id);
+      const offlineResult = (offlineRoundResults || []).find(
+        o => (o.round === 'round_2' && (o.teamId === t.id || o.teamName?.toLowerCase() === t.name?.toLowerCase()))
+      );
+
+      const r2Score = teamEval?.totalScore !== undefined
+        ? Number(teamEval.totalScore)
+        : (offlineResult?.score !== undefined ? Number(offlineResult.score) : undefined);
+
+      const combinedScore = (r1AvgScore !== undefined ? r1AvgScore : 0) + (r2Score !== undefined ? r2Score : 0);
+
+      return {
+        ...t,
+        r1AvgScore,
+        teamAttemptsCount: teamAttempts.length,
+        hasDeckSubmitted: Boolean(sub),
+        sub,
+        r2Score,
+        combinedScore: (isResultsPublished && r2Score !== undefined) ? combinedScore : undefined,
+      };
+    });
+  }, [dynamicTeamsFromReg, teams, instName, coordinatorEmail, quizAttempts, caseSubmissions, evaluations, offlineRoundResults, isResultsPublished]);
+
+  // Real dynamic roster from registration nominees with dynamic attempt data (Fee is ₹0)
+  const rosterFromReg = useMemo(() => {
+    return regNominees.map((n, idx) => {
+      const email = (n.email || '').toLowerCase().trim();
+      const attempt = (quizAttempts || []).find(
+        a => a.participantEmail?.toLowerCase().trim() === email || a.studentId === n.enrolmentNumber
+      );
+      
+      const r1Score = attempt?.score !== undefined ? Number(attempt.score) : undefined;
+      const isAttempted = Boolean(attempt?.isCompleted || attempt);
+
+      const teamName = n.teamName || 'Institute Nominee';
+      const team = instituteTeams.find(t => t.name === teamName);
+      
+      const r2Score = team?.r2Score;
+      const hasDeckSubmitted = Boolean(team?.hasDeckSubmitted);
+
+      return {
+        id: n.id || n.email || `nom_${idx}`,
+        name: n.name,
+        studentId: n.enrolmentNumber || ('ENR-' + (n.mobile ? n.mobile.slice(-4) : ('00' + (idx + 1)))),
+        email: n.email,
+        teamName,
+        feePaid: true,
+        feeAmount: 0,
+        r1Score,
+        isAttempted,
+        r2Score,
+        hasDeckSubmitted,
+      };
+    });
+  }, [regNominees, quizAttempts, instituteTeams]);
+
+  const rosterFromDb = useMemo(() => {
+    return dbParticipants
+      .filter(p => !p.program?.toLowerCase().includes('coordinator') && p.email?.toLowerCase() !== coordinatorEmail.toLowerCase())
+      .map((p, idx) => {
+        const email = (p.email || '').toLowerCase().trim();
+        const attempt = (quizAttempts || []).find(
+          a => a.participantEmail?.toLowerCase().trim() === email || a.studentId === p.enrolment_number
+        );
+        const r1Score = attempt?.score !== undefined ? Number(attempt.score) : undefined;
+        const isAttempted = Boolean(attempt?.isCompleted || attempt);
+
+        const teamName = p.is_team_leader ? `${instName} Team Leader` : `${instName} Student Nominee`;
+        const team = instituteTeams.find(t => t.name === teamName);
+        const r2Score = team?.r2Score;
+        const hasDeckSubmitted = Boolean(team?.hasDeckSubmitted);
+
+        return {
+          id: p.id || p.email,
+          name: p.name,
+          studentId: p.enrolment_number || ('ENR-' + (p.mobile ? p.mobile.slice(-4) : ('00' + (idx + 1)))),
+          email: p.email,
+          teamName,
+          feePaid: true,
+          feeAmount: 0,
+          r1Score,
+          isAttempted,
+          r2Score,
+          hasDeckSubmitted,
+        };
+      });
+  }, [dbParticipants, coordinatorEmail, instName, quizAttempts, instituteTeams]);
 
   const activeRoster = rosterFromReg.length > 0
     ? rosterFromReg
@@ -205,7 +308,7 @@ export const InstitutePortal: React.FC = () => {
       s.studentId.toLowerCase().includes(searchTerm.toLowerCase());
     if (statusFilter === 'paid') return matchesSearch && s.feePaid;
     if (statusFilter === 'unpaid') return matchesSearch && !s.feePaid;
-    if (statusFilter === 'qualified') return matchesSearch && s.r1Score && s.r1Score >= 65;
+    if (statusFilter === 'qualified') return matchesSearch && Boolean(isResultsPublished && s.r1Score && s.r1Score >= 65);
     return matchesSearch;
   });
 
@@ -515,20 +618,49 @@ export const InstitutePortal: React.FC = () => {
                     ))}
                   </div>
 
-                  {/* Stage Status & Round 2 Deadlines */}
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-3 text-xs">
+                  {/* Stage Status & Dynamic Results (R1, R2, and Combined) */}
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-2 text-xs">
                     <div>
                       <span className="text-[10px] text-slate-400 uppercase font-semibold block">Round 1 Quiz</span>
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Qualified (Avg {t.r1AvgScore || 85}%)
-                      </span>
+                      {isResultsPublished ? (
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5 text-xs">
+                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> {t.r1AvgScore !== undefined ? `Avg ${t.r1AvgScore}%` : 'Qualified'}
+                        </span>
+                      ) : (
+                        <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5 text-[11px]">
+                          <Clock className="w-3.5 h-3.5 shrink-0" /> Under Review
+                        </span>
+                      )}
                     </div>
 
                     <div>
-                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">R2 Submission Cut-off</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200 block mt-0.5">
-                        {deadlineDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}, 23:59 IST
-                      </span>
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">R2 Case Defense</span>
+                      {t.r2Score !== undefined ? (
+                        <span className="font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 mt-0.5 text-xs">
+                          <Trophy className="w-3.5 h-3.5 shrink-0" /> {t.r2Score}/100 pts
+                        </span>
+                      ) : t.hasDeckSubmitted ? (
+                        <span className="font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1 mt-0.5 text-[11px]">
+                          <FileCheck className="w-3.5 h-3.5 shrink-0" /> Review Pending
+                        </span>
+                      ) : (
+                        <span className="font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1 mt-0.5 text-[11px]">
+                          <Clock className="w-3.5 h-3.5 shrink-0" /> Pending Defense
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">Combined Merit</span>
+                      {isResultsPublished && t.r2Score !== undefined ? (
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5 text-xs">
+                          <Award className="w-3.5 h-3.5 shrink-0" /> {t.combinedScore}/200
+                        </span>
+                      ) : (
+                        <span className="font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5 text-[11px]">
+                          <Clock className="w-3.5 h-3.5 shrink-0" /> Results Awaited
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -594,10 +726,10 @@ export const InstitutePortal: React.FC = () => {
                 onChange={e => setStatusFilter(e.target.value as any)}
                 className="text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-slate-900 dark:text-slate-100"
               >
-                <option value="all">All Statuses</option>
-                <option value="paid">Fee Paid</option>
+                <option value="all">All Candidates</option>
+                <option value="paid">Registered (₹0 Fee)</option>
                 <option value="unpaid">Payment Pending</option>
-                <option value="qualified">Round 1 Qualified</option>
+                {isResultsPublished && <option value="qualified">Round 1 Qualified</option>}
               </select>
             </div>
           </div>
@@ -607,12 +739,13 @@ export const InstitutePortal: React.FC = () => {
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase text-[10px] font-bold tracking-wider border-b border-slate-100 dark:border-slate-800">
                 <tr>
-                  <th className="p-3">Student Name & ID</th>
+                  <th className="p-3">Student Name &amp; ID</th>
                   <th className="p-3">Email Address</th>
                   <th className="p-3">Team Assignment</th>
                   <th className="p-3">Stage Fee</th>
                   <th className="p-3">R1 Quiz Score</th>
-                  <th className="p-3 text-right">Academic Verification</th>
+                  <th className="p-3">R2 Case Defense</th>
+                  <th className="p-3 text-right">Combined Result</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
@@ -627,18 +760,16 @@ export const InstitutePortal: React.FC = () => {
                       <span className="font-medium text-slate-800 dark:text-slate-200">{s.teamName || 'Unassigned'}</span>
                     </td>
                     <td className="p-3">
-                      {s.feePaid || isBulkPaid ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 font-bold border border-emerald-300">
-                          Paid ₹200
-                        </span>
-                      ) : (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 font-bold border border-amber-300">
-                          Pending
-                        </span>
-                      )}
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 font-bold border border-emerald-300">
+                        Paid ₹0
+                      </span>
                     </td>
                     <td className="p-3 font-semibold">
-                      {s.r1Score ? (
+                      {!isResultsPublished ? (
+                        <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> Under Review
+                        </span>
+                      ) : s.r1Score !== undefined ? (
                         <span className={s.r1Score >= 65 ? 'text-emerald-600' : 'text-slate-500'}>
                           {s.r1Score}% {s.r1Score >= 65 ? '★' : ''}
                         </span>
@@ -646,10 +777,29 @@ export const InstitutePortal: React.FC = () => {
                         <span className="text-slate-400 italic">Not taken</span>
                       )}
                     </td>
+                    <td className="p-3 font-semibold">
+                      {s.r2Score !== undefined ? (
+                        <span className="text-purple-600 dark:text-purple-400 font-bold font-mono">
+                          {s.r2Score}/100 pts
+                        </span>
+                      ) : s.hasDeckSubmitted ? (
+                        <span className="text-blue-600 dark:text-blue-400 text-[11px] font-medium flex items-center gap-1">
+                          <FileCheck className="w-3 h-3" /> Review Pending
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-[11px] italic">Pending Defense</span>
+                      )}
+                    </td>
                     <td className="p-3 text-right">
-                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1">
-                        <ShieldCheck className="w-3.5 h-3.5" /> ID Verified
-                      </span>
+                      {isResultsPublished && s.r2Score !== undefined ? (
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">
+                          {((s.r1Score || 0) + s.r2Score)}/200
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-[11px] italic">
+                          Results Awaited
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
