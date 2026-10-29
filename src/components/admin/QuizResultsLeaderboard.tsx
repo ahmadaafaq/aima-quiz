@@ -1189,7 +1189,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
 
   // Certificate Publishing & Dispatch Cockpit States
   const [showCertificateCockpit, setShowCertificateCockpit] = useState<boolean>(false);
-  const [selectionTopPercentage, setSelectionTopPercentage] = useState<number>(25);
+  const [selectionCombinedCutoff, setSelectionCombinedCutoff] = useState<number>(100);
   const [isPublishingCerts, setIsPublishingCerts] = useState<boolean>(false);
   const [isEmailingCerts, setIsEmailingCerts] = useState<boolean>(false);
   const [emailingCertId, setEmailingCertId] = useState<string | null>(null);
@@ -1197,9 +1197,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   const [certSearchQuery, setCertSearchQuery] = useState<string>('');
   const [certFilterCategory, setCertFilterCategory] = useState<'all' | 'achievement' | 'selection' | 'participation'>('all');
 
-  // Compute official certificates based on calculated rankings
-  const selectionCutoffRank = Math.max(2, Math.ceil(sortedLeaderboard.length * (selectionTopPercentage / 100)));
-
+  // Compute official certificates based on calculated rankings & combined score criteria:
+  // 1. 1st position certificate to top winner (rank === 1)
+  // 2. Certificate of Grand Finalist to those whose combined marks are >= 100
+  // 3. Rest other certificate of participation who all participated
   const computedCertificates = useMemo(() => {
     return sortedLeaderboard.map((item, idx) => {
       const rank = idx + 1;
@@ -1209,7 +1210,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       if (rank === 1) {
         achievement = 'CERTIFICATE OF ACHIEVEMENT - TOP 1 POSITION';
         category = 'achievement';
-      } else if (rank <= selectionCutoffRank) {
+      } else if (Number(item.combinedScore) >= selectionCombinedCutoff) {
         achievement = 'CERTIFICATE OF SELECTION - GRAND FINALE';
         category = 'selection';
       } else {
@@ -1238,7 +1239,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         institute,
         achievement,
         certificateCategory: category,
-        selectionTopPercentage,
+        selectionTopPercentage: 25,
         issueDate: '29 October 2026',
         qrVerificationUrl: `https://research.aima.in/verify/${certNum}`,
         authorizedSignatory: 'DR. ANUJA PANDEY',
@@ -1252,7 +1253,11 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         certificate: cert,
       };
     });
-  }, [sortedLeaderboard, selectionTopPercentage, selectionCutoffRank]);
+  }, [sortedLeaderboard, selectionCombinedCutoff]);
+
+  const achievementCount = useMemo(() => computedCertificates.filter(c => c.category === 'achievement').length, [computedCertificates]);
+  const selectionCount = useMemo(() => computedCertificates.filter(c => c.category === 'selection').length, [computedCertificates]);
+  const participationCount = useMemo(() => computedCertificates.filter(c => c.category === 'participation').length, [computedCertificates]);
 
   // Assemble certificates for both individual squad members and team entries
   const assembleAllCertificates = (): CertificateRecord[] => {
@@ -4071,32 +4076,32 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                 </div>
               )}
 
-              {/* Configuration Section: Grand Finale Selection Top % */}
+              {/* Configuration Section: Grand Finale Selection Combined Cutoff */}
               <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                       <Sliders className="w-4 h-4 text-amber-500" />
-                      <span>Grand Finale Selection Threshold (Top Percentage)</span>
+                      <span>Grand Finale Selection Qualification Cutoff (Combined Marks)</span>
                     </h4>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      Configures the percentage cutoff for teams advancing to the Grand Finale to receive the official Selection Certificate.
+                      Rule 1: Rank 1 receives <strong>Top 1 Position Certificate</strong> • Rule 2: Combined Marks ≥ {selectionCombinedCutoff} receive <strong>Grand Finale Selection Certificate</strong> • Rule 3: All other participants receive <strong>Certificate of Participation</strong>.
                     </p>
                   </div>
 
                   <div className="flex items-center gap-2 self-start sm:self-auto">
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Cutoff:</span>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Cutoff Score:</span>
                     <div className="relative">
                       <input
                         type="number"
-                        min={5}
-                        max={100}
+                        min={0}
+                        max={200}
                         step={1}
-                        value={selectionTopPercentage}
-                        onChange={e => setSelectionTopPercentage(Math.max(1, Math.min(100, Number(e.target.value) || 25)))}
-                        className="w-20 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-extrabold text-xs text-center focus:ring-2 focus:ring-amber-500"
+                        value={selectionCombinedCutoff}
+                        onChange={e => setSelectionCombinedCutoff(Math.max(0, Math.min(200, Number(e.target.value) || 100)))}
+                        className="w-24 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-extrabold text-xs text-center focus:ring-2 focus:ring-amber-500"
                       />
-                      <span className="absolute right-2.5 top-1.5 text-xs text-slate-400 font-bold pointer-events-none">%</span>
+                      <span className="absolute right-2.5 top-1.5 text-xs text-slate-400 font-bold pointer-events-none">/200</span>
                     </div>
                   </div>
                 </div>
@@ -4104,18 +4109,18 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                 {/* Preset Chips */}
                 <div className="flex items-center gap-2 flex-wrap pt-1">
                   <span className="text-[11px] font-semibold text-slate-500">Quick Presets:</span>
-                  {[15, 20, 25, 30, 40, 50].map(pct => (
+                  {[90, 95, 100, 105, 110, 120].map(cutoff => (
                     <button
-                      key={pct}
+                      key={cutoff}
                       type="button"
-                      onClick={() => setSelectionTopPercentage(pct)}
+                      onClick={() => setSelectionCombinedCutoff(cutoff)}
                       className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        selectionTopPercentage === pct
+                        selectionCombinedCutoff === cutoff
                           ? 'bg-amber-500 text-slate-950 font-extrabold shadow-xs'
                           : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
                       }`}
                     >
-                      Top {pct}% {pct === 25 ? '★ Recommended' : ''}
+                      Score ≥ {cutoff} {cutoff === 100 ? '★ Official Rule (≥ 100)' : ''}
                     </button>
                   ))}
                 </div>
@@ -4129,7 +4134,7 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                     <Trophy className="w-4 h-4 text-amber-500" />
                   </div>
                   <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-                    1 Team
+                    {achievementCount} {achievementCount === 1 ? 'Team' : 'Teams'}
                   </div>
                   <div className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5 truncate">
                     Rank 1: {computedCertificates[0]?.name || 'N/A'}
@@ -4142,10 +4147,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                     <Medal className="w-4 h-4 text-blue-500" />
                   </div>
                   <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-                    {Math.max(0, selectionCutoffRank - 1)} Teams
+                    {selectionCount} Teams
                   </div>
                   <div className="text-[10px] text-blue-700 dark:text-blue-400 mt-0.5">
-                    Ranks 2 to {selectionCutoffRank} (Top {selectionTopPercentage}%)
+                    Combined Score ≥ {selectionCombinedCutoff}/200
                   </div>
                 </div>
 
@@ -4155,10 +4160,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                     <FileText className="w-4 h-4 text-slate-500" />
                   </div>
                   <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-                    {Math.max(0, computedCertificates.length - selectionCutoffRank)} Teams
+                    {participationCount} Teams
                   </div>
                   <div className="text-[10px] text-slate-500 mt-0.5">
-                    Ranks {selectionCutoffRank + 1} to {computedCertificates.length}
+                    Combined Score &lt; {selectionCombinedCutoff}/200
                   </div>
                 </div>
 
@@ -4183,9 +4188,9 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Filter By Type:</span>
                     {[
                       { id: 'all', label: `All (${computedCertificates.length})` },
-                      { id: 'achievement', label: 'Achievement (1)' },
-                      { id: 'selection', label: `Selection (${Math.max(0, selectionCutoffRank - 1)})` },
-                      { id: 'participation', label: `Participation (${Math.max(0, computedCertificates.length - selectionCutoffRank)})` },
+                      { id: 'achievement', label: `Achievement (${achievementCount})` },
+                      { id: 'selection', label: `Selection (${selectionCount})` },
+                      { id: 'participation', label: `Participation (${participationCount})` },
                     ].map(tab => (
                       <button
                         key={tab.id}
