@@ -342,6 +342,13 @@ export const StudentDashboard: React.FC = () => {
 
   const quizAvailability = getQuizAvailability();
 
+  // Team roster modification is permitted ONLY before the Round 1 Quiz begins (upcoming / not yet started).
+  // Once the quiz is live (now >= startMs), closed, or results published, roster modification buttons are hidden.
+  const r1ScheduleStartDate = stage1Program?.startDate || stage1Program?.startTime || (stage1Program as any)?.start_time || config?.r1QuizStartTime;
+  const r1ScheduleStartMs = parseISTTimestamp(r1ScheduleStartDate);
+  const isQuizUpcoming = stage1Program?.status === 'draft' || (!isNaN(r1ScheduleStartMs) && Date.now() < r1ScheduleStartMs);
+  const canModifyTeamRoster = isQuizUpcoming && !quizAvailability.isOpen && !isResultsPublished;
+
   // Dynamic candidate & squad role determination
   const candidateCount =
     liveRegistration?.participantCount ||
@@ -1493,6 +1500,10 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
 
   const handleAddMemberSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canModifyTeamRoster) {
+      setAddMemberFeedback({ success: false, message: 'Team roster is locked. Members cannot be added once the quiz is live or published.' });
+      return;
+    }
     if (!addMemberName.trim() || !addMemberEmail.trim()) {
       setAddMemberFeedback({ success: false, message: 'Please provide both full name and email address.' });
       return;
@@ -1907,7 +1918,7 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
                         : `Open for Member (${currentTeam.members?.length || 0}/${currentTeam.maxMembers || 4})`}
                   </span>
                 )}
-                {isTeamLeader && currentTeam && (currentTeam.members?.length || 0) < (currentTeam.maxMembers || 4) && (
+                {isTeamLeader && canModifyTeamRoster && currentTeam && (currentTeam.members?.length || 0) < (currentTeam.maxMembers || 4) && (
                   <button
                     type="button"
                     onClick={() => {
@@ -2012,8 +2023,8 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
                   </div>
                 </div>
 
-                {/* Team Leader Add Member Button when roster < 4 */}
-                {isTeamLeader && currentTeam && (currentTeam.members?.length || 0) < (currentTeam.maxMembers || 4) && (
+                {/* Team Leader Add Member Button when roster < 4 and quiz has not started */}
+                {isTeamLeader && canModifyTeamRoster && currentTeam && (currentTeam.members?.length || 0) < (currentTeam.maxMembers || 4) && (
                   <div className="pt-1">
                     <button
                       type="button"
@@ -2171,8 +2182,8 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
                 )}
               </div>
 
-              {/* Add 4th Member Action if Roster < 4 */}
-              {!isSoloCandidate && currentTeam && (currentTeam.members?.length || 0) < (currentTeam.maxMembers || 4) && (
+              {/* Add 4th Member Action if Roster < 4 and quiz has not started */}
+              {!isSoloCandidate && canModifyTeamRoster && currentTeam && (currentTeam.members?.length || 0) < (currentTeam.maxMembers || 4) && (
                 <div className="p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
                   <div>
                     <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 dark:text-amber-300">
