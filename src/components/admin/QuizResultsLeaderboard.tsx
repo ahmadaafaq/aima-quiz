@@ -1219,12 +1219,30 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
       }
 
       // If team entry, determine leader details for candidate-level certificate
-      const leaderMember = item.members?.find((m: any) => m.isTeamLeader) || item.members?.[0];
+      const matchedTeam = teams.find(t => t.id === item.teamId || t.id === item.id || (item.registrationNumber && t.inviteCode?.includes(item.registrationNumber)));
+      const resolvedMembers = matchedTeam && matchedTeam.members && matchedTeam.members.length > 0
+        ? matchedTeam.members.map((tm: any) => ({
+            userId: tm.studentId || tm.id || tm.email,
+            name: tm.name,
+            email: (tm.email || '').trim(),
+            isTeamLeader: Boolean(tm.isLeader || tm.isTeamLeader || tm.roleInTeam === 'Team Leader'),
+            registrationNumber: item.registrationNumber,
+          }))
+        : (item.members || []);
+
+      const leaderMember = resolvedMembers.find((m: any) => m.isTeamLeader) || resolvedMembers[0] || item.members?.find((m: any) => m.isTeamLeader) || item.members?.[0];
       const recipientName = item.isTeam ? (leaderMember?.name || item.name) : item.name;
-      const recipientEmail = (item.email || leaderMember?.email || item.members?.[0]?.email || '').trim();
+      const recipientEmail = (item.email || leaderMember?.email || resolvedMembers[0]?.email || item.members?.[0]?.email || '').trim();
       const teamName = item.isTeam ? item.name : (item.userProfile?.teamName || item.name);
       const institute = item.instituteName || item.userProfile?.instituteName || 'ICFAI Business School (IBS) Bengaluru';
       const certNum = `AIMA-ICL-2026-${category.toUpperCase().slice(0, 3)}-${String(rank).padStart(3, '0')}-${Math.floor(1000 + (rank * 137) % 9000)}`;
+
+      const teamMembersList = item.isTeam && resolvedMembers.length > 0
+        ? resolvedMembers.map((m: any) => m.name).filter(Boolean)
+        : undefined;
+      const memberNamesDisplay = teamMembersList && teamMembersList.length > 0
+        ? teamMembersList.join(', ')
+        : undefined;
 
       const cert: CertificateRecord = {
         id: `cert_${item.id || idx}_${category}`,
@@ -1235,6 +1253,8 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         recipientId: item.isTeam ? leaderMember?.userId || leaderMember?.id || item.id : item.id,
         teamId: item.id,
         teamName,
+        teamMembers: teamMembersList,
+        memberNamesDisplay,
         registrationNumber: item.registrationNumber,
         institute,
         achievement,
@@ -1251,9 +1271,10 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
         rank,
         category,
         certificate: cert,
+        resolvedMembers,
       };
     });
-  }, [sortedLeaderboard, selectionCombinedCutoff]);
+  }, [sortedLeaderboard, selectionCombinedCutoff, teams]);
 
   const achievementCount = useMemo(() => computedCertificates.filter(c => c.category === 'achievement').length, [computedCertificates]);
   const selectionCount = useMemo(() => computedCertificates.filter(c => c.category === 'selection').length, [computedCertificates]);
@@ -1263,24 +1284,34 @@ export const QuizResultsLeaderboard: React.FC<QuizResultsLeaderboardProps> = ({
   const assembleAllCertificates = (): CertificateRecord[] => {
     const allCerts: CertificateRecord[] = [];
     computedCertificates.forEach(c => {
-      if (c.isTeam && c.members && c.members.length > 0) {
-        // First push personalized certificates for each squad member (including leader)
-        c.members.forEach((m: any, mIdx: number) => {
-          const memberCertNum = `${c.certificate.certificateNumber}-M${mIdx + 1}`;
-          allCerts.push({
-            ...c.certificate,
-            id: `cert_${m.userId || m.id || m.email || mIdx}_${c.category}`,
-            certificateNumber: memberCertNum,
-            recipientName: m.name,
-            recipientEmail: (m.email || '').trim(),
-            recipientId: m.userId || m.id,
-            recipientRole: m.isTeamLeader ? 'Team Leader' : 'Squad Member',
-            registrationNumber: m.registrationNumber || c.certificate.registrationNumber,
-            qrVerificationUrl: `https://research.aima.in/verify/${memberCertNum}`,
+      const roster = (c as any).resolvedMembers && (c as any).resolvedMembers.length > 0
+        ? (c as any).resolvedMembers
+        : (c.members || []);
+
+      if (c.isTeam && roster && roster.length > 0) {
+        if (c.category === 'achievement' || c.category === 'selection') {
+          // For Grand Finalists / Top 1 Winners: issue ONLY the authoritative unified Team Certificate listing all member names
+          allCerts.push(c.certificate);
+        } else {
+          // For Non-Grand Finalists: issue individual personalized Participation Certificates to each squad member
+          roster.forEach((m: any, mIdx: number) => {
+            const memberCertNum = `${c.certificate.certificateNumber}-M${mIdx + 1}`;
+            allCerts.push({
+              ...c.certificate,
+              id: `cert_${m.userId || m.id || m.email || mIdx}_${c.category}`,
+              certificateNumber: memberCertNum,
+              recipientName: m.name,
+              recipientEmail: (m.email || '').trim(),
+              recipientId: m.userId || m.id,
+              recipientRole: m.isTeamLeader ? 'Team Leader' : 'Squad Member',
+              teamMembers: c.certificate.teamMembers,
+              memberNamesDisplay: c.certificate.memberNamesDisplay,
+              registrationNumber: m.registrationNumber || c.certificate.registrationNumber,
+              qrVerificationUrl: `https://research.aima.in/verify/${memberCertNum}`,
+            });
           });
-        });
-        // Also push the team certificate for team-level querying
-        allCerts.push(c.certificate);
+          allCerts.push(c.certificate);
+        }
       } else {
         allCerts.push(c.certificate);
       }

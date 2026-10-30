@@ -474,6 +474,9 @@ export interface CertificateRecord {
   qrVerificationUrl: string;
   authorizedSignatory?: string;
   signatoryTitle?: string;
+  type?: string;
+  teamMembers?: string[];
+  memberNamesDisplay?: string;
 }
 
 export interface SupportTicket {

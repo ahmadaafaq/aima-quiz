@@ -83,6 +83,16 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate,
   const instituteDisplay = certificate.institute || 'All India Management Association Partner Institution';
   const topPercent = certificate.selectionTopPercentage || 25;
 
+  const memberNamesDisplay =
+    certificate.memberNamesDisplay ||
+    (Array.isArray(certificate.teamMembers) && certificate.teamMembers.length > 0
+      ? certificate.teamMembers.join(', ')
+      : '');
+
+  const teamWithMembersDisplay = memberNamesDisplay && memberNamesDisplay !== teamDisplay
+    ? `${teamDisplay} (${memberNamesDisplay})`
+    : teamDisplay;
+
   const templatePath = isAchievementTop1
     ? '/certificates/cert_top1_signed.png'
     : isSelectionFinale
@@ -138,11 +148,11 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate,
       // 2. Render exact dynamic participant / team / institute details
       if (isAchievementTop1) {
         // Page 2: Achievement Top 1 Position
-        drawField(teamDisplay, 1092, 540, 560, 28, '#0B4E94', 'bold');
+        drawField(teamWithMembersDisplay, 1092, 540, 560, 28, '#0B4E94', 'bold');
         drawField(instituteDisplay, 671, 592, 680, 24, '#1E293B', 'bold');
       } else if (isSelectionFinale) {
-        // Page 3: Selection Grand Finale
-        drawField(teamDisplay, 1025, 540, 600, 28, '#0B4E94', 'bold');
+        // Page 3: Selection Grand Finale (Includes Team Name and Team Members)
+        drawField(teamWithMembersDisplay, 1025, 540, 600, 28, '#0B4E94', 'bold');
         drawField(instituteDisplay, 727, 592, 680, 24, '#1E293B', 'bold');
       } else {
         // Page 1: Participation
@@ -306,9 +316,9 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate,
             >
               {isAchievementTop1 ? (
                 <>
-                  {/* Top 1 Position: Team Name (Line 1) */}
+                  {/* Top 1 Position: Team Name & Members (Line 1) */}
                   {(() => {
-                    const metrics = getAdaptiveSvgFontSize(teamDisplay, 560, 28, 13);
+                    const metrics = getAdaptiveSvgFontSize(teamWithMembersDisplay, 560, 28, 13);
                     return (
                       <text
                         x="1092"
@@ -321,7 +331,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate,
                         textLength={metrics.textLength}
                         lengthAdjust={metrics.textLength ? 'spacingAndGlyphs' : undefined}
                       >
-                        {teamDisplay}
+                        {teamWithMembersDisplay}
                       </text>
                     );
                   })()}
@@ -348,9 +358,9 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate,
                 </>
               ) : isSelectionFinale ? (
                 <>
-                  {/* Selection Grand Finale: Team Name (Line 1) */}
+                  {/* Selection Grand Finale: Team Name & Team Members (Line 1) */}
                   {(() => {
-                    const metrics = getAdaptiveSvgFontSize(teamDisplay, 600, 28, 13);
+                    const metrics = getAdaptiveSvgFontSize(teamWithMembersDisplay, 600, 28, 13);
                     return (
                       <text
                         x="1025"
@@ -363,7 +373,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({ certificate,
                         textLength={metrics.textLength}
                         lengthAdjust={metrics.textLength ? 'spacingAndGlyphs' : undefined}
                       >
-                        {teamDisplay}
+                        {teamWithMembersDisplay}
                       </text>
                     );
                   })()}
