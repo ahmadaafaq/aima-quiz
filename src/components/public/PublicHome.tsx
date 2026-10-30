@@ -114,14 +114,14 @@ export const PublicHome: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
-              <button
+              {/* <button
                 type="button"
                 onClick={() => setActiveView('registration')}
                 className="h-9 px-3.5 sm:px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-blue-500/20 cursor-pointer transition-all shrink-0"
               >
                 <GraduationCap className="w-3.5 h-3.5" />
                 <span>Registration</span>
-              </button>
+              </button> */}
 
               <button
                 type="button"
@@ -248,7 +248,7 @@ export const PublicHome: React.FC = () => {
 
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 pt-2">
-                <MovingBorderButton
+                {/* <MovingBorderButton
                   borderRadius="0.875rem"
                   onClick={() => setActiveView('registration')}
                   className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm px-6 py-3.5 shadow-lg shadow-blue-500/30"
@@ -256,7 +256,7 @@ export const PublicHome: React.FC = () => {
                   <GraduationCap className="w-4 h-4 text-sky-200" />
                   <span>Register for Competition</span>
                   <ChevronRight className="w-4 h-4 text-sky-200" />
-                </MovingBorderButton>
+                </MovingBorderButton> */}
 
                 <button
                   onClick={() => setShowRulesModal(true)}
@@ -283,7 +283,7 @@ export const PublicHome: React.FC = () => {
               <ThreeHeroCanvas className="w-full h-full" />
 
               {/* 1. Highlighted & Floating Early Bird Badge (Separate & Distinct) */}
-              <div className="absolute -top-4 sm:-top-6 right-0 sm:right-2 z-20 animate-float">
+              {/* <div className="absolute -top-4 sm:-top-6 right-0 sm:right-2 z-20 animate-float">
                 <button
                   type="button"
                   onClick={() => setActiveView('registration')}
@@ -312,7 +312,7 @@ export const PublicHome: React.FC = () => {
                     </div>
                   </div>
                 </button>
-              </div>
+              </div> */}
 
               {/* 2. South Zone Hub Badge (Separate Callout) */}
               <div className="absolute top-16 sm:top-20 right-0 sm:right-2 p-2.5 sm:p-3 rounded-2xl bg-slate-900/90 border border-amber-500/50 backdrop-blur-md shadow-lg pointer-events-none z-10 text-left">
@@ -373,7 +373,7 @@ export const PublicHome: React.FC = () => {
           ))}
 
           {/* Quick Registration CTA Card */}
-          <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-md flex flex-col justify-between space-y-3 text-left">
+          {/* <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-md flex flex-col justify-between space-y-3 text-left">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-widest text-sky-200">Get Started</span>
               <h3 className="font-extrabold text-base text-white mt-1">Ready to Compete?</h3>
@@ -388,7 +388,7 @@ export const PublicHome: React.FC = () => {
               <span>Go to Registration</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
-          </div>
+          </div> */}
         </div>
       </section>
 

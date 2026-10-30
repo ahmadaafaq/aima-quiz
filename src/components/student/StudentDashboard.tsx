@@ -2891,7 +2891,7 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
               /* State B: Track Confirmed - Display Confirmed State, Venue Details, Scorecard Workflow */
               <div className="p-6 sm:p-7 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-6 animate-in fade-in">
                 {/* Header with Confirmed Track */}
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+                <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
@@ -2912,7 +2912,7 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
                     <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100">
                       {activeConfirmedTrack?.name}
                     </h3>
-                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed max-w-3xl">
                       {activeConfirmedTrack?.description}
                     </p>
                     {activeConfirmedTrack?.masterCaseTitle && (
@@ -2922,70 +2922,10 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
                       </p>
                     )}
                   </div>
-
-                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                    <button
-                      onClick={() => setIsChangingTrack(true)}
-                      className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs transition-colors cursor-pointer"
-                    >
-                      Change Track
-                    </button>
-
-                    {activeConfirmedTrack?.caseDocFileName && (
-                      <button
-                        onClick={(e) => handleDownloadDirectCaseStudy(activeConfirmedTrack, e)}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs shadow-sm hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-                        title={`Download Case Study (PDF): ${activeConfirmedTrack.masterCaseTitle || activeConfirmedTrack.name}`}
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Download Case Study</span>
-                      </button>
-                    )}
-
-                    <button
-                      onClick={handleDownloadInstructions}
-                      className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs shadow-sm hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-                      title="Download AIMA ICRC South Zone Student Instructions (PDF)"
-                    >
-                      <Download className="w-3.5 h-3.5 text-slate-300" />
-                      <span>Guidelines (PDF)</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Official Documents Bar with Clean Action Pills */}
-                <div className="p-3.5 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-                  <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 font-medium">
-                    <FileText className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="text-[11px] uppercase tracking-wider font-bold text-slate-400">Attached Documents</span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={handleDownloadInstructions}
-                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                      title="Official League Guidelines: AIMA_ICRC_South_Zone_Student_Instructions.pdf"
-                    >
-                      <Download className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                      <span>Official Guidelines (PDF)</span>
-                    </button>
-
-                    {activeConfirmedTrack?.caseDocFileName && (
-                      <button
-                        type="button"
-                        onClick={(e) => handleDownloadDirectCaseStudy(activeConfirmedTrack, e)}
-                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-300 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                        title={`Case Document: ${activeConfirmedTrack.caseDocFileName}`}
-                      >
-                        <Download className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Case Brief Study (PDF)</span>
-                      </button>
-                    )}
-                  </div>
                 </div>
 
                 {/* Round 2 Jury Scorecard & Final Results Card (Displayed when jury has evaluated) */}
-                {studentJuryEval && (
+                {studentJuryEval ? (
                   <div className="p-5 sm:p-6 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 transition-all space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-700/60">
                       <div className="flex items-start gap-3">
@@ -3032,7 +2972,7 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
                             <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">Combined Merit</span>
                             <div className="flex items-baseline justify-end gap-0.5">
                               <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                                {((myAttempt?.score ?? 0) + Number(studentJuryEval.total_score ?? studentJuryEval.livePresentationScore ?? studentJuryEval.aggregateScore ?? 0))}
+                                {Number(((myAttempt?.score ?? 0) + Number(studentJuryEval.total_score ?? studentJuryEval.livePresentationScore ?? studentJuryEval.aggregateScore ?? 0)).toFixed(2))}
                               </span>
                               <span className="text-xs font-semibold text-emerald-600/70 dark:text-emerald-400/70">/200</span>
                             </div>
@@ -3059,6 +2999,20 @@ Issued under the official seal of All India Management Association (AIMA-ICRC), 
                         </div>
                       </div>
                     )}
+                  </div>
+                ) : (
+                  <div className="p-5 rounded-2xl bg-slate-50/60 dark:bg-slate-800/30 border border-slate-200/80 dark:border-slate-800 flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        Round 2 Offline Evaluation In Progress
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Your jury defense evaluation scorecard and merit marks will appear here once officially published.
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>

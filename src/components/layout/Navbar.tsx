@@ -60,7 +60,7 @@ export const Navbar: React.FC = () => {
 
   const fullDemoNavItems = [
     { id: 'public', label: 'Home', fullTitle: 'India Case League 2026 - Home', icon: BookOpen },
-    { id: 'registration', label: 'Registration', fullTitle: 'Candidate & Institute Registration', icon: GraduationCap },
+    // { id: 'registration', label: 'Registration', fullTitle: 'Candidate & Institute Registration', icon: GraduationCap },
     { id: 'contact_us', label: 'Contact Us', fullTitle: 'AIMA Secretariat & Hub Contacts', icon: Phone },
     { id: 'participant_login', label: 'Login', fullTitle: 'Participant Portal Login', icon: User },
     { id: 'student', label: 'Workspace', fullTitle: 'Student Participant Workspace & Submissions', icon: LayoutDashboard },
@@ -83,7 +83,7 @@ export const Navbar: React.FC = () => {
   const visibleWebsiteNav = isLiveSite
     ? [
       { id: 'public', label: 'Home', fullTitle: 'India Case League 2026 - Home', icon: BookOpen },
-      { id: 'registration', label: 'Registration', fullTitle: 'Registration & Participant Onboarding', icon: GraduationCap },
+      // { id: 'registration', label: 'Registration', fullTitle: 'Registration & Participant Onboarding', icon: GraduationCap },
       { id: 'contact_us', label: 'Contact Us', fullTitle: 'AIMA Secretariat & Hub Contacts', icon: Phone },
       ...(participantUser
         ? isCoordinator

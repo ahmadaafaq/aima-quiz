@@ -17,11 +17,15 @@ import {
   RefreshCw,
   Volume2,
   ShieldAlert,
+  ArrowLeft,
+  Lock,
 } from 'lucide-react';
 import {
   signInWithEmailPassword,
   UserProfileRow,
   SupabaseParticipantRow,
+  sendForgotPasswordOtp,
+  verifyOtpAndResetPassword,
 } from '../../lib/supabase';
 import { useCompetition } from '../../context/CompetitionContext';
 
@@ -50,6 +54,60 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
   const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
   const formLoadTimestamp = useRef<number>(Date.now());
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Forgot Password flow states
+  const [fpView, setFpView] = useState<'login' | 'fp_email' | 'fp_reset' | 'fp_success'>('login');
+  const [fpEmail, setFpEmail] = useState('');
+  const [fpOtp, setFpOtp] = useState('');
+  const [fpNewPassword, setFpNewPassword] = useState('');
+  const [fpConfirmPassword, setFpConfirmPassword] = useState('');
+  const [fpShowPassword, setFpShowPassword] = useState(false);
+  const [fpLoading, setFpLoading] = useState(false);
+  const [fpError, setFpError] = useState('');
+
+  const handleSendFpOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fpEmail.trim()) {
+      setFpError('Please enter your registered email address.');
+      return;
+    }
+    setFpLoading(true);
+    setFpError('');
+    const res = await sendForgotPasswordOtp(fpEmail.trim());
+    setFpLoading(false);
+    if (!res.success) {
+      setFpError(res.error || 'Failed to send OTP. Please check the email address.');
+      return;
+    }
+    setFpView('fp_reset');
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fpOtp.trim()) {
+      setFpError('Please enter the verification OTP code.');
+      return;
+    }
+    if (!fpNewPassword || fpNewPassword.length < 6) {
+      setFpError('Password must be at least 6 characters long.');
+      return;
+    }
+    if (fpNewPassword !== fpConfirmPassword) {
+      setFpError('Passwords do not match.');
+      return;
+    }
+    setFpLoading(true);
+    setFpError('');
+    const res = await verifyOtpAndResetPassword(fpEmail.trim(), fpOtp.trim(), fpNewPassword);
+    setFpLoading(false);
+    if (!res.success) {
+      setFpError(res.error || 'Failed to reset password.');
+      return;
+    }
+    setPassword(fpNewPassword);
+    setEmail(fpEmail.trim());
+    setFpView('fp_success');
+  };
 
   // Generate a random 6-character alphanumeric CAPTCHA
   const generateCaptcha = useCallback(() => {
@@ -390,6 +448,230 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
     );
   }
 
+  if (fpView !== 'login') {
+    return (
+      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-slate-50 dark:bg-slate-950">
+        <div className="max-w-md w-full space-y-6">
+          {/* Brand Banner */}
+          <div className="text-center space-y-3">
+            <div className="inline-flex items-center justify-center p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-md">
+              <img
+                src="/aima-icrc-logo.png"
+                alt="AIMA - ICRC Logo"
+                className="h-10 w-auto object-contain"
+              />
+            </div>
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-300 dark:border-blue-700/50">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Account Recovery • Password Reset</span>
+              </div>
+              <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                {fpView === 'fp_email' && 'Reset Your Password'}
+                {fpView === 'fp_reset' && 'Verify & Set Password'}
+                {fpView === 'fp_success' && 'Password Updated!'}
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {fpView === 'fp_email' && 'Enter your registered email address to receive a verification OTP.'}
+                {fpView === 'fp_reset' && `We sent a 6-digit OTP code to ${fpEmail}.`}
+                {fpView === 'fp_success' && 'Your credentials have been securely updated.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-5">
+            {fpError && (
+              <div className="p-3.5 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 flex items-center gap-2.5 text-xs text-red-700 dark:text-red-300">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{fpError}</span>
+              </div>
+            )}
+
+            {fpView === 'fp_email' && (
+              <form onSubmit={handleSendFpOtp} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Registered Email Address
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      value={fpEmail}
+                      onChange={(e) => setFpEmail(e.target.value)}
+                      placeholder="e.g. participant@university.edu"
+                      required
+                      autoFocus
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={fpLoading}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-600/25 disabled:opacity-60"
+                >
+                  {fpLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Sending OTP...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Send Verification OTP</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {fpView === 'fp_reset' && (
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Enter OTP Code
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setFpView('fp_email')}
+                      className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer font-medium"
+                    >
+                      Change email
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={fpOtp}
+                      onChange={(e) => setFpOtp(e.target.value)}
+                      placeholder="Enter OTP"
+                      maxLength={10}
+                      required
+                      autoFocus
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono tracking-widest uppercase focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                    <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={fpShowPassword ? 'text' : 'password'}
+                      value={fpNewPassword}
+                      onChange={(e) => setFpNewPassword(e.target.value)}
+                      placeholder="At least 6 characters"
+                      required
+                      className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <button
+                      type="button"
+                      onClick={() => setFpShowPassword(!fpShowPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                    >
+                      {fpShowPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Confirm New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={fpShowPassword ? 'text' : 'password'}
+                      value={fpConfirmPassword}
+                      onChange={(e) => setFpConfirmPassword(e.target.value)}
+                      placeholder="Re-enter new password"
+                      required
+                      className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={fpLoading}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-600/25 disabled:opacity-60"
+                >
+                  {fpLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Updating Password...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Reset & Save Password</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {fpView === 'fp_success' && (
+              <div className="space-y-4 text-center py-2">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">
+                    Password Reset Successfully
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Your password has been changed. You can now log in using your new credentials.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFpView('login');
+                    setFpError('');
+                  }}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-600/25"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Return to Login</span>
+                </button>
+              </div>
+            )}
+
+            {/* Back to Login link */}
+            {fpView !== 'fp_success' && (
+              <div className="pt-2 text-center border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFpView('login');
+                    setFpError('');
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer font-medium"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back to Login</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="text-center text-[11px] text-slate-400 flex items-center justify-center gap-2">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+            <span>AIMA Secure Portal • Your data is protected</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-slate-50 dark:bg-slate-950">
       <div className="max-w-md w-full space-y-6">
@@ -476,6 +758,19 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
               <p className="mt-1.5 text-[10px] text-slate-400 dark:text-slate-500">
                 Default password format: <span className="font-mono">firstname@last4digits#AIMA2026</span>
               </p>
+              <div className="flex justify-end mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFpEmail(email);
+                    setFpError('');
+                    setFpView('fp_email');
+                  }}
+                  className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer font-semibold"
+                >
+                  Forgot Password?
+                </button>
+              </div>
             </div>
 
             {/* Hidden honeypot field for bot trapping */}
@@ -609,8 +904,8 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="relative">
+          {/* Registration route closed post-quiz phase */}
+          {/* <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-slate-200 dark:border-slate-700" />
             </div>
@@ -625,7 +920,7 @@ export const ParticipantLoginPage: React.FC<ParticipantLoginPageProps> = ({ onLo
           >
             <GraduationCap className="w-4 h-4" />
             Register for National Online Quiz 2026
-          </button>
+          </button> */}
         </div>
 
         {/* Footer */}

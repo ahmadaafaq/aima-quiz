@@ -389,6 +389,71 @@ export async function loginParticipant(
   }
 }
 
+/**
+ * Send OTP to participant email for password reset via Supabase Auth.
+ */
+export async function sendForgotPasswordOtp(email: string): Promise<{ success: boolean; error?: string }> {
+  const cleanEmail = email.toLowerCase().trim();
+  if (cleanEmail === 'co@aima.in') {
+    return { success: false, error: 'This account is not eligible for self-service password reset.' };
+  }
+  try {
+    const { error } = await supabase.auth.signInWithOtp({
+      email: cleanEmail,
+      options: {
+        shouldCreateUser: false,
+      },
+    });
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to send OTP.' };
+  }
+}
+
+/**
+ * Verify OTP and update password in both Supabase Auth and participants table.
+ */
+export async function verifyOtpAndResetPassword(
+  email: string,
+  otp: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: string }> {
+  const cleanEmail = email.toLowerCase().trim();
+  try {
+    const { error: verifyErr } = await supabase.auth.verifyOtp({
+      email: cleanEmail,
+      token: otp.trim(),
+      type: 'email',
+    });
+    if (verifyErr) {
+      return { success: false, error: 'Invalid or expired OTP. Please try again.' };
+    }
+
+    const { error: updateErr } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    if (updateErr) {
+      console.warn('Auth password update warning:', updateErr.message);
+    }
+
+    const { error: partErr } = await supabase
+      .from('participants')
+      .update({ password_hash: hashPassword(newPassword) })
+      .eq('email', cleanEmail);
+
+    if (partErr) {
+      console.warn('Participant table password update warning:', partErr.message);
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Password reset failed.' };
+  }
+}
+
 // ============================================================
 // UNIFIED SUPABASE AUTH & PUBLIC.PROFILES HELPERS (Rules § 1, 3, 4)
 // ============================================================

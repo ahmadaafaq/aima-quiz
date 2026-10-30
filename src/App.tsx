@@ -52,10 +52,11 @@ const AppContent: React.FC = () => {
 
   const renderActiveView = () => {
     switch (activeView) {
-      case 'registration':
-      case 'register':
-      case 'bootcamp_registration':
-        return <RegistrationPage />;
+      // Registration route commented out — quiz is over, registrations disabled for now
+      // case 'registration':
+      // case 'register':
+      // case 'bootcamp_registration':
+      //   return <RegistrationPage />;
       case 'participant_login':
       case 'login':
         return <ParticipantLoginPage />;
