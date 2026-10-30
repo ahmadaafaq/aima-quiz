@@ -2825,30 +2825,58 @@ export async function savePublishedCertificatesToSupabase(
       console.warn('Could not update quiz_programs with published certificates:', progErr);
     }
 
-    // 2. Also update each registration's raw_data.certificate in the database for direct access
+    // 2. Also update each registration's raw_data in the database for direct access
+    // Group certificates by registrationNumber so multi-member teams retain ALL member certificates
+    const certsByReg: Record<string, CertificateRecord[]> = {};
     for (const cert of certs) {
-      if (cert.registrationNumber || cert.recipientEmail) {
-        try {
-          let query = supabase.from('registrations').select('id, raw_data');
-          if (cert.registrationNumber) {
-            query = query.eq('registration_number', cert.registrationNumber);
-          } else if (cert.recipientEmail) {
-            query = query.eq('candidate_email', cert.recipientEmail.toLowerCase().trim());
+      const regKey = cert.registrationNumber?.trim() || '';
+      if (regKey) {
+        if (!certsByReg[regKey]) certsByReg[regKey] = [];
+        certsByReg[regKey].push(cert);
+      }
+    }
+
+    for (const [regNum, regCerts] of Object.entries(certsByReg)) {
+      try {
+        const { data: regRows } = await supabase
+          .from('registrations')
+          .select('id, raw_data')
+          .eq('registration_number', regNum)
+          .limit(1);
+
+        if (regRows && regRows.length > 0) {
+          const row = regRows[0];
+          const raw = row.raw_data || {};
+
+          // Update nominees array in raw_data if present so each individual nominee has their certificate
+          let updatedNominees = raw.nominees;
+          if (Array.isArray(updatedNominees)) {
+            updatedNominees = updatedNominees.map((nom: any) => {
+              const nomEmail = (nom.email || '').toLowerCase().trim();
+              const nomCert = regCerts.find(c => c.recipientEmail?.toLowerCase().trim() === nomEmail);
+              return nomCert ? { ...nom, certificate: nomCert } : nom;
+            });
           }
-          const { data: regRows } = await query.limit(1);
-          if (regRows && regRows.length > 0) {
-            const row = regRows[0];
-            const updatedRaw = {
-              ...(row.raw_data || {}),
-              certificate: cert,
-              isCertificatePublished: true,
-              certificatePublishedAt: new Date().toISOString(),
-            };
-            await supabase.from('registrations').update({ raw_data: updatedRaw }).eq('id', row.id);
-          }
-        } catch {
-          // ignore individual update errors
+
+          // Pick the primary cert (team leader's cert or team selection cert) for backward-compat raw_data.certificate
+          const leaderOrTeamCert =
+            regCerts.find(c => c.type !== 'PARTICIPATION') ||
+            regCerts.find(c => c.recipientRole === 'Team Leader') ||
+            regCerts[0];
+
+          const updatedRaw = {
+            ...raw,
+            certificate: leaderOrTeamCert,
+            certificates: regCerts,
+            nominees: updatedNominees,
+            isCertificatePublished: true,
+            certificatePublishedAt: new Date().toISOString(),
+          };
+
+          await supabase.from('registrations').update({ raw_data: updatedRaw }).eq('id', row.id);
         }
+      } catch {
+        // ignore individual update errors
       }
     }
 

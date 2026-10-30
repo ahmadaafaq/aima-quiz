@@ -207,9 +207,26 @@ export const StudentDashboard: React.FC = () => {
           const reg = await fetchRegistrationByNumber(regNum);
           if (isMounted && reg) {
             setLiveRegistration(reg);
-            if ((reg as any)?.raw_data?.certificate) {
-              const c = (reg as any).raw_data.certificate;
-              setCertificates(prev => [c, ...prev.filter(item => item.id !== c.id && item.certificateNumber !== c.certificateNumber)]);
+            const raw = (reg as any)?.raw_data || {};
+            const certsToAdd: any[] = [];
+            if (Array.isArray(raw.certificates)) {
+              certsToAdd.push(...raw.certificates);
+            }
+            if (Array.isArray(raw.nominees)) {
+              raw.nominees.forEach((n: any) => {
+                if (n?.certificate) certsToAdd.push(n.certificate);
+              });
+            }
+            if (raw.certificate) {
+              certsToAdd.push(raw.certificate);
+            }
+            if (certsToAdd.length > 0) {
+              setCertificates(prev => {
+                const map = new Map<string, any>();
+                (prev || []).forEach(c => map.set(c.certificateNumber || c.id, c));
+                certsToAdd.forEach(c => map.set(c.certificateNumber || c.id, c));
+                return Array.from(map.values());
+              });
             }
           }
         } catch (err) {
@@ -254,28 +271,83 @@ export const StudentDashboard: React.FC = () => {
 
   const myCert =
     (Array.isArray(certificates)
-      ? certificates.find((c) => {
-        if (!c) return false;
-        // Match by email
-        if (currentUser.email && c.recipientEmail && c.recipientEmail.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return true;
-        if (liveRegistration?.email && c.recipientEmail && c.recipientEmail.toLowerCase().trim() === liveRegistration.email.toLowerCase().trim()) return true;
-        if (liveRegistration?.candidate_email && c.recipientEmail && c.recipientEmail.toLowerCase().trim() === liveRegistration.candidate_email.toLowerCase().trim()) return true;
-        // Match by registration number
-        if (currentUser.registrationNumber && (c as any).registrationNumber && (c as any).registrationNumber === currentUser.registrationNumber) return true;
-        if (liveRegistration?.registrationNumber && (c as any).registrationNumber && (c as any).registrationNumber === liveRegistration.registrationNumber) return true;
-        if (currentUser.registrationNumber && c.certificateNumber && c.certificateNumber.includes(currentUser.registrationNumber)) return true;
-        if (liveRegistration?.registrationNumber && c.certificateNumber && c.certificateNumber.includes(liveRegistration.registrationNumber)) return true;
-        // Match by team name
-        if (currentTeam?.name && c.teamName && c.teamName.toLowerCase().trim() === currentTeam.name.toLowerCase().trim()) return true;
-        if (liveRegistration?.teamName && c.teamName && c.teamName.toLowerCase().trim() === liveRegistration.teamName.toLowerCase().trim()) return true;
-        // Match by recipient ID / team ID
-        if (c.recipientId && (c.recipientId === currentUser.id || c.recipientId === currentUser.email)) return true;
-        if (currentTeam?.id && c.teamId && c.teamId === currentTeam.id) return true;
-        return false;
-      })
+      ? (
+          // 1. Highest Priority: Grand Finale / Top 1 Selection certificate for the candidate's team or registration
+          certificates.find((c) => {
+            if (!c) return false;
+            const isFinalistCert =
+              c.type === 'SELECTION_FINALE' ||
+              c.type === 'ACHIEVEMENT_TOP1' ||
+              c.certificateCategory === 'selection' ||
+              c.certificateCategory === 'achievement' ||
+              (c.achievement && (
+                c.achievement.includes('GRAND FINALE') ||
+                c.achievement.includes('TOP 1') ||
+                c.achievement.includes('WINNER') ||
+                c.achievement.includes('SELECTION')
+              ));
+            if (!isFinalistCert) return false;
+
+            // Match by team name
+            const teamNameMatches =
+              (currentTeam?.name && c.teamName && c.teamName.toLowerCase().trim() === currentTeam.name.toLowerCase().trim()) ||
+              (liveRegistration?.team_name && c.teamName && c.teamName.toLowerCase().trim() === liveRegistration.team_name.toLowerCase().trim()) ||
+              (liveRegistration?.teamName && c.teamName && c.teamName.toLowerCase().trim() === liveRegistration.teamName.toLowerCase().trim());
+            if (teamNameMatches) return true;
+
+            // Match by registration number
+            const regNumMatches =
+              (currentUser.registrationNumber && (c as any).registrationNumber && (c as any).registrationNumber === currentUser.registrationNumber) ||
+              (liveRegistration?.registration_number && (c as any).registrationNumber && (c as any).registrationNumber === liveRegistration.registration_number) ||
+              (liveRegistration?.registrationNumber && (c as any).registrationNumber && (c as any).registrationNumber === liveRegistration.registrationNumber);
+            if (regNumMatches) return true;
+
+            // Match by recipient email or team member roster
+            if (currentUser.email && c.recipientEmail && c.recipientEmail.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return true;
+            if (currentUser.name && Array.isArray(c.teamMembers) && c.teamMembers.some((m: string) => m.toLowerCase().trim() === currentUser.name.toLowerCase().trim())) return true;
+            return false;
+          }) ||
+          // 2. Personal Participation certificate (strictly for non-grand finalists)
+          certificates.find((c) => {
+            if (!c) return false;
+            if (currentUser.email && c.recipientEmail && c.recipientEmail.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return true;
+            if (c.recipientId && (c.recipientId === currentUser.id || c.recipientId === currentUser.email)) return true;
+            return false;
+          }) ||
+          // 3. Team-level Participation certificate for non-grand finalists
+          certificates.find((c) => {
+            if (!c) return false;
+            const matchesTeam =
+              (currentTeam?.name && c.teamName && c.teamName.toLowerCase().trim() === currentTeam.name.toLowerCase().trim()) ||
+              (liveRegistration?.team_name && c.teamName && c.teamName.toLowerCase().trim() === liveRegistration.team_name.toLowerCase().trim()) ||
+              (liveRegistration?.teamName && c.teamName && c.teamName.toLowerCase().trim() === liveRegistration.teamName.toLowerCase().trim());
+            if (matchesTeam) {
+              if (!c.recipientEmail || c.recipientEmail.toLowerCase().trim() === currentUser.email?.toLowerCase().trim()) return true;
+            }
+            return false;
+          }) ||
+          // 4. Fallback for solo candidates by registration number
+          (!liveRegistration?.team_name && !liveRegistration?.teamName
+            ? certificates.find((c) => {
+                if (!c) return false;
+                if (currentUser.registrationNumber && (c as any).registrationNumber && (c as any).registrationNumber === currentUser.registrationNumber) return true;
+                if (liveRegistration?.registration_number && (c as any).registrationNumber && (c as any).registrationNumber === liveRegistration.registration_number) return true;
+                if (liveRegistration?.registrationNumber && (c as any).registrationNumber && (c as any).registrationNumber === liveRegistration.registrationNumber) return true;
+                return false;
+              })
+            : undefined)
+        )
       : undefined) ||
-    (liveRegistration as any)?.raw_data?.certificate ||
-    (liveRegistration as any)?.certificate;
+    // 5. Fallbacks from liveRegistration
+    ((liveRegistration as any)?.raw_data?.certificates?.find((c: any) =>
+      c.achievement?.includes('GRAND FINALE') ||
+      c.achievement?.includes('TOP 1') ||
+      c.achievement?.includes('WINNER') ||
+      c.type === 'SELECTION_FINALE'
+    )) ||
+    ((liveRegistration as any)?.raw_data?.nominees?.find((n: any) => n.email?.toLowerCase().trim() === currentUser.email?.toLowerCase().trim())?.certificate) ||
+    ((liveRegistration as any)?.raw_data?.certificate) ||
+    ((liveRegistration as any)?.certificate);
 
   const assignedHubId = currentTeam?.assignedHub || currentUser.assignedHub || 'north';
   const hubInfo = hubs.find(h => h.id === assignedHubId) || hubs[0];
@@ -469,6 +541,7 @@ export const StudentDashboard: React.FC = () => {
   const isCertificatePublished = Boolean(
     config?.isCertificatesPublished === true ||
     config?.isCertificatePublished === true ||
+    (liveRegistration as any)?.raw_data?.isCertificatePublished === true ||
     (typeof localStorage !== 'undefined' && localStorage.getItem('AIMA_CERTIFICATES_PUBLISHED') === 'true')
   );
 
