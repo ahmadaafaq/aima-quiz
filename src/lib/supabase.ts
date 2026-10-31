@@ -97,6 +97,19 @@ export function verifyPassword(plain: string, stored: string): boolean {
   return false;
 }
 
+// Decode password from stored hash ('aima_' + base64)
+export function decodePassword(stored: string): string {
+  if (!stored) return '';
+  if (stored.startsWith('aima_')) {
+    try {
+      return decodeURIComponent(escape(atob(stored.slice(5))));
+    } catch {
+      return stored;
+    }
+  }
+  return stored;
+}
+
 // Auto-generate a strong default password from the nominee's name + mobile
 export function generateDefaultPassword(name: string, mobile: string): string {
   const first = name.trim().split(' ')[0].toLowerCase();
@@ -398,10 +411,22 @@ export async function sendForgotPasswordOtp(email: string): Promise<{ success: b
     return { success: false, error: 'This account is not eligible for self-service password reset.' };
   }
   try {
+    // 1. Verify that the email is actually a registered participant in the database
+    const { data: partData, error: partErr } = await supabase
+      .from('participants')
+      .select('email')
+      .eq('email', cleanEmail)
+      .maybeSingle();
+
+    if (partErr || !partData) {
+      return { success: false, error: 'No account found with this email address. Please check and try again.' };
+    }
+
+    // 2. Dispatch OTP via Supabase Auth (create user if not yet in auth.users)
     const { error } = await supabase.auth.signInWithOtp({
       email: cleanEmail,
       options: {
-        shouldCreateUser: false,
+        shouldCreateUser: true,
       },
     });
     if (error) {
@@ -448,9 +473,68 @@ export async function verifyOtpAndResetPassword(
       console.warn('Participant table password update warning:', partErr.message);
     }
 
+    // Also safely sync registrations.raw_data so legacy/cached records stay consistent
+    try {
+      const { data: regRows } = await supabase
+        .from('registrations')
+        .select('id, raw_data');
+
+      if (regRows && regRows.length > 0) {
+        for (const r of regRows) {
+          const raw = r.raw_data || {};
+          let updated = false;
+          if (Array.isArray(raw.nominees)) {
+            raw.nominees = raw.nominees.map((n: any) => {
+              if (n && n.email && n.email.toLowerCase().trim() === cleanEmail) {
+                updated = true;
+                return { ...n, password: newPassword };
+              }
+              return n;
+            });
+          }
+          if (raw.participantPassword && raw.nominees?.some((n: any) => n.email?.toLowerCase().trim() === cleanEmail && n.isTeamLeader)) {
+            raw.participantPassword = newPassword;
+            updated = true;
+          }
+          if (updated) {
+            await supabase.from('registrations').update({ raw_data: raw }).eq('id', r.id);
+          }
+        }
+      }
+    } catch (syncErr) {
+      console.warn('Registration raw_data password sync warning:', syncErr);
+    }
+
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Password reset failed.' };
+  }
+}
+
+/**
+ * Fetches live participant credentials from public.participants for a registration.
+ * Decodes the stored password hashes on-the-fly to guarantee the Single Source of Truth.
+ */
+export async function fetchLiveParticipantCredentials(
+  registrationNumber: string
+): Promise<Record<string, string>> {
+  if (!registrationNumber) return {};
+  try {
+    const { data, error } = await supabase
+      .from('participants')
+      .select('email, password_hash')
+      .eq('registration_number', registrationNumber.trim());
+
+    if (error || !data) return {};
+    const map: Record<string, string> = {};
+    for (const row of data) {
+      if (row.email && row.password_hash) {
+        map[row.email.toLowerCase().trim()] = decodePassword(row.password_hash);
+      }
+    }
+    return map;
+  } catch {
+    return {};
   }
 }
 

@@ -8,6 +8,7 @@ import {
   fetchRegistrationsFromSupabase,
   updateRegistrationPaymentInSupabase,
   generateDefaultPassword,
+  fetchLiveParticipantCredentials,
   SUPABASE_URL,
   SUPABASE_SQL_SETUP_SCRIPT
 } from '../../lib/supabase';
@@ -105,6 +106,7 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
 
   // Modals
   const [activeNomineesModal, setActiveNomineesModal] = useState<CSRBootcampRegistration | null>(null);
+  const [livePasswords, setLivePasswords] = useState<Record<string, string>>({});
   const [activeInvoiceReg, setActiveInvoiceReg] = useState<CSRBootcampRegistration | null>(null);
   const [showSqlModal, setShowSqlModal] = useState<boolean>(false);
   const [copiedLogins, setCopiedLogins] = useState<boolean>(false);
@@ -267,6 +269,23 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, modeFilter, statusFilter]);
+
+  // Fetch live credentials from participants table when Credentials Vault is opened
+  useEffect(() => {
+    if (!activeNomineesModal?.registrationNumber) {
+      setLivePasswords({});
+      return;
+    }
+    let isMounted = true;
+    fetchLiveParticipantCredentials(activeNomineesModal.registrationNumber).then((map) => {
+      if (isMounted) {
+        setLivePasswords(map);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [activeNomineesModal?.registrationNumber]);
 
   // Pagination derived values
   const totalPages = Math.max(1, Math.ceil(filteredRegistrations.length / itemsPerPage));
@@ -484,8 +503,10 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
   const handleCopyNomineeLogins = (reg: CSRBootcampRegistration) => {
     const text = (reg.nominees || [])
       .map(
-        (n, i) =>
-          `[${i + 1}] ${n.name}\nEmail/Login: ${n.email}\nEnrolment: ${n.enrolmentNumber || 'N/A'}\nQuiz Password: ${n.password || generateDefaultPassword(n.name, n.mobile || '')}\n`
+        (n, i) => {
+          const pwd = (n.email && livePasswords[n.email.toLowerCase().trim()]) || n.password || generateDefaultPassword(n.name, n.mobile || '');
+          return `[${i + 1}] ${n.name}\nEmail/Login: ${n.email}\nEnrolment: ${n.enrolmentNumber || 'N/A'}\nQuiz Password: ${pwd}\n`;
+        }
       )
       .join('\n');
     navigator.clipboard.writeText(text);
@@ -1071,12 +1092,12 @@ export const DynamicRegistrationsManager: React.FC<DynamicRegistrationsManagerPr
                       name: getCandidateName(activeNomineesModal),
                       email: getCandidateEmail(activeNomineesModal),
                       mobile: getCandidatePhone(activeNomineesModal),
-                      password: activeNomineesModal.participantPassword || generateDefaultPassword(getCandidateName(activeNomineesModal), getCandidatePhone(activeNomineesModal)),
+                      password: (getCandidateEmail(activeNomineesModal) && livePasswords[getCandidateEmail(activeNomineesModal).toLowerCase().trim()]) || activeNomineesModal.participantPassword || generateDefaultPassword(getCandidateName(activeNomineesModal), getCandidatePhone(activeNomineesModal)),
                       isTeamLeader: true,
                     },
                   ]
                 ).map((nom, idx) => {
-                  const pwd = nom.password || generateDefaultPassword(nom.name, nom.mobile || '');
+                  const pwd = (nom.email && livePasswords[nom.email.toLowerCase().trim()]) || nom.password || generateDefaultPassword(nom.name, nom.mobile || '');
                   const nomKey = nom.id || `nom_${idx}`;
                   const isCopied = copiedNomineeId === nomKey;
 
